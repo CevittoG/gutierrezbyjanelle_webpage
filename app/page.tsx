@@ -1,11 +1,14 @@
-// Main landing page skeleton
-export default function Home() {
+import { siteConfig } from "@/config/site";
+
+export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-center font-mono text-sm flex">
-        <h1 className="text-4xl font-bold">GutierrezByJanelle</h1>
-      </div>
-      <p className="mt-4 text-zinc-500">Coming soon...</p>
-    </main>
+    <section className="container flex flex-col items-center justify-center py-24 px-4 md:px-8 text-center space-y-6">
+      <h1 className="text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
+        {siteConfig.name}
+      </h1>
+      <p className="max-w-[600px] text-lg text-muted-foreground">
+        {siteConfig.description}
+      </p>
+    </section>
   );
 }

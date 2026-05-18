@@ -3,9 +3,3 @@ node_modules
 out
 build
 .git
-.gitignore
-.env*.local
-.vscode
-.dockerignore
-Dockerfile
-docker-compose.yml
