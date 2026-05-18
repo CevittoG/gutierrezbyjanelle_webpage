@@ -12,9 +12,11 @@ export function GalleryGrid({ items, className }: GalleryGridProps) {
       {items.map((item) => (
         <div
           key={item.id}
-          className="aspect-square rounded-lg border bg-muted flex items-center justify-center overflow-hidden"
+          className="aspect-square rounded-lg border overflow-hidden bg-gradient-to-br from-accent to-primary/30 flex items-end"
         >
-          <span className="text-sm text-muted-foreground">{item.alt}</span>
+          <span className="w-full px-3 py-2 text-xs uppercase tracking-widest text-foreground/50 bg-background/40 backdrop-blur-sm text-center">
+            {item.alt}
+          </span>
         </div>
       ))}
     </div>
