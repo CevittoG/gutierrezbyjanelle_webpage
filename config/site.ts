@@ -32,6 +32,8 @@ export type GalleryItem = {
   alt: string;
 };
 
+export type Weddings = { paragraphs: string[] };
+
 export type EtsyStore = {
   url: string;
   name: string;
@@ -64,15 +66,21 @@ export const siteConfig = {
   } satisfies Hero,
   about: {
     paragraphs: [
-      "Hi brides! Firstly, I'd like to congratulate you on your engagement! I'm so happy you've found me to work with during this special planning time. You have someone who loves you unconditionally, and you both choose to spend your life together — that's no small feat!",
-      "For that reason and many more, being a fiancée was one of the best and most favorite moments in my life! On the day my husband proposed, a couple we met congratulated us and gave just one piece of advice that made an impact in our relationship and how we felt throughout our engagement. The same advice that was passed on to them when she said, \"yes\" … \"never stop celebrating being engaged,\" which eventually turned into never stop celebrating our love.",
-      "We used that advice during our entire wedding planning period, from the Mardi Gras parade to the night before we said \"I do.\" That advice turned into a beautiful excuse of endless dates to discuss each wedding decision, big or small. We used that time to connect in a low-stress conversation about our vision, what we wanted our guests to experience and of course, our finances. A date to discuss, another date to discuss, a date when we finally made up our minds (or changed them!)… we had so much fun in the midst of the wedding planning craze!",
-      "I would love to be a part of your wedding planning craze and give you one less worry! I fell in love with designing my dream day and I'm excited to help you do the same! I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
+      "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon! xx",
     ],
     cta: { label: "See What I Offer", href: "/pricing" },
   } satisfies About,
+  weddings: {
+    paragraphs: [
+      "Welcome, brides! Firstly, I'd like to congratulate you on your engagement 🤍 You have someone who loves you unconditionally, and you both choose to spend your life together, it's such a beautiful milestone! I'm so happy you've found me to help illuminate your love to your family and friends.",
+      "Being a fiancée was one of the best and most favorite moments in my life! On the day my husband proposed, a couple we met congratulated us and gave just one piece of advice that made an impact in our relationship and how we felt throughout our engagement. The same advice that was passed on to them… \"never stop celebrating being engaged.\" Simple, yet can get shadowed in the midst of all of the wedding chaos. Never stopping the celebration of our engagement eventually turned into never stop celebrating our love.",
+      "We used that advice during our entire wedding planning period, from the mardi gras parade to the night before we said \"I do.\" That advice became a beautiful excuse for endless dates to discuss each wedding decision, big or small. We used that time to connect in a low-stress conversation about our vision, what we wanted our guests to experience and of course, the infamous wedding budget. One date to discuss, another date to compromise, a date when we finally made up our minds… or changed them! We had so much fun in the midst of the wedding planning craze.",
+      "I would love to be a part of your wedding planning craze and give you one less worry! I fell in love with designing my dream day and I'm excited to help you do the same! I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
+    ],
+  } satisfies Weddings,
   mainNav: [
     { title: "Home", href: "/" },
+    { title: "Weddings", href: "/weddings" },
     { title: "Pricing", href: "/pricing" },
     { title: "Reviews", href: "/reviews" },
     { title: "Gallery", href: "/gallery" },
