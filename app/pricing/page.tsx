@@ -1,3 +1,4 @@
+import { PriceCard } from "@/components/ui/price-card";
 import { siteConfig } from "@/config/site";
 
 export default function PricingPage() {
@@ -11,16 +12,7 @@ export default function PricingPage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
         {siteConfig.pricing.map((plan) => (
-          <div key={plan.id} className="relative overflow-hidden rounded-lg border bg-background p-8">
-            <h3 className="font-bold text-xl">{plan.name}</h3>
-            <p className="text-sm text-muted-foreground mt-2">{plan.description}</p>
-            <div className="text-3xl font-bold py-6">{plan.price}</div>
-            <ul className="grid gap-3 text-sm text-muted-foreground">
-              {plan.features.map((f) => (
-                <li key={f}>• {f}</li>
-              ))}
-            </ul>
-          </div>
+          <PriceCard key={plan.id} plan={plan} />
         ))}
       </div>
     </section>

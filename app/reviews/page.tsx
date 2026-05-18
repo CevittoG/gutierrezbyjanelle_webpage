@@ -1,3 +1,4 @@
+import { ReviewCard } from "@/components/ui/review-card";
 import { siteConfig } from "@/config/site";
 
 export default function ReviewsPage() {
@@ -11,20 +12,7 @@ export default function ReviewsPage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
         {siteConfig.reviews.map((review) => (
-          <div
-            key={review.id}
-            className="flex flex-col justify-between rounded-2xl border bg-card p-8 shadow-sm"
-          >
-            <blockquote className="text-lg leading-relaxed text-foreground italic">
-              &ldquo;{review.text}&rdquo;
-            </blockquote>
-            <div className="mt-8 flex items-center gap-4">
-              <div className="flex flex-col">
-                <p className="font-semibold">{review.author}</p>
-                <p className="text-sm text-muted-foreground">{review.role}</p>
-              </div>
-            </div>
-          </div>
+          <ReviewCard key={review.id} review={review} />
         ))}
       </div>
     </section>
