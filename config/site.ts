@@ -38,6 +38,19 @@ export type EtsyStore = {
   tagline: string;
 };
 
+export type InstagramPost = {
+  id: string;
+  url: string;
+  caption: string;
+  src?: string;
+};
+
+export type InstagramConfig = {
+  handle: string;
+  profileUrl: string;
+  posts: InstagramPost[];
+};
+
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description:
@@ -129,4 +142,9 @@ export const siteConfig = {
     name: "GutierrezByJanelle",
     tagline: "Ready-to-customize designs and digital stationery packs — available now in my Etsy shop.",
   } satisfies EtsyStore,
+  instagram: {
+    handle: "gutierrez.byjanelle",
+    profileUrl: "https://www.instagram.com/gutierrez.byjanelle",
+    posts: [] as InstagramPost[],
+  } satisfies InstagramConfig,
 };
