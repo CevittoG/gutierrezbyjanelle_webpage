@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PriceCard } from "@/components/ui/price-card";
+import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -25,6 +26,10 @@ export default function PricingPage() {
         {siteConfig.pricing.map((plan) => (
           <PriceCard key={plan.id} plan={plan} />
         ))}
+      </div>
+
+      <div className="mt-16 max-w-4xl mx-auto">
+        <EtsyStoreCard store={siteConfig.etsyStore} />
       </div>
     </section>
   );

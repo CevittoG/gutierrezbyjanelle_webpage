@@ -32,6 +32,12 @@ export type GalleryItem = {
   alt: string;
 };
 
+export type EtsyStore = {
+  url: string;
+  name: string;
+  tagline: string;
+};
+
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description:
@@ -118,4 +124,9 @@ export const siteConfig = {
     { id: "g3", src: "/gallery/placeholder-3.jpg", alt: "Seating chart display" },
     { id: "g4", src: "/gallery/placeholder-4.jpg", alt: "Custom event décor" },
   ] satisfies GalleryItem[],
+  etsyStore: {
+    url: "https://xgutierrezbyjanelle.etsy.com",
+    name: "GutierrezByJanelle",
+    tagline: "Ready-to-customize designs and digital stationery packs — available now in my Etsy shop.",
+  } satisfies EtsyStore,
 };
