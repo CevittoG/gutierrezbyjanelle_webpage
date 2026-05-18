@@ -1,8 +1,28 @@
 import Image from "next/image";
-import { Instagram, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils";
 import type { InstagramPost, InstagramConfig } from "@/config/site";
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M17.5 6.5h.01" />
+    </svg>
+  );
+}
 
 interface InstagramGridProps {
   config: InstagramConfig;
@@ -13,7 +33,7 @@ export function InstagramGrid({ config, className }: InstagramGridProps) {
   if (config.posts.length === 0) {
     return (
       <div className={cn("flex flex-col items-center gap-6 py-12 text-center", className)}>
-        <Instagram className="w-10 h-10 text-muted-foreground/50" />
+        <InstagramIcon className="w-10 h-10 text-muted-foreground/50" />
         <p className="text-muted-foreground max-w-sm">
           Follow along for the latest designs, behind-the-scenes, and wedding inspiration.
         </p>
@@ -24,7 +44,7 @@ export function InstagramGrid({ config, className }: InstagramGridProps) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2"
           >
-            <Instagram className="w-4 h-4" />
+            <InstagramIcon className="w-4 h-4" />
             @{config.handle}
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
@@ -48,7 +68,7 @@ export function InstagramGrid({ config, className }: InstagramGridProps) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2"
           >
-            <Instagram className="w-4 h-4" />
+            <InstagramIcon className="w-4 h-4" />
             See all on Instagram
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
