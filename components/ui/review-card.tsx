@@ -11,7 +11,7 @@ export function ReviewCard({ review, className }: ReviewCardProps) {
   return (
     <Card className={cn("flex flex-col justify-between", className)}>
       <CardContent className="pt-6">
-        <blockquote className="text-lg leading-relaxed italic mb-8">
+        <blockquote className="text-base md:text-lg leading-relaxed italic mb-8">
           &ldquo;{review.text}&rdquo;
         </blockquote>
         <div className="flex flex-col">

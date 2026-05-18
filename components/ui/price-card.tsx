@@ -15,7 +15,7 @@ export function PriceCard({ plan, className }: PriceCardProps) {
         <CardDescription>{plan.description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-4xl font-bold mb-6">{plan.price}</div>
+        <div className="text-3xl md:text-4xl font-bold mb-6">{plan.price}</div>
         <ul className="grid gap-2 text-sm text-muted-foreground">
           {plan.features.map((f) => (
             <li key={f} className="flex items-center gap-2">

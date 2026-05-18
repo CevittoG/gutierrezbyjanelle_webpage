@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <>
-      <section className="container flex flex-col items-center justify-center py-32 px-4 md:px-8 text-center space-y-6">
+      <section className="container flex flex-col items-center justify-center py-16 md:py-32 px-4 md:px-8 text-center space-y-6">
         <h1 className="font-shadows text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
           {siteConfig.hero.headline}
         </h1>
