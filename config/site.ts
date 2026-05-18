@@ -30,6 +30,7 @@ export type GalleryItem = {
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description: "Boutique beauty services by Janelle.",
+  url: "https://www.gutierrezbyjanelle.com",
   hero: {
     headline: "Beauty, refined.",
     subheadline: "Boutique beauty services by Janelle — tailored to you.",
