@@ -1,5 +1,16 @@
+import type { Metadata } from "next";
 import { GalleryGrid } from "@/components/ui/gallery-grid";
 import { siteConfig } from "@/config/site";
+
+export const metadata: Metadata = {
+  title: "Gallery",
+  description: `Browse recent beauty work by ${siteConfig.name}. A showcase of services and results.`,
+  openGraph: {
+    url: `${siteConfig.url}/gallery`,
+    title: `Gallery | ${siteConfig.name}`,
+    description: `Browse recent beauty work by ${siteConfig.name}. A showcase of services and results.`,
+  },
+};
 
 export default function GalleryPage() {
   return (

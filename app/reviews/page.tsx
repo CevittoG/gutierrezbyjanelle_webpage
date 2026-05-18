@@ -1,5 +1,16 @@
+import type { Metadata } from "next";
 import { ReviewCard } from "@/components/ui/review-card";
 import { siteConfig } from "@/config/site";
+
+export const metadata: Metadata = {
+  title: "Reviews",
+  description: `Read what clients say about ${siteConfig.name}. Real experiences from real clients.`,
+  openGraph: {
+    url: `${siteConfig.url}/reviews`,
+    title: `Client Reviews | ${siteConfig.name}`,
+    description: `Read what clients say about ${siteConfig.name}. Real experiences from real clients.`,
+  },
+};
 
 export default function ReviewsPage() {
   return (

@@ -1,5 +1,16 @@
+import type { Metadata } from "next";
 import { PriceCard } from "@/components/ui/price-card";
 import { siteConfig } from "@/config/site";
+
+export const metadata: Metadata = {
+  title: "Pricing",
+  description: `View transparent pricing for beauty services by ${siteConfig.name}.`,
+  openGraph: {
+    url: `${siteConfig.url}/pricing`,
+    title: `Pricing | ${siteConfig.name}`,
+    description: `View transparent pricing for beauty services by ${siteConfig.name}.`,
+  },
+};
 
 export default function PricingPage() {
   return (
