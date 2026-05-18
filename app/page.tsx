@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -46,6 +47,10 @@ export default function HomePage() {
             </Button>
           </div>
         </div>
+      </section>
+
+      <section className="container py-16 px-4 md:px-8">
+        <EtsyStoreCard store={siteConfig.etsyStore} className="max-w-4xl mx-auto" />
       </section>
     </>
   );

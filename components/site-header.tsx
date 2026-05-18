@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Menu } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,14 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/" className="flex items-center space-x-2">
-          <span className="font-shadows text-2xl tracking-wide">{siteConfig.name}</span>
+          <Image
+            src="/logo.png"
+            alt={siteConfig.name}
+            width={48}
+            height={48}
+            priority
+            className="h-12 w-12 object-contain"
+          />
         </Link>
 
         <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">

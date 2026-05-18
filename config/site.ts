@@ -32,6 +32,25 @@ export type GalleryItem = {
   alt: string;
 };
 
+export type EtsyStore = {
+  url: string;
+  name: string;
+  tagline: string;
+};
+
+export type InstagramPost = {
+  id: string;
+  url: string;
+  caption: string;
+  src?: string;
+};
+
+export type InstagramConfig = {
+  handle: string;
+  profileUrl: string;
+  posts: InstagramPost[];
+};
+
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description:
@@ -118,4 +137,14 @@ export const siteConfig = {
     { id: "g3", src: "/gallery/placeholder-3.jpg", alt: "Seating chart display" },
     { id: "g4", src: "/gallery/placeholder-4.jpg", alt: "Custom event décor" },
   ] satisfies GalleryItem[],
+  etsyStore: {
+    url: "https://xgutierrezbyjanelle.etsy.com",
+    name: "GutierrezByJanelle",
+    tagline: "Ready-to-customize designs and digital stationery packs — available now in my Etsy shop.",
+  } satisfies EtsyStore,
+  instagram: {
+    handle: "gutierrez.byjanelle",
+    profileUrl: "https://www.instagram.com/gutierrez.byjanelle",
+    posts: [] as InstagramPost[],
+  } satisfies InstagramConfig,
 };
