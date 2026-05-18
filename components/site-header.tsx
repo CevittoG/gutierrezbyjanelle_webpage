@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
-import { siteConfig } from "../config/site";
+import { Menu } from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 export function SiteHeader() {
   return (
@@ -8,7 +13,8 @@ export function SiteHeader() {
         <Link href="/" className="flex items-center space-x-2">
           <span className="font-bold text-xl tracking-tight">{siteConfig.name}</span>
         </Link>
-        <nav className="flex items-center space-x-6 text-sm font-medium">
+
+        <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
           {siteConfig.mainNav.map((item) => (
             <Link
               key={item.href}
@@ -19,6 +25,28 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
+
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Toggle menu</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right">
+            <nav className="flex flex-col gap-6 mt-8">
+              {siteConfig.mainNav.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-lg font-medium transition-colors hover:text-foreground/70"
+                >
+                  {item.title}
+                </Link>
+              ))}
+            </nav>
+          </SheetContent>
+        </Sheet>
       </div>
     </header>
   );
