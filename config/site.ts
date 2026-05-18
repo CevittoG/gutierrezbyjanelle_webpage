@@ -1,5 +1,11 @@
 export type NavItem = { title: string; href: string };
 
+export type Hero = {
+  headline: string;
+  subheadline: string;
+  cta: { label: string; href: string };
+};
+
 export type PricePlan = {
   id: string;
   name: string;
@@ -24,6 +30,11 @@ export type GalleryItem = {
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description: "Boutique beauty services by Janelle.",
+  hero: {
+    headline: "Beauty, refined.",
+    subheadline: "Boutique beauty services by Janelle — tailored to you.",
+    cta: { label: "View Pricing", href: "/pricing" },
+  } satisfies Hero,
   mainNav: [
     { title: "Home", href: "/" },
     { title: "Pricing", href: "/pricing" },
