@@ -1,12 +1,20 @@
-// Root layout for the application
 import type { Metadata } from "next";
+import { Cinzel, Shadows_Into_Light } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 
+const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap" });
+const shadowsIntoLight = Shadows_Into_Light({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-shadows",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "GutierrezByJanelle",
-  description: "Boutique digital assets for designers",
+  description: "Beauty services by Janelle Gutierrez",
 };
 
 export default function RootLayout({
@@ -15,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="antialiased min-h-screen flex flex-col">
+    <html lang="en" className={`${cinzel.variable} ${shadowsIntoLight.variable}`}>
+      <body className="font-cinzel antialiased min-h-screen flex flex-col">
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

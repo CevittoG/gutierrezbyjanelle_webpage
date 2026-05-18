@@ -43,6 +43,10 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      fontFamily: {
+        cinzel: ["var(--font-cinzel)", "serif"],
+        shadows: ["var(--font-shadows)", "cursive"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
