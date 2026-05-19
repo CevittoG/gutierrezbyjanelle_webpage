@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
-import { Cinzel, Shadows_Into_Light } from "next/font/google";
+import { Anybody, Square_Peg } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
 import { siteConfig } from "@/config/site";
 
-const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap" });
-const shadowsIntoLight = Shadows_Into_Light({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-shadows",
-  display: "swap",
-});
+const anybody = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap" });
+const squarePeg = Square_Peg({ subsets: ["latin"], weight: "400", variable: "--font-squarepeg", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -44,8 +39,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${cinzel.variable} ${shadowsIntoLight.variable}`}>
-      <body className="font-cinzel antialiased min-h-screen flex flex-col">
+    <html lang="en" className={`${anybody.variable} ${squarePeg.variable}`}>
+      <body className="font-anybody antialiased min-h-screen flex flex-col">
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />

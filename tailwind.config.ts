@@ -47,8 +47,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        cinzel: ["var(--font-cinzel)", "serif"],
-        shadows: ["var(--font-shadows)", "cursive"],
+        anybody:   ["var(--font-anybody)",   "sans-serif"],
+        squarepeg: ["var(--font-squarepeg)", "cursive"],
       },
       borderRadius: {
         lg: "var(--radius)",
