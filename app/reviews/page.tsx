@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ReviewCard } from "@/components/ui/review-card";
+import { ZolaBadgeCard } from "@/components/ui/zola-badge-card";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -25,6 +26,9 @@ export default function ReviewsPage() {
         {siteConfig.reviews.map((review) => (
           <ReviewCard key={review.id} review={review} />
         ))}
+      </div>
+      <div className="max-w-5xl mx-auto mt-12">
+        <ZolaBadgeCard zola={siteConfig.zola} />
       </div>
     </section>
   );
