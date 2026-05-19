@@ -40,7 +40,7 @@ export default function WeddingsPage() {
           </div>
           <div className="flex justify-center mt-10">
             <Button asChild size="lg" variant="outline">
-              <Link href="/pricing">See What I Offer</Link>
+              <Link href="/investment">See What I Offer</Link>
             </Button>
           </div>
         </div>
