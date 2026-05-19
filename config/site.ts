@@ -40,6 +40,8 @@ export type EtsyStore = {
   tagline: string;
 };
 
+export type ZolaProfile = { vendorUrl: string };
+
 export type InstagramPost = {
   id: string;
   url: string;
@@ -62,13 +64,13 @@ export const siteConfig = {
     headline: "Your dream day, beautifully designed.",
     subheadline:
       "Custom invitations, décor, signs, and digital resources — crafted with love for the moments that matter most.",
-    cta: { label: "View Packages", href: "/pricing" },
+    cta: { label: "View Packages", href: "/investment" },
   } satisfies Hero,
   about: {
     paragraphs: [
       "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon! xx",
     ],
-    cta: { label: "See What I Offer", href: "/pricing" },
+    cta: { label: "See What I Offer", href: "/investment" },
   } satisfies About,
   weddings: {
     paragraphs: [
@@ -81,9 +83,9 @@ export const siteConfig = {
   mainNav: [
     { title: "Home", href: "/" },
     { title: "Weddings", href: "/weddings" },
-    { title: "Pricing", href: "/pricing" },
-    { title: "Reviews", href: "/reviews" },
     { title: "Gallery", href: "/gallery" },
+    { title: "Reviews", href: "/reviews" },
+    { title: "Investment", href: "/investment" },
   ] satisfies NavItem[],
   pricing: [
     {
@@ -150,6 +152,9 @@ export const siteConfig = {
     name: "GutierrezByJanelle",
     tagline: "Ready-to-customize designs and digital stationery packs — available now in my Etsy shop.",
   } satisfies EtsyStore,
+  zola: {
+    vendorUrl: "https://www.zola.com/wedding-vendors/wedding-extras/gutierrez-by-janelle",
+  } satisfies ZolaProfile,
   instagram: {
     handle: "gutierrez.byjanelle",
     profileUrl: "https://www.instagram.com/gutierrez.byjanelle",
