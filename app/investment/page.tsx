@@ -16,19 +16,46 @@ export const metadata: Metadata = {
 export default function InvestmentPage() {
   return (
     <section className="container py-12 px-4 md:px-8">
-      <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center mb-12">
+      <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center mb-8">
         <h1 className="font-squarepeg text-3xl leading-[1.1] sm:text-3xl md:text-5xl">Your Investment</h1>
         <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
-          Transparent plans with no hidden fees.
+          Explore what each investment includes and reach out to begin your custom quote.
         </p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-        {siteConfig.pricing.map((plan) => (
+
+      <div className="mx-auto max-w-4xl mb-10">
+        <div className="rounded-lg border border-border bg-accent/40 px-6 py-5 text-center space-y-4">
+          <p className="text-foreground font-medium">
+            Inquire for a quote — I&apos;d love to bring your vision to life.
+          </p>
+          <div className="flex items-center justify-center gap-4 flex-wrap">
+            <a
+              href={siteConfig.etsyStore.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              Shop on Etsy
+            </a>
+            <a
+              href={siteConfig.instagram.profileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              DM on Instagram
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        {siteConfig.investments.map((plan) => (
           <PriceCard key={plan.id} plan={plan} />
         ))}
       </div>
 
-      <div className="mt-16 max-w-4xl mx-auto">
+      <div className="mt-16 max-w-5xl mx-auto">
         <EtsyStoreCard store={siteConfig.etsyStore} />
       </div>
     </section>

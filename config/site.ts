@@ -11,10 +11,9 @@ export type About = {
   cta: { label: string; href: string };
 };
 
-export type PricePlan = {
+export type InvestmentTier = {
   id: string;
   name: string;
-  price: string;
   description: string;
   features: string[];
 };
@@ -64,13 +63,13 @@ export const siteConfig = {
     headline: "Your dream day, beautifully designed.",
     subheadline:
       "Custom invitations, décor, signs, and digital resources — crafted with love for the moments that matter most.",
-    cta: { label: "View Packages", href: "/investment" },
+    cta: { label: "View Investments", href: "/investment" },
   } satisfies Hero,
   about: {
     paragraphs: [
       "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon! xx",
     ],
-    cta: { label: "See What I Offer", href: "/investment" },
+    cta: { label: "See My Investments", href: "/investment" },
   } satisfies About,
   weddings: {
     paragraphs: [
@@ -87,46 +86,72 @@ export const siteConfig = {
     { title: "Reviews", href: "/reviews" },
     { title: "Investment", href: "/investment" },
   ] satisfies NavItem[],
-  pricing: [
+  investments: [
     {
-      id: "digital",
-      name: "Digital Suite",
-      price: "Starting at $75",
-      description: "Digital-only designs delivered as print-ready files.",
+      id: "individual",
+      name: "Individual Item",
+      description: "Buy any single stationery piece — invite, thank you note, RSVP, menu, and more. Mix and match to suit your event.",
       features: [
-        "Custom invitation design",
-        "Digital save-the-dates",
-        "2 revision rounds",
-        "Print-ready PDF export",
+        "Invite",
+        "Thank you note",
+        "RSVP card",
+        "Menu",
+        "And more — inquire for the full list",
       ],
     },
     {
-      id: "signature",
-      name: "Signature Collection",
-      price: "Starting at $200",
-      description: "A full printed stationery suite for your wedding day.",
+      id: "diy-digital",
+      name: "DIY Digital",
+      description: "High quality print-ready PDF export. No printing included — files shared by email.",
       features: [
-        "Invitations + envelopes",
-        "Save-the-dates",
-        "Programs, menus & signage",
-        "3 revision rounds",
-        "Coordinated design suite",
+        "Invite",
+        "Save the date",
       ],
     },
     {
-      id: "full-event",
-      name: "Full Event Package",
-      price: "Custom quote",
-      description: "Custom décor, signs, and printed resources for every detail.",
+      id: "sweet-suite",
+      name: "Sweet Suite",
+      description: "A complete invite suite printed at home and shipped anywhere in the US.",
       features: [
-        "Everything in Signature",
-        "Custom venue signage",
-        "Escort card & table design",
-        "Seating chart display",
-        "Day-of coordination materials",
+        "Save the date",
+        "Invite",
+        "Detail card",
+        "RSVP",
+        "Envelopes",
       ],
     },
-  ] satisfies PricePlan[],
+    {
+      id: "signature-suite",
+      name: "Signature Suite",
+      description: "The full wedding stationery experience — every detail, beautifully coordinated.",
+      features: [
+        "Save the date",
+        "Invite",
+        "Detail card",
+        "RSVP",
+        "Envelopes",
+        "Ceremony cards",
+        "Personalized guest settings",
+        "Welcome sign",
+        "Seating chart",
+      ],
+    },
+    {
+      id: "add-ons",
+      name: "Add-Ons",
+      description: "Enhance any suite with these extra touches — available individually alongside any investment.",
+      features: [
+        "Menu",
+        "Drink toppers",
+        "Table top signs (signature drink sign)",
+        "Place cards",
+        "Thank you cards",
+        "Party favor tags",
+        "Full color designs",
+        "Custom paper",
+      ],
+    },
+  ] satisfies InvestmentTier[],
   reviews: [
     {
       id: "r1",
