@@ -30,7 +30,7 @@ export function EtsyStoreCard({ store, className }: EtsyStoreCardProps) {
           <p className="text-xs font-semibold uppercase tracking-widest text-accent-foreground">
             Shop on Etsy
           </p>
-          <h3 className="font-shadows text-3xl md:text-4xl text-foreground flex items-center gap-2 justify-center md:justify-start">
+          <h3 className="font-squarepeg text-3xl md:text-4xl text-foreground flex items-center gap-2 justify-center md:justify-start">
             {store.name}
             <ExternalLink className="w-5 h-5 text-muted-foreground" />
           </h3>

@@ -15,7 +15,7 @@ export function ReviewCard({ review, className }: ReviewCardProps) {
           &ldquo;{review.text}&rdquo;
         </blockquote>
         <div className="flex flex-col">
-          <p className="font-semibold">{review.author}</p>
+          <p className="font-squarepeg text-lg">{review.author}</p>
           <p className="text-sm text-muted-foreground">{review.role}</p>
         </div>
       </CardContent>

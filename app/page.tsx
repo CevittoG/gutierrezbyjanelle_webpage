@@ -19,7 +19,7 @@ export default function HomePage() {
   return (
     <>
       <section className="container flex flex-col items-center justify-center py-16 md:py-32 px-4 md:px-8 text-center space-y-6">
-        <h1 className="font-shadows text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
+        <h1 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
           {siteConfig.hero.headline}
         </h1>
         <p className="max-w-[600px] text-lg text-muted-foreground">
@@ -32,7 +32,7 @@ export default function HomePage() {
 
       <section className="bg-muted/50 border-t border-border">
         <div className="container max-w-3xl mx-auto py-20 px-4 md:px-8">
-          <h2 className="font-shadows text-4xl md:text-5xl text-center mb-10">
+          <h2 className="font-squarepeg text-4xl md:text-5xl text-center mb-10">
             A note from Janelle
           </h2>
           <div className="space-y-6">
@@ -57,6 +57,7 @@ export default function HomePage() {
       <section className="container py-16 px-4 md:px-8">
         <EtsyStoreCard store={siteConfig.etsyStore} className="max-w-4xl mx-auto" />
       </section>
+
     </>
   );
 }

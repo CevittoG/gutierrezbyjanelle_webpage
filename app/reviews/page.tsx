@@ -17,7 +17,7 @@ export default function ReviewsPage() {
   return (
     <section className="container py-12 px-4 md:px-8">
       <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center mb-12">
-        <h1 className="text-3xl font-bold leading-[1.1] sm:text-3xl md:text-5xl">Client Stories</h1>
+        <h1 className="font-squarepeg text-3xl leading-[1.1] sm:text-3xl md:text-5xl">Client Stories</h1>
         <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
           See what clients are saying about their experience.
         </p>
