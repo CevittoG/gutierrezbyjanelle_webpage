@@ -14,3 +14,4 @@ services:
       - /app/.next
     environment:
       - NODE_ENV=development
+      - QUOTE_CALC_PASSWORD=${QUOTE_CALC_PASSWORD}
