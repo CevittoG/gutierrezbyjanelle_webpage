@@ -44,11 +44,13 @@ globals.css  →  tailwind.config.ts  →  Tailwind utilities
 **Current palette (Janelle's brand):**
 | Token | Value | Role |
 |-------|-------|------|
-| `--background` | `42 40% 94%` | Warm cream |
-| `--foreground` | `20 10% 12%` | Near-black warm |
+| `--background` | `27 21% 80%` | Warm taupe (`#D6CAC0`) |
+| `--foreground` | `0 0% 0%` | Pure black |
 | `--primary` | `30 35% 72%` | Tan |
 | `--secondary` | `0 0% 100%` | White |
-| `--muted` | `42 25% 88%` | Deeper cream |
+| `--muted` | `27 21% 74%` | Darker taupe (section backgrounds) |
+| `--card` | `27 15% 90%` | Light taupe (card surfaces) |
+| `--border` | `27 15% 65%` | Mid taupe |
 | `--accent` | `350 60% 90%` | Light pink |
 
 To retheme the entire site, only the `:root` block in `app/globals.css` needs to change.
@@ -85,14 +87,14 @@ Components import `siteConfig` and nothing else — never hardcode display strin
 
 ## Typography
 
-Two Google Fonts loaded via `next/font/google` in `app/layout.tsx`, exposed as CSS variables:
+Two font roles, two fonts loaded via `next/font/google` in `app/layout.tsx`:
 
-| Variable | Font | Tailwind class | Usage |
-|----------|------|----------------|-------|
-| `--font-cinzel` | Cinzel | `font-cinzel` | Body default — all standard text, nav, cards |
-| `--font-shadows` | Shadows Into Light | `font-shadows` | Accent — site name in header, hero headline |
+| Role | Font | CSS variable | Tailwind class | Usage |
+|------|------|-------------|----------------|-------|
+| **Print / body** | Anybody (variable) | `--font-anybody` | `font-anybody` | Default on `<body>` — all nav, paragraphs, cards, buttons. Weight 132, uppercase, letter-spacing 0.04em (set in `globals.css`). |
+| **Cursive / accent** | Square Peg | `--font-squarepeg` | `font-squarepeg` | Hero headlines, key section headings, page titles, card/plan names, reviewer names. Normal case, weight 400. |
 
-Both variables are applied to `<html>`. `font-cinzel` is set on `<body>` as the default. Apply `font-shadows` only to accent elements.
+Both variables are applied to `<html>`. `font-anybody` is set on `<body>` as the default. The `globals.css` `@layer base` block applies weight/uppercase/tracking to `.font-anybody` and resets them on `.font-squarepeg` so uppercase does not cascade into accent headings.
 
 ---
 
