@@ -188,7 +188,7 @@ export interface AddOnResult {
 }
 
 function stateVal(s: QuoteState, key: string): number {
-  return (s as Record<string, number>)[key] ?? 0;
+  return (s as unknown as Record<string, number>)[key] ?? 0;
 }
 
 export function getItemQty(itemKey: string, packageQty: number): number {
