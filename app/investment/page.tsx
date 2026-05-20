@@ -35,7 +35,7 @@ export default function InvestmentPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
             >
-              Shop on Etsy
+              Etsy
             </a>
             <a
               href={siteConfig.instagram.profileUrl}
@@ -43,12 +43,13 @@ export default function InvestmentPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
             >
-              DM on Instagram
+              Instagram
             </a>
           </div>
         </div>
       </div>
 
+      <h2 className="font-squarepeg text-2xl sm:text-3xl text-center mb-6">Optimized Value Suites</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
         {siteConfig.investments.map((plan) => (
           <PriceCard key={plan.id} plan={plan} />

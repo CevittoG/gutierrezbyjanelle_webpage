@@ -10,12 +10,7 @@ interface PriceCardProps {
 export function PriceCard({ plan, className }: PriceCardProps) {
   return (
     <Card className={cn("relative overflow-hidden", className)}>
-      {plan.discount && (
-        <span className="absolute top-3 right-3 rounded-full bg-accent text-accent-foreground px-2.5 py-0.5 text-xs font-semibold">
-          {plan.discount}% savings
-        </span>
-      )}
-      <CardHeader>
+<CardHeader>
         <CardTitle className="font-squarepeg">{plan.name}</CardTitle>
         <CardDescription>{plan.description}</CardDescription>
       </CardHeader>
