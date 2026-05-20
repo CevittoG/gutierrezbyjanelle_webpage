@@ -22,7 +22,7 @@ export default function WeddingsPage() {
           For the Brides
         </h1>
         <p className="max-w-[500px] text-lg text-muted-foreground">
-          A little note from me to you, before we begin.
+          A little message from me to you, before we begin.
         </p>
       </section>
 
