@@ -16,6 +16,7 @@ export type InvestmentTier = {
   name: string;
   description: string;
   features: string[];
+  discount?: number;
 };
 
 export type Review = {
@@ -63,20 +64,19 @@ export const siteConfig = {
     headline: "Your dream day, beautifully designed.",
     subheadline:
       "Custom invitations, décor, signs, and digital resources — crafted with love for the moments that matter most.",
-    cta: { label: "View Investments", href: "/investment" },
   } satisfies Hero,
   about: {
     paragraphs: [
       "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon! xx",
     ],
-    cta: { label: "See My Investments", href: "/investment" },
+    cta: { label: "Invest in my event", href: "/investment" },
   } satisfies About,
   weddings: {
     paragraphs: [
-      "Welcome, brides! Firstly, I'd like to congratulate you on your engagement 🤍 You have someone who loves you unconditionally, and you both choose to spend your life together, it's such a beautiful milestone! I'm so happy you've found me to help illuminate your love to your family and friends.",
+      "Welcome, brides! Firstly, I'd like to congratulate you on your engagement ♡ You have someone who loves you unconditionally, and you both choose to spend your life together, it's such a beautiful milestone! I'm delighted to dedicate time into illuminating your love to your family and friends.",
       "Being a fiancée was one of the best and most favorite moments in my life! On the day my husband proposed, a couple we met congratulated us and gave just one piece of advice that made an impact in our relationship and how we felt throughout our engagement. The same advice that was passed on to them… \"never stop celebrating being engaged.\" Simple, yet can get shadowed in the midst of all of the wedding chaos. Never stopping the celebration of our engagement eventually turned into never stop celebrating our love.",
       "We used that advice during our entire wedding planning period, from the mardi gras parade to the night before we said \"I do.\" That advice became a beautiful excuse for endless dates to discuss each wedding decision, big or small. We used that time to connect in a low-stress conversation about our vision, what we wanted our guests to experience and of course, the infamous wedding budget. One date to discuss, another date to compromise, a date when we finally made up our minds… or changed them! We had so much fun in the midst of the wedding planning craze.",
-      "I would love to be a part of your wedding planning craze and give you one less worry! I fell in love with designing my dream day and I'm excited to help you do the same! I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
+      "I would love to be a part of your wedding planning craze and give you one less worry. I fell in love with designing my dream day and I'm excited to help you do the same. I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
     ],
   } satisfies Weddings,
   mainNav: [
@@ -101,12 +101,13 @@ export const siteConfig = {
     },
     {
       id: "diy-digital",
-      name: "DIY Digital",
+      name: "Design Suite",
       description: "High quality print-ready PDF export. No printing included — files shared by email.",
       features: [
         "Invite",
         "Save the date",
       ],
+      discount: 10,
     },
     {
       id: "sweet-suite",
@@ -119,6 +120,7 @@ export const siteConfig = {
         "RSVP",
         "Envelopes",
       ],
+      discount: 12,
     },
     {
       id: "signature-suite",
@@ -135,6 +137,7 @@ export const siteConfig = {
         "Welcome sign",
         "Seating chart",
       ],
+      discount: 15,
     },
     {
       id: "add-ons",
