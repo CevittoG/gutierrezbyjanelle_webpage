@@ -3,7 +3,7 @@ export type NavItem = { title: string; href: string };
 export type Hero = {
   headline: string;
   subheadline: string;
-  cta: { label: string; href: string };
+  cta?: { label: string; href: string };
 };
 
 export type About = {
