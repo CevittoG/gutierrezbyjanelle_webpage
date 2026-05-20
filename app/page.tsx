@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { ZolaBadgeCard } from "@/components/ui/zola-badge-card";
@@ -19,21 +20,26 @@ export default function HomePage() {
   return (
     <>
       <section className="container flex flex-col items-center justify-center py-16 md:py-32 px-4 md:px-8 text-center space-y-6">
+        <Image
+          src="/logo.png"
+          alt={siteConfig.name}
+          width={140}
+          height={140}
+          priority
+          className="object-contain"
+        />
         <h1 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
           {siteConfig.hero.headline}
         </h1>
         <p className="max-w-[600px] text-lg text-muted-foreground">
           {siteConfig.hero.subheadline}
         </p>
-        <Button asChild size="lg">
-          <Link href={siteConfig.hero.cta.href}>{siteConfig.hero.cta.label}</Link>
-        </Button>
       </section>
 
       <section className="bg-muted/50 border-t border-border">
         <div className="container max-w-3xl mx-auto py-20 px-4 md:px-8">
           <h2 className="font-squarepeg text-4xl md:text-5xl text-center mb-10">
-            A note from Janelle
+            Welcome, <em>party people!</em>
           </h2>
           <div className="space-y-6">
             {siteConfig.about.paragraphs.map((paragraph, i) => (
