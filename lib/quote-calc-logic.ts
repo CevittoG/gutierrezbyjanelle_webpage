@@ -1,63 +1,68 @@
-export type PkgKey = "individual" | "diy" | "sweet" | "deluxe";
+export type PkgKey = "individual" | "diy" | "sweet" | "signature";
 export type PricingMode = "fresh" | "reuse";
 
 export interface QuoteState {
-  // Material & production
-  paper: number;
-  env: number;
-  pkg: number;
   hourly: number;
-  // Markup levers
-  shipBase: number;
-  printProfit: number;
-  shipProfit: number;
-  // Design fees
-  feeC: number;
-  feeR: number;
-  feeT: number;
-  // Item-level [_d = design fee, _r = reuse price, _p = print cost/unit]
-  iSaveDate_d: number; iSaveDate_r: number; iSaveDate_p: number;
-  iInvite_d: number;   iInvite_r: number;   iInvite_p: number;
-  iDetail_d: number;   iDetail_r: number;   iDetail_p: number;
-  iRSVP_d: number;     iRSVP_r: number;     iRSVP_p: number;
-  iEnvelope_d: number; iEnvelope_r: number; iEnvelope_p: number;
-  iCeremony_d: number; iCeremony_r: number; iCeremony_p: number;
-  iGuestSetting_d: number; iGuestSetting_r: number; iGuestSetting_p: number;
-  iWelcome_d: number;  iWelcome_r: number;  iWelcome_p: number;
-  iSeating_d: number;  iSeating_r: number;  iSeating_p: number;
-  iMenu_d: number;     iMenu_r: number;     iMenu_p: number;
-  iDrinkTop_d: number; iDrinkTop_r: number; iDrinkTop_p: number;
-  iTableSign_d: number; iTableSign_r: number; iTableSign_p: number;
-  iPlaceCard_d: number; iPlaceCard_r: number; iPlaceCard_p: number;
-  iThankYou_d: number; iThankYou_r: number; iThankYou_p: number;
-  iPartyFavor_d: number; iPartyFavor_r: number; iPartyFavor_p: number;
-  // Hours per package
-  hDIY: number; hSweet: number; hDeluxe: number;
-  // Target
-  target: number;
+  adminPtg: number;
+  targetProfitPtg: number;
+  errorMarginPtg: number;
+  packagingCost: number;
+  reuseFactor: number;
+  revisionMin: number;
+
+  discountIndividual: number;
+  discountDiy: number;
+  discountSweet: number;
+  discountSignature: number;
+
+  vendorIncentivePtg: number;
+  fullColorFactor: number;
+  customPaperFactor: number;
+  rushFeePtg: number;
+  digitalLicensePtg: number;
+
+  // Per-item: _dt = design time (min), _pt = production time/unit (min), _sc = sheet cost, _y = yield
+  iSaveDate_dt: number; iSaveDate_pt: number; iSaveDate_sc: number; iSaveDate_y: number;
+  iInvite_dt: number;   iInvite_pt: number;   iInvite_sc: number;   iInvite_y: number;
+  iDetail_dt: number;   iDetail_pt: number;   iDetail_sc: number;   iDetail_y: number;
+  iRSVP_dt: number;     iRSVP_pt: number;     iRSVP_sc: number;     iRSVP_y: number;
+  iEnvelope_dt: number; iEnvelope_pt: number;  iEnvelope_sc: number; iEnvelope_y: number;
+  iCeremony_dt: number; iCeremony_pt: number;  iCeremony_sc: number; iCeremony_y: number;
+  iGuestSetting_dt: number; iGuestSetting_pt: number; iGuestSetting_sc: number; iGuestSetting_y: number;
+  iWelcome_dt: number;  iWelcome_pt: number;   iWelcome_sc: number;  iWelcome_y: number;
+  iSeating_dt: number;  iSeating_pt: number;   iSeating_sc: number;  iSeating_y: number;
+  iMenu_dt: number;     iMenu_pt: number;      iMenu_sc: number;     iMenu_y: number;
+  iDrinkTop_dt: number; iDrinkTop_pt: number;  iDrinkTop_sc: number; iDrinkTop_y: number;
+  iTableSign_dt: number; iTableSign_pt: number; iTableSign_sc: number; iTableSign_y: number;
+  iPlaceCard_dt: number; iPlaceCard_pt: number; iPlaceCard_sc: number; iPlaceCard_y: number;
+  iThankYou_dt: number; iThankYou_pt: number;  iThankYou_sc: number; iThankYou_y: number;
+  iPartyFavor_dt: number; iPartyFavor_pt: number; iPartyFavor_sc: number; iPartyFavor_y: number;
 }
 
 export const DEFAULTS: QuoteState = {
-  paper: 0.15, env: 0.25, pkg: 5, hourly: 60,
-  shipBase: 12, printProfit: 100, shipProfit: 25,
-  feeC: 250, feeR: 55, feeT: 75,
-  iSaveDate_d: 120, iSaveDate_r: 18,  iSaveDate_p: 0.55,
-  iInvite_d: 150,   iInvite_r: 22,    iInvite_p: 0.75,
-  iDetail_d: 60,    iDetail_r: 10,    iDetail_p: 0.45,
-  iRSVP_d: 80,      iRSVP_r: 12,      iRSVP_p: 0.55,
-  iEnvelope_d: 0,   iEnvelope_r: 0,   iEnvelope_p: 0.30,
-  iCeremony_d: 80,  iCeremony_r: 12,  iCeremony_p: 0.55,
-  iGuestSetting_d: 100, iGuestSetting_r: 8, iGuestSetting_p: 0.65,
-  iWelcome_d: 180,  iWelcome_r: 65,   iWelcome_p: 35,
-  iSeating_d: 200,  iSeating_r: 90,   iSeating_p: 55,
-  iMenu_d: 90,      iMenu_r: 12,      iMenu_p: 0.60,
-  iDrinkTop_d: 50,  iDrinkTop_r: 1.5, iDrinkTop_p: 0.35,
-  iTableSign_d: 70, iTableSign_r: 18, iTableSign_p: 4,
-  iPlaceCard_d: 50, iPlaceCard_r: 1.5,iPlaceCard_p: 0.40,
-  iThankYou_d: 90,  iThankYou_r: 3,   iThankYou_p: 0.55,
-  iPartyFavor_d: 60,iPartyFavor_r: 2, iPartyFavor_p: 0.40,
-  hDIY: 4, hSweet: 8, hDeluxe: 14,
-  target: 50,
+  hourly: 25, adminPtg: 10, targetProfitPtg: 15, errorMarginPtg: 5,
+  packagingCost: 2.5, reuseFactor: 0.25, revisionMin: 30,
+
+  discountIndividual: 0, discountDiy: 10, discountSweet: 12, discountSignature: 15,
+
+  vendorIncentivePtg: 10, fullColorFactor: 1.5, customPaperFactor: 1.3, rushFeePtg: 30, digitalLicensePtg: 30,
+
+  //                       dt   pt    sc     y
+  iSaveDate_dt: 30,      iSaveDate_pt: 3,   iSaveDate_sc: 0.55,  iSaveDate_y: 6,
+  iInvite_dt: 30,        iInvite_pt: 3,     iInvite_sc: 0.55,    iInvite_y: 2,
+  iDetail_dt: 30,        iDetail_pt: 3,     iDetail_sc: 0.55,    iDetail_y: 2,
+  iRSVP_dt: 30,          iRSVP_pt: 4,       iRSVP_sc: 0.55,      iRSVP_y: 4,
+  iEnvelope_dt: 0,       iEnvelope_pt: 0,   iEnvelope_sc: 0.31,  iEnvelope_y: 1,
+  iCeremony_dt: 45,      iCeremony_pt: 3,   iCeremony_sc: 0.55,  iCeremony_y: 2,
+  iGuestSetting_dt: 30,  iGuestSetting_pt: 4, iGuestSetting_sc: 0.55, iGuestSetting_y: 4,
+  iWelcome_dt: 30,       iWelcome_pt: 1,    iWelcome_sc: 22,     iWelcome_y: 1,
+  iSeating_dt: 60,       iSeating_pt: 1,    iSeating_sc: 22,     iSeating_y: 1,
+  iMenu_dt: 15,          iMenu_pt: 2,       iMenu_sc: 0.55,      iMenu_y: 1,
+  iDrinkTop_dt: 30,      iDrinkTop_pt: 4,   iDrinkTop_sc: 0.55,  iDrinkTop_y: 12,
+  iTableSign_dt: 15,     iTableSign_pt: 1,  iTableSign_sc: 0.55, iTableSign_y: 1,
+  iPlaceCard_dt: 15,     iPlaceCard_pt: 3,  iPlaceCard_sc: 0.55, iPlaceCard_y: 6,
+  iThankYou_dt: 30,      iThankYou_pt: 2,   iThankYou_sc: 0.55,  iThankYou_y: 4,
+  iPartyFavor_dt: 15,    iPartyFavor_pt: 4, iPartyFavor_sc: 0.55, iPartyFavor_y: 10,
 };
 
 export interface CatalogItem {
@@ -69,21 +74,21 @@ export interface CatalogItem {
 }
 
 export const ITEM_CATALOG: CatalogItem[] = [
-  { key: "iSaveDate",     label: "Save the date",              qty: 1, notes: "Sent 4–8 months out" },
-  { key: "iInvite",       label: "Invite",                     qty: 1, notes: "Core item · anchor of every suite" },
+  { key: "iSaveDate",     label: "Save the date",              qty: 1, notes: "Sent 4-8 months out" },
+  { key: "iInvite",       label: "Invite",                     qty: 1, notes: "Core item - anchor of every suite" },
   { key: "iDetail",       label: "Detail card",                qty: 1, notes: "Hotel info, QR codes, directions" },
   { key: "iRSVP",         label: "RSVP",                       qty: 1, notes: "Often bundled with invite" },
-  { key: "iEnvelope",     label: "Envelope",                   qty: 2, notes: "Material cost only · no design fee" },
+  { key: "iEnvelope",     label: "Envelope",                   qty: 2, notes: "Material cost only - no design" },
   { key: "iCeremony",     label: "Ceremony card",              qty: 1, notes: "Program / order of events" },
-  { key: "iGuestSetting", label: "Personalized guest setting", qty: 2, notes: "~2 per household · high volume" },
-  { key: "iWelcome",      label: "Welcome sign",               qty: 0, fixed: 1, notes: "1 per event · large format" },
-  { key: "iSeating",      label: "Seating chart",              qty: 0, fixed: 1, notes: "1 per event · time-intensive" },
+  { key: "iGuestSetting", label: "Personalized guest setting", qty: 2, notes: "~2 per household - high volume" },
+  { key: "iWelcome",      label: "Welcome sign",               qty: 0, fixed: 1, notes: "1 per event - large format" },
+  { key: "iSeating",      label: "Seating chart",              qty: 0, fixed: 1, notes: "1 per event - time-intensive" },
   { key: "iMenu",         label: "Menu",                       qty: 2, notes: "~2 per household" },
-  { key: "iDrinkTop",     label: "Drink toppers",              qty: 4, notes: "~4 per household · easy upsell" },
+  { key: "iDrinkTop",     label: "Drink toppers",              qty: 4, notes: "~4 per household - easy upsell" },
   { key: "iTableSign",    label: "Table top signs",            qty: 0, fixed: 8, notes: "~8 tables typical" },
-  { key: "iPlaceCard",    label: "Place cards",                qty: 2, notes: "~2 per household · great margin at scale" },
+  { key: "iPlaceCard",    label: "Place cards",                qty: 2, notes: "~2 per household - great margin at scale" },
   { key: "iThankYou",     label: "Thank you cards",            qty: 1, notes: "Common reorder after the event" },
-  { key: "iPartyFavor",   label: "Party favor tags",           qty: 2, notes: "~2 per household · small format" },
+  { key: "iPartyFavor",   label: "Party favor tags",           qty: 2, notes: "~2 per household - small format" },
 ];
 
 export const ADD_ON_KEYS = [
@@ -95,10 +100,8 @@ export interface PackageDef {
   tagline: string;
   description: string;
   items: string[];
-  hasShipping: boolean;
-  hasPrinting: boolean;
-  hasDesignFee: boolean;
-  hours: number | string;
+  isDigital: boolean;
+  discountKey: keyof QuoteState;
   colorClass: string;
   selectedColorClass: string;
 }
@@ -106,86 +109,67 @@ export interface PackageDef {
 export const PACKAGES: Record<PkgKey, PackageDef> = {
   individual: {
     name: "Individual Item",
-    tagline: "One item type à la carte",
-    description: "Sample shown as a single Invite. Use this template for any standalone line item on a quote.",
+    tagline: "One item type a la carte",
+    description: "Any single stationery piece. Can be sold as digital (design only) or physical (printed + shipped).",
     items: ["iInvite"],
-    hasShipping: true, hasPrinting: true, hasDesignFee: true,
-    hours: 2,
-    colorClass: "border-primary/40 bg-primary/5",
-    selectedColorClass: "border-primary bg-primary/10 ring-2 ring-primary/30",
-  },
-  diy: {
-    name: "DIY Digital",
-    tagline: "Print-ready PDFs — no printing or shipping",
-    description: "High-quality PDF files delivered by email. Great for budget-conscious clients who want to self-print.",
-    items: ["iSaveDate", "iInvite"],
-    hasShipping: false, hasPrinting: false, hasDesignFee: true,
-    hours: "hDIY",
-    colorClass: "border-ring/30 bg-ring/5",
-    selectedColorClass: "border-ring bg-ring/10 ring-2 ring-ring/30",
-  },
-  sweet: {
-    name: "Sweet Suite",
-    tagline: "Full invite suite · printed & shipped",
-    description: "All the core invite pieces, professionally printed at home and shipped anywhere in the US.",
-    items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope"],
-    hasShipping: true, hasPrinting: true, hasDesignFee: true,
-    hours: "hSweet",
+    isDigital: false,
+    discountKey: "discountIndividual",
     colorClass: "border-accent-foreground/20 bg-accent/20",
     selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
   },
-  deluxe: {
-    name: "Deluxe Suite",
-    tagline: "The full experience — invites + day-of pieces",
+  diy: {
+    name: "Design Suite",
+    tagline: "Print-ready PDFs - design only",
+    description: "High-quality PDF files delivered by email. No printing or shipping included.",
+    items: ["iSaveDate", "iInvite"],
+    isDigital: true,
+    discountKey: "discountDiy",
+    colorClass: "border-accent-foreground/20 bg-accent/20",
+    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+  },
+  sweet: {
+    name: "Sweet Suite",
+    tagline: "Full invite suite - printed & shipped",
+    description: "All the core invite pieces, professionally printed at home and shipped anywhere in the US.",
+    items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope"],
+    isDigital: false,
+    discountKey: "discountSweet",
+    colorClass: "border-accent-foreground/20 bg-accent/20",
+    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+  },
+  signature: {
+    name: "Signature Suite",
+    tagline: "The full experience - invites + day-of pieces",
     description: "Everything in Sweet Suite plus ceremony cards, personalized guest settings, welcome sign, and seating chart.",
     items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope", "iCeremony", "iGuestSetting", "iWelcome", "iSeating"],
-    hasShipping: true, hasPrinting: true, hasDesignFee: true,
-    hours: "hDeluxe",
-    colorClass: "border-muted-foreground/30 bg-muted/50",
-    selectedColorClass: "border-muted-foreground bg-muted ring-2 ring-muted-foreground/30",
+    isDigital: false,
+    discountKey: "discountSignature",
+    colorClass: "border-accent-foreground/20 bg-accent/20",
+    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
   },
 };
 
-export interface PrintLineItem {
-  label: string;
-  qty: number;
-  costPer: number;
-  markup: number;
-  revenue: number;
+// --- Time formatting ---
+
+export function fmtTime(totalMin: number): string {
+  const m = Math.round(totalMin);
+  if (m <= 0) return "0m";
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  if (h === 0) return `${rm}m`;
+  return `${h}h ${rm}m`;
 }
 
-export interface FeeLineItem {
-  label: string;
-  amount: number;
+export function timeToHM(totalMin: number): { h: number; m: number } {
+  const t = Math.max(0, Math.round(totalMin));
+  return { h: Math.floor(t / 60), m: t % 60 };
 }
 
-export interface PackageResult {
-  price: number;
-  printCost: number;
-  printRevenue: number;
-  shipCost: number;
-  shipRevenue: number;
-  itemFees: number;
-  cogs: number;
-  grossProfit: number;
-  laborCost: number;
-  netProfit: number;
-  netMargin: number;
-  hours: number;
-  pkgMaterials: number;
-  printLines: PrintLineItem[];
-  feeLines: FeeLineItem[];
+export function hmToMin(h: number, m: number): number {
+  return Math.max(0, h) * 60 + Math.max(0, m);
 }
 
-export interface AddOnResult {
-  qty: number;
-  costPer: number;
-  markup: number;
-  printRevenue: number;
-  printCost: number;
-  itemFee: number;
-  price: number;
-}
+// --- Helpers ---
 
 function stateVal(s: QuoteState, key: string): number {
   return (s as unknown as Record<string, number>)[key] ?? 0;
@@ -198,75 +182,174 @@ export function getItemQty(itemKey: string, packageQty: number): number {
   return item.qty * packageQty;
 }
 
+export function getDiscountPtg(pkgKey: PkgKey, s: QuoteState): number {
+  return stateVal(s, PACKAGES[pkgKey].discountKey);
+}
+
+// --- Result types ---
+
+export interface ItemBreakdown {
+  label: string;
+  qty: number;
+  designMin: number;
+  designLabor: number;
+  fullDesignLabor: number;
+  prodMin: number;
+  productionLabor: number;
+  sheetCost: number;
+  yield: number;
+  materialPerUnitBase: number;
+  materialPerUnit: number;
+  materialsCost: number;
+}
+
+export interface PackageResult {
+  finalPrice: number;
+
+  totalFullDesignLabor: number;
+  totalDesignLabor: number;
+  reuseDiscount: number;
+  totalProductionLabor: number;
+  totalMaterials: number;
+  packaging: number;
+  revisionLabor: number;
+  totalVariable: number;
+  totalFullVariable: number;
+
+  adminAmount: number;
+  profitAmount: number;
+  priceBeforeDiscount: number;
+  discountPtg: number;
+  discountAmount: number;
+  vendorIncentivePtg: number;
+  vendorIncentiveAmount: number;
+
+  totalDirectCosts: number;
+  totalLaborCost: number;
+  netProfit: number;
+  effectiveMargin: number;
+
+  itemBreakdown: ItemBreakdown[];
+  isDigital: boolean;
+}
+
+export interface AddOnResult {
+  qty: number;
+  designMin: number;
+  designLabor: number;
+  prodMin: number;
+  productionLabor: number;
+  materialPerUnit: number;
+  materialsCost: number;
+  itemVariable: number;
+  adminAmount: number;
+  profitAmount: number;
+  price: number;
+}
+
+// --- Calculations ---
+
 export function calcPackage(
   pkgKey: PkgKey,
   qty: number,
   mode: PricingMode,
-  s: QuoteState
+  s: QuoteState,
+  extraRevisions: number,
+  overrideItems?: string[],
+  overrideDigital?: boolean,
+  fullColor?: boolean,
+  customPaper?: boolean,
+  vendorIncentive?: boolean,
 ): PackageResult {
   const pkg = PACKAGES[pkgKey];
-  const isFresh = mode === "fresh";
-  const printMarkup = 1 + s.printProfit / 100;
-  const shipMarkup = 1 + s.shipProfit / 100;
+  const items = overrideItems ?? pkg.items;
+  const isDigital = overrideDigital ?? pkg.isDigital;
+  const isReuse = mode === "reuse";
 
-  let printCost = 0;
-  let printRevenue = 0;
-  let itemFees = 0;
-  const printLines: PrintLineItem[] = [];
-  const feeLines: FeeLineItem[] = [];
+  let totalDesignLabor = 0;
+  let totalFullDesignLabor = 0;
+  let totalProductionLabor = 0;
+  let totalMaterials = 0;
+  const itemBreakdown: ItemBreakdown[] = [];
 
-  for (const itemKey of pkg.items) {
+  const sheetMultiplier = (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
+
+  for (const itemKey of items) {
     const itemQty = getItemQty(itemKey, qty);
-    const printCostPer = stateVal(s, itemKey + "_p");
-    const designFee = stateVal(s, itemKey + "_d");
-    const reusePrice = stateVal(s, itemKey + "_r");
+    const designMin = stateVal(s, itemKey + "_dt");
+    const prodMin = stateVal(s, itemKey + "_pt");
+    const rawSheetCost = stateVal(s, itemKey + "_sc");
+    const sheetCost = rawSheetCost * sheetMultiplier;
+    const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
     const catalogItem = ITEM_CATALOG.find((i) => i.key === itemKey)!;
 
-    if (pkg.hasPrinting && printCostPer > 0) {
-      const lineRevenue = itemQty * printCostPer * printMarkup;
-      printCost += itemQty * printCostPer;
-      printRevenue += lineRevenue;
-      printLines.push({ label: catalogItem.label, qty: itemQty, costPer: printCostPer, markup: printMarkup, revenue: lineRevenue });
+    const fullDesignLabor = (designMin / 60) * s.hourly;
+    const designLabor = fullDesignLabor * (isReuse ? s.reuseFactor : 1);
+
+    let productionLabor = 0;
+    let materialPerUnitBase = 0;
+    let materialPerUnit = 0;
+    let materialsCost = 0;
+
+    if (!isDigital) {
+      productionLabor = (prodMin / 60) * s.hourly * itemQty;
+      materialPerUnitBase = sheetCost / yield_;
+      materialPerUnit = materialPerUnitBase * (1 + s.errorMarginPtg / 100);
+      materialsCost = materialPerUnit * itemQty;
     }
 
-    if (itemKey === "iEnvelope") continue;
+    totalFullDesignLabor += fullDesignLabor;
+    totalDesignLabor += designLabor;
+    totalProductionLabor += productionLabor;
+    totalMaterials += materialsCost;
 
-    if (isFresh && designFee > 0) {
-      itemFees += designFee;
-      feeLines.push({ label: catalogItem.label, amount: designFee });
-    } else if (!isFresh && reusePrice > 0) {
-      itemFees += reusePrice;
-      feeLines.push({ label: catalogItem.label, amount: reusePrice });
-    }
+    itemBreakdown.push({
+      label: catalogItem.label,
+      qty: itemQty,
+      designMin,
+      designLabor,
+      fullDesignLabor,
+      prodMin,
+      productionLabor,
+      sheetCost,
+      yield: yield_,
+      materialPerUnitBase,
+      materialPerUnit,
+      materialsCost,
+    });
   }
 
-  let shipCost = 0;
-  let shipRevenue = 0;
-  if (pkg.hasShipping) {
-    shipCost = s.shipBase;
-    shipRevenue = s.shipBase * shipMarkup;
-  }
+  const revisionLabor = (extraRevisions * s.revisionMin / 60) * s.hourly;
+  const packaging = isDigital ? 0 : s.packagingCost;
+  const reuseDiscount = totalFullDesignLabor - totalDesignLabor;
 
-  let hours: number;
-  if (typeof pkg.hours === "string") {
-    hours = stateVal(s, pkg.hours);
-  } else {
-    hours = pkg.hours;
-  }
-  if (!isFresh) hours = Math.max(1, hours * 0.4);
-  const laborCost = s.hourly * hours;
+  const totalVariable = totalDesignLabor + totalProductionLabor + totalMaterials + revisionLabor + packaging;
+  const totalFullVariable = totalFullDesignLabor + totalProductionLabor + totalMaterials + revisionLabor + packaging;
+  const adminAmount = totalVariable * (s.adminPtg / 100);
+  const priceAfterAdmin = totalVariable + adminAmount;
+  const profitAmount = priceAfterAdmin * (s.targetProfitPtg / 100);
+  const priceBeforeDiscount = priceAfterAdmin + profitAmount;
 
-  const price = pkgKey === "diy" ? laborCost + itemFees : printRevenue + shipRevenue + itemFees;
-  const pkgMaterials = pkg.hasShipping ? s.pkg : 0;
-  const cogs = printCost + shipCost + pkgMaterials;
-  const grossProfit = price - cogs;
-  const netProfit = grossProfit - laborCost;
-  const netMargin = price > 0 ? (netProfit / price) * 100 : 0;
+  const discountPtg = getDiscountPtg(pkgKey, s);
+  const vendorIncentivePtg = vendorIncentive ? s.vendorIncentivePtg : 0;
+  const combinedDiscountPtg = discountPtg + vendorIncentivePtg;
+  const discountAmount = priceBeforeDiscount * (discountPtg / 100);
+  const vendorIncentiveAmount = priceBeforeDiscount * (vendorIncentivePtg / 100);
+  const finalPrice = priceBeforeDiscount * (1 - combinedDiscountPtg / 100);
+
+  const totalDirectCosts = totalMaterials + packaging;
+  const totalLaborCost = totalDesignLabor + totalProductionLabor + revisionLabor;
+  const netProfit = finalPrice - totalDirectCosts - totalLaborCost;
+  const effectiveMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
 
   return {
-    price, printCost, printRevenue, shipCost, shipRevenue, itemFees,
-    cogs, grossProfit, laborCost, netProfit, netMargin, hours, pkgMaterials,
-    printLines, feeLines,
+    finalPrice, totalFullDesignLabor, totalDesignLabor, reuseDiscount,
+    totalProductionLabor, totalMaterials, packaging, revisionLabor,
+    totalVariable, totalFullVariable, adminAmount, profitAmount,
+    priceBeforeDiscount, discountPtg, discountAmount,
+    vendorIncentivePtg, vendorIncentiveAmount,
+    totalDirectCosts, totalLaborCost, netProfit, effectiveMargin,
+    itemBreakdown, isDigital,
   };
 }
 
@@ -274,18 +357,36 @@ export function calcAddOn(
   itemKey: string,
   qty: number,
   mode: PricingMode,
-  s: QuoteState
+  s: QuoteState,
+  fullColor?: boolean,
+  customPaper?: boolean,
 ): AddOnResult {
   const itemQty = getItemQty(itemKey, qty);
-  const printCostPer = stateVal(s, itemKey + "_p");
-  const designFee = stateVal(s, itemKey + "_d");
-  const reusePrice = stateVal(s, itemKey + "_r");
-  const printMarkup = 1 + s.printProfit / 100;
-  const printCost = itemQty * printCostPer;
-  const printRevenue = printCost * printMarkup;
-  const itemFee = mode === "fresh" ? designFee : reusePrice;
-  return { qty: itemQty, costPer: printCostPer, markup: printMarkup, printRevenue, printCost, itemFee, price: printRevenue + itemFee };
+  const designMin = stateVal(s, itemKey + "_dt");
+  const prodMin = stateVal(s, itemKey + "_pt");
+  const rawSheetCost = stateVal(s, itemKey + "_sc");
+  const sheetMultiplier = (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
+  const sheetCost = rawSheetCost * sheetMultiplier;
+  const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
+  const isReuse = mode === "reuse";
+
+  const designLabor = (designMin / 60) * s.hourly * (isReuse ? s.reuseFactor : 1);
+  const productionLabor = (prodMin / 60) * s.hourly * itemQty;
+  const materialPerUnit = (sheetCost / yield_) * (1 + s.errorMarginPtg / 100);
+  const materialsCost = materialPerUnit * itemQty;
+
+  const itemVariable = designLabor + productionLabor + materialsCost;
+  const adminAmount = itemVariable * (s.adminPtg / 100);
+  const profitAmount = (itemVariable + adminAmount) * (s.targetProfitPtg / 100);
+  const price = itemVariable + adminAmount + profitAmount;
+
+  return {
+    qty: itemQty, designMin, designLabor, prodMin, productionLabor,
+    materialPerUnit, materialsCost, itemVariable, adminAmount, profitAmount, price,
+  };
 }
+
+// --- Formatting ---
 
 export function fmt$(n: number, dec = 0): string {
   return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -297,4 +398,54 @@ export function fmt$2(n: number): string {
 
 export function fmtPct(n: number): string {
   return Math.round(n) + "%";
+}
+
+// --- Persistence ---
+
+const STORAGE_KEY = "quote-calc-defaults";
+
+export function loadSavedDefaults(): QuoteState {
+  if (typeof window === "undefined") return { ...DEFAULTS };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { ...DEFAULTS };
+    const parsed = JSON.parse(raw) as Partial<QuoteState>;
+    return { ...DEFAULTS, ...parsed };
+  } catch {
+    return { ...DEFAULTS };
+  }
+}
+
+export function saveDefaults(s: QuoteState): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+
+export function clearSavedDefaults(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+export function exportSettings(s: QuoteState): void {
+  const blob = new Blob([JSON.stringify(s, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `quote-calc-settings-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function importSettings(file: File): Promise<QuoteState> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as Partial<QuoteState>;
+        resolve({ ...DEFAULTS, ...parsed });
+      } catch {
+        reject(new Error("Invalid JSON file"));
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
 }
