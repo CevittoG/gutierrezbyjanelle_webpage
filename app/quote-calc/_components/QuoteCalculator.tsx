@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ADD_ON_KEYS,
   DEFAULTS,
@@ -12,13 +12,15 @@ import {
   calcAddOn,
   calcPackage,
   fmt$,
-  fmt$2,
+  fmtPct,
+  loadSavedDefaults,
+  getDiscountPtg,
 } from "@/lib/quote-calc-logic";
 import { cn } from "@/utils";
 import { BreakdownPanel } from "./BreakdownPanel";
 import { AssumptionsPanel } from "./AssumptionsPanel";
 
-const PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "deluxe"];
+const PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
 
 export function QuoteCalculator() {
   const [pkg, setPkg] = useState<PkgKey>("sweet");
@@ -29,6 +31,19 @@ export function QuoteCalculator() {
   const [extraRevisions, setExtraRevisions] = useState(0);
   const [digitalLicense, setDigitalLicense] = useState(false);
   const [assumptions, setAssumptions] = useState<QuoteState>({ ...DEFAULTS });
+
+  const [vendorIncentive, setVendorIncentive] = useState(false);
+  const [fullColor, setFullColor] = useState(false);
+  const [customPaper, setCustomPaper] = useState(false);
+
+  const [individualItem, setIndividualItem] = useState("iInvite");
+  const [individualDigital, setIndividualDigital] = useState(false);
+
+  const [tooltipPkg, setTooltipPkg] = useState<PkgKey | null>(null);
+
+  useEffect(() => {
+    setAssumptions(loadSavedDefaults());
+  }, []);
 
   function updateAssumption(key: keyof QuoteState, value: number) {
     setAssumptions((prev) => ({ ...prev, [key]: value }));
@@ -43,9 +58,12 @@ export function QuoteCalculator() {
     });
   }
 
+  const overrideItems = pkg === "individual" ? [individualItem] : undefined;
+  const overrideDigital = pkg === "individual" ? individualDigital : undefined;
+
   const baseResult = useMemo(
-    () => calcPackage(pkg, qty, mode, assumptions),
-    [pkg, qty, mode, assumptions]
+    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive),
+    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive],
   );
 
   const selectedAddOns = useMemo(
@@ -53,23 +71,21 @@ export function QuoteCalculator() {
       ADD_ON_KEYS.filter((k) => addOns.has(k)).map((k) => ({
         key: k,
         label: ITEM_CATALOG.find((i) => i.key === k)!.label,
-        result: calcAddOn(k, qty, mode, assumptions),
+        result: calcAddOn(k, qty, mode, assumptions, fullColor, customPaper),
       })),
-    [addOns, qty, mode, assumptions]
+    [addOns, qty, mode, assumptions, fullColor, customPaper],
   );
 
-  // Per-add-on price preview for the checklist
   const addOnPreviews = useMemo(
     () =>
       Object.fromEntries(
-        ADD_ON_KEYS.map((k) => [k, calcAddOn(k, qty, mode, assumptions)])
+        ADD_ON_KEYS.map((k) => [k, calcAddOn(k, qty, mode, assumptions, fullColor, customPaper)])
       ),
-    [qty, mode, assumptions]
+    [qty, mode, assumptions, fullColor, customPaper],
   );
 
   return (
     <div className="container py-8 px-4 md:px-8 normal-case tracking-normal">
-      {/* Page header */}
       <div className="mb-7">
         <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
           Internal tool · not indexed
@@ -81,7 +97,7 @@ export function QuoteCalculator() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        {/* ─── Left: configuration panel ─── */}
+        {/* Left: configuration panel */}
         <div className="lg:col-span-3 space-y-5">
 
           {/* 1. Package selector */}
@@ -90,38 +106,117 @@ export function QuoteCalculator() {
               {PKG_KEYS.map((key) => {
                 const def = PACKAGES[key];
                 const isSelected = pkg === key;
-                const previewResult = calcPackage(key, qty, mode, assumptions);
+                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive);
+                const discount = getDiscountPtg(key, assumptions);
                 return (
-                  <button
-                    key={key}
-                    onClick={() => setPkg(key)}
-                    className={cn(
-                      "text-left p-4 rounded-xl border-2 transition-all duration-150",
-                      isSelected ? def.selectedColorClass : def.colorClass + " hover:brightness-95"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="font-squarepeg text-xl leading-tight">{def.name}</span>
-                      {isSelected && (
-                        <span className="shrink-0 text-xs rounded-full bg-foreground text-background px-2 py-0.5 font-medium">
-                          Selected
-                        </span>
+                  <div key={key} className="relative group">
+                    <button
+                      onClick={() => setPkg(key)}
+                      onMouseEnter={() => setTooltipPkg(key)}
+                      onMouseLeave={() => setTooltipPkg(null)}
+                      className={cn(
+                        "w-full text-left p-4 rounded-xl border-2 transition-all duration-150",
+                        isSelected ? def.selectedColorClass : def.colorClass + " hover:brightness-95"
                       )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2">{def.tagline}</p>
-                    <p className="text-xs text-muted-foreground/70 leading-relaxed">{def.description}</p>
-                    <p className="text-sm font-mono font-semibold mt-3 tabular-nums">
-                      {fmt$(Math.round(previewResult.price))}
-                    </p>
-                  </button>
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className="font-squarepeg text-xl leading-tight">{def.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {discount > 0 && (
+                            <span className="text-xs rounded-full bg-accent text-accent-foreground px-2 py-0.5 font-medium">
+                              -{discount}%
+                            </span>
+                          )}
+                          {isSelected && (
+                            <span className="text-xs rounded-full bg-foreground text-background px-2 py-0.5 font-medium">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">{def.tagline}</p>
+                      <p className="text-xs text-muted-foreground/70 leading-relaxed">{def.description}</p>
+                      <p className="text-sm font-mono font-semibold mt-3 tabular-nums">
+                        {fmt$(Math.round(previewResult.finalPrice))}
+                      </p>
+                    </button>
+
+                    {/* Tooltip */}
+                    {tooltipPkg === key && (
+                      <div className="absolute z-20 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg p-3 text-xs space-y-1.5">
+                        <p className="font-semibold text-foreground">{def.name} includes:</p>
+                        <ul className="text-muted-foreground space-y-0.5">
+                          {def.items.map((ik) => {
+                            const ci = ITEM_CATALOG.find((i) => i.key === ik);
+                            return <li key={ik}>· {ci?.label ?? ik}</li>;
+                          })}
+                        </ul>
+                        <hr className="border-border" />
+                        <p className="text-muted-foreground/80 font-mono">
+                          Cost × {(1 + assumptions.adminPtg / 100).toFixed(2)} admin × {(1 + assumptions.targetProfitPtg / 100).toFixed(2)} profit
+                          {discount > 0 ? ` × ${(1 - discount / 100).toFixed(2)} (${discount}% savings)` : ""}
+                        </p>
+                        {def.isDigital && (
+                          <p className="text-muted-foreground/60 italic">Digital — design labor only</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </Section>
 
-          {/* 2. Mode + Quantity */}
+          {/* 2. Mode + Quantity + Individual options */}
           <Section title="Configuration">
             <div className="space-y-4">
+              {/* Individual item selector */}
+              {pkg === "individual" && (
+                <div className="space-y-3 pb-3 border-b border-border">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                      Select item
+                    </label>
+                    <select
+                      value={individualItem}
+                      onChange={(e) => setIndividualItem(e.target.value)}
+                      className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {ITEM_CATALOG.map((item) => (
+                        <option key={item.key} value={item.key}>{item.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                      Sale type
+                    </label>
+                    <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                      {([false, true] as const).map((isDigital) => (
+                        <button
+                          key={String(isDigital)}
+                          onClick={() => setIndividualDigital(isDigital)}
+                          className={cn(
+                            "px-5 py-2 text-sm font-medium transition-colors",
+                            individualDigital === isDigital
+                              ? "bg-foreground text-background"
+                              : "bg-card text-foreground hover:bg-muted"
+                          )}
+                        >
+                          {isDigital ? "Digital" : "Physical"}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {individualDigital
+                        ? "Digital sale — design labor only, no printing or materials."
+                        : "Physical sale — includes production labor and materials."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Mode toggle */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
@@ -145,8 +240,8 @@ export function QuoteCalculator() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                   {mode === "fresh"
-                    ? "Charging design fees — new original artwork from scratch."
-                    : "Adapting an existing design — lower cost, fewer hours, reuse prices apply."}
+                    ? "Full design labor — new original artwork from scratch."
+                    : `Reduced design labor (×${assumptions.reuseFactor}) — adapting an existing design.`}
                 </p>
               </div>
 
@@ -170,9 +265,6 @@ export function QuoteCalculator() {
                     className="w-28 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <span className="text-sm text-muted-foreground">households</span>
-                  <span className="text-xs text-muted-foreground/60">
-                    (~{(qty * 2.1).toFixed(0)} individual items at ×2 multiplier)
-                  </span>
                 </div>
               </div>
             </div>
@@ -181,7 +273,7 @@ export function QuoteCalculator() {
           {/* 3. Add-ons */}
           <Section title="Add-ons">
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Sold à la carte on top of any package. Prices update live with your quantity and mode.
+              Sold a la carte on top of any package. Always physical (printed). No bundle discount applied.
             </p>
             <div className="space-y-2">
               {ADD_ON_KEYS.map((key) => {
@@ -212,11 +304,6 @@ export function QuoteCalculator() {
                       <span className="text-sm font-mono tabular-nums font-medium">
                         {fmt$(Math.round(preview.price))}
                       </span>
-                      {preview.itemFee > 0 && (
-                        <div className="text-xs text-muted-foreground font-mono tabular-nums">
-                          {fmt$2(preview.printRevenue)} print + {fmt$2(preview.itemFee)} fee
-                        </div>
-                      )}
                     </div>
                   </label>
                 );
@@ -253,7 +340,7 @@ export function QuoteCalculator() {
                 <div className="flex-1">
                   <span className="text-sm font-medium">Extra revision rounds</span>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    First round is free. Each extra round adds {fmt$(assumptions.feeR)}.
+                    First round is free. Each extra round adds {assumptions.revisionMin}m of design labor.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -262,7 +349,7 @@ export function QuoteCalculator() {
                     disabled={extraRevisions === 0}
                     className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-sm hover:bg-muted disabled:opacity-30 transition-colors"
                   >
-                    −
+                    -
                   </button>
                   <span className="w-6 text-center font-mono text-sm tabular-nums">{extraRevisions}</span>
                   <button
@@ -289,9 +376,72 @@ export function QuoteCalculator() {
                   className="h-4 w-4 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
-                  <span className="text-sm font-medium">Digital file license</span>
+                  <span className="text-sm font-medium">Digital file license (+{assumptions.digitalLicensePtg}%)</span>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Print-ready files · unlimited copies — design fees ×1.3.
+                    Print-ready source files · unlimited copies — design labor ×{(1 + assumptions.digitalLicensePtg / 100).toFixed(1)}.
+                  </p>
+                </div>
+              </label>
+
+              {/* Vendor incentive */}
+              <label
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  vendorIncentive ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={vendorIncentive}
+                  onChange={(e) => setVendorIncentive(e.target.checked)}
+                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">Vendor incentive (-{assumptions.vendorIncentivePtg}%)</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Discount for customers referred by another vendor. Stacks with package discount.
+                  </p>
+                </div>
+              </label>
+
+              {/* Full color designs */}
+              <label
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  fullColor ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={fullColor}
+                  onChange={(e) => setFullColor(e.target.checked)}
+                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">Full color designs (x{assumptions.fullColorFactor})</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Heavy ink coverage increases sheet cost. Multiplied into material pricing.
+                  </p>
+                </div>
+              </label>
+
+              {/* Custom paper */}
+              <label
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  customPaper ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={customPaper}
+                  onChange={(e) => setCustomPaper(e.target.checked)}
+                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium">Custom paper (x{assumptions.customPaperFactor})</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Premium or specialty paper increases sheet cost. Multiplied into material pricing.
                   </p>
                 </div>
               </label>
@@ -299,7 +449,7 @@ export function QuoteCalculator() {
           </Section>
         </div>
 
-        {/* ─── Right: price breakdown ─── */}
+        {/* Right: price breakdown */}
         <div className="lg:col-span-2">
           <BreakdownPanel
             pkg={pkg}
@@ -311,16 +461,20 @@ export function QuoteCalculator() {
             rushFee={rushFee}
             extraRevisions={extraRevisions}
             digitalLicense={digitalLicense}
+            vendorIncentive={vendorIncentive}
+            fullColor={fullColor}
+            customPaper={customPaper}
           />
         </div>
       </div>
 
-      {/* ─── Assumptions panel (full width, collapsible) ─── */}
+      {/* Assumptions panel (full width, collapsible) */}
       <div className="mt-6">
         <AssumptionsPanel
           assumptions={assumptions}
           onUpdate={updateAssumption}
           onReset={() => setAssumptions({ ...DEFAULTS })}
+          onLoad={(s) => setAssumptions(s)}
         />
       </div>
     </div>

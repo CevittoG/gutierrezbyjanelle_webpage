@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   PackageResult,
   AddOnResult,
-  CatalogItem,
   PkgKey,
   PricingMode,
   QuoteState,
@@ -13,6 +12,7 @@ import {
   fmt$,
   fmt$2,
   fmtPct,
+  fmtTime,
 } from "@/lib/quote-calc-logic";
 import { cn } from "@/utils";
 
@@ -32,6 +32,9 @@ interface Props {
   rushFee: boolean;
   extraRevisions: number;
   digitalLicense: boolean;
+  vendorIncentive: boolean;
+  fullColor: boolean;
+  customPaper: boolean;
 }
 
 function Row({
@@ -93,74 +96,101 @@ export function BreakdownPanel({
   rushFee,
   extraRevisions,
   digitalLicense,
+  vendorIncentive,
+  fullColor,
+  customPaper,
 }: Props) {
   const [copied, setCopied] = useState(false);
 
   const pkgDef = PACKAGES[pkg];
+  const isReuse = mode === "reuse";
 
-  // Digital license bonus applies to item fees
-  const digitalBonus = digitalLicense ? baseResult.itemFees * 0.3 : 0;
-  const effectiveItemFees = baseResult.itemFees + digitalBonus;
-  const basePriceAdjusted = baseResult.price - baseResult.itemFees + effectiveItemFees;
+  const dlFactor = assumptions.digitalLicensePtg / 100;
 
-  // Add-ons total
-  const addOnsSubtotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
-  const addOnsPrintCost = selectedAddOns.reduce((s, a) => s + a.result.printCost, 0);
+  // Digital license bonus: configurable % on design labor (applied to actual, not full)
+  const digitalBonus = digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
 
-  // Revisions
-  const revisionsTotal = extraRevisions * assumptions.feeR;
+  // Recalculate with digital bonus
+  const adjustedVariable = baseResult.totalVariable + digitalBonus;
+  const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
+  const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
+  const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
 
-  // Subtotal before rush
-  const subtotalBeforeRush = basePriceAdjusted + addOnsSubtotal + revisionsTotal;
+  const discountAmount = adjustedBeforeDiscount * (baseResult.discountPtg / 100);
+  const vendorAmount = adjustedBeforeDiscount * (baseResult.vendorIncentivePtg / 100);
+  const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
+  const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
+
+  // For display: full design labor (no reuse) + digital bonus
+  const displayFullDesign = baseResult.totalFullDesignLabor + (digitalLicense ? baseResult.totalFullDesignLabor * dlFactor : 0);
+  const displayFullVariable = baseResult.totalFullVariable + (digitalLicense ? baseResult.totalFullDesignLabor * dlFactor : 0);
+  const reuseDisplaySavings = isReuse ? baseResult.reuseDiscount + (digitalLicense ? baseResult.reuseDiscount * dlFactor : 0) : 0;
+
+  // Summary totals for YOUR COSTS formulas
+  const totalDesignMin = baseResult.itemBreakdown.reduce((s, b) => s + b.designMin, 0);
+  const totalProdMinQty = baseResult.itemBreakdown.reduce((s, b) => s + b.prodMin * b.qty, 0);
+
+  // Add-ons
+  const addOnsTotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
+  const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
+  const addOnsLabor = selectedAddOns.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
 
   // Rush
-  const rushAmount = rushFee ? subtotalBeforeRush * 0.3 : 0;
+  const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
+  const rushAmount = rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
   const finalPrice = subtotalBeforeRush + rushAmount;
 
-  // Costs
-  const totalPrintCost = baseResult.printCost + addOnsPrintCost;
-  const yourCosts = baseResult.cogs + addOnsPrintCost + baseResult.laborCost;
+  // Your costs
+  const totalDirectCosts = baseResult.totalDirectCosts + addOnsMaterials;
+  const totalLabor = baseResult.totalLaborCost + addOnsLabor + digitalBonus;
+  const yourCosts = totalDirectCosts + totalLabor;
   const netProfit = finalPrice - yourCosts;
   const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
 
-  const marginDiff = netMargin - assumptions.target;
+  const marginTarget = assumptions.targetProfitPtg;
+  const marginDiff = netMargin - marginTarget;
   const marginBadge =
     marginDiff >= 0
       ? "bg-green-100 text-green-800 border border-green-200"
       : marginDiff >= -5
       ? "bg-amber-100 text-amber-800 border border-amber-200"
       : "bg-red-100 text-red-800 border border-red-200";
-  const marginIcon = marginDiff >= 0 ? "✓" : marginDiff >= -5 ? "≈" : "↓";
-  const marginLabel =
-    marginDiff >= 0
-      ? `${Math.round(marginDiff)} pts above target`
-      : marginDiff >= -5
-      ? `${Math.round(Math.abs(marginDiff))} pts below target`
-      : `${Math.round(Math.abs(marginDiff))} pts below target`;
+  const marginIcon = marginDiff >= 0 ? "+" : marginDiff >= -5 ? "~" : "-";
+  const marginLabel = `${Math.abs(Math.round(marginDiff))} pts ${marginDiff >= 0 ? "above" : "below"} target`;
+
+  // Sheet cost note
+  const sheetNotes: string[] = [];
+  if (fullColor) sheetNotes.push(`full color x${assumptions.fullColorFactor}`);
+  if (customPaper) sheetNotes.push(`custom paper x${assumptions.customPaperFactor}`);
+  const sheetNote = sheetNotes.length > 0 ? ` (${sheetNotes.join(", ")})` : "";
 
   function copyQuoteSummary() {
-    const addOnNames = selectedAddOns.map((a) => a.label).join(", ");
     const packageItems = pkgDef.items
       .map((k) => ITEM_CATALOG.find((i) => i.key === k)?.label)
       .filter(Boolean)
       .join(", ");
+    const addOnNames = selectedAddOns.map((a) => a.label).join(", ");
 
     const lines = [
-      "GutierrezByJanelle — Quote Summary",
-      "─────────────────────────────────────",
+      "GutierrezByJanelle - Quote Summary",
+      String.fromCharCode(9472).repeat(37),
       `Package:     ${pkgDef.name}`,
       `Mode:        ${mode === "fresh" ? "Custom design (fresh artwork)" : "Reuse existing design"}`,
       `Quantity:    ${qty} households`,
       `Includes:    ${packageItems}`,
       addOnNames ? `Add-ons:     ${addOnNames}` : null,
       extraRevisions > 0 ? `Revisions:   ${extraRevisions} extra round${extraRevisions > 1 ? "s" : ""}` : null,
-      rushFee ? `Rush fee:    Yes (+30%)" ` : null,
+      rushFee ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
       digitalLicense ? "Digital file license included" : null,
-      "─────────────────────────────────────",
+      vendorIncentive ? `Vendor referral discount: ${assumptions.vendorIncentivePtg}%` : null,
+      fullColor ? "Full color designs" : null,
+      customPaper ? "Custom paper" : null,
+      String.fromCharCode(9472).repeat(37),
       `Total:       ${fmt$(Math.round(finalPrice))}`,
       "",
+      "* Shipping not included - added based on carrier quote.",
       "Prices are estimates. Final quote may vary based on design complexity and final details.",
-      "— GutierrezByJanelle",
+      "- GutierrezByJanelle",
     ]
       .filter(Boolean)
       .join("\n");
@@ -185,161 +215,240 @@ export function BreakdownPanel({
 
       <Divider strong />
 
-      {/* Breakdown */}
       <div>
-        {/* Printing */}
-        {baseResult.printLines.length > 0 && (
+        {/* ─── VARIABLE COSTS (show full design, no reuse applied) ─── */}
+        <SectionLabel>Variable Costs</SectionLabel>
+
+        {/* Design labor — always shown at FULL rate */}
+        {displayFullDesign > 0 && (
           <>
-            <SectionLabel>Printing</SectionLabel>
-            {baseResult.printLines.map((line, i) => (
+            <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Design labor</p>
+            {baseResult.itemBreakdown.filter((b) => b.fullDesignLabor > 0).map((b, i) => (
               <Row
                 key={i}
                 indent
-                label={line.label}
-                math={`${line.qty} × ${fmt$2(line.costPer)} × ${line.markup.toFixed(2)}×`}
-                value={fmt$2(line.revenue)}
+                label={b.label}
+                math={`${fmtTime(b.designMin)} x $${assumptions.hourly}/hr`}
+                value={fmt$2(b.fullDesignLabor)}
                 dim
               />
-            ))}
-            {baseResult.printLines.length > 1 && (
-              <Row label="Print subtotal" value={fmt$2(baseResult.printRevenue)} dim />
-            )}
-          </>
-        )}
-
-        {/* DIY Digital — labor */}
-        {pkg === "diy" && (
-          <>
-            <SectionLabel>Labor</SectionLabel>
-            <Row
-              indent
-              label="Design & export"
-              math={`${baseResult.hours}h × ${fmt$(assumptions.hourly)}/hr`}
-              value={fmt$2(baseResult.laborCost)}
-              dim
-            />
-          </>
-        )}
-
-        {/* Shipping */}
-        {baseResult.shipRevenue > 0 && (
-          <>
-            <SectionLabel>Shipping</SectionLabel>
-            <Row
-              indent
-              label="Flat rate shipping"
-              math={`${fmt$(assumptions.shipBase)} × ${(1 + assumptions.shipProfit / 100).toFixed(2)}×`}
-              value={fmt$2(baseResult.shipRevenue)}
-              dim
-            />
-          </>
-        )}
-
-        {/* Design / item fees */}
-        {baseResult.feeLines.length > 0 && (
-          <>
-            <SectionLabel>{mode === "fresh" ? "Design Fees (fresh artwork)" : "Item Fees (reuse existing)"}</SectionLabel>
-            {baseResult.feeLines.map((line, i) => (
-              <Row key={i} indent label={line.label} value={fmt$2(line.amount)} dim />
             ))}
             {digitalLicense && (
+              <Row indent label={`Digital file license x${(1 + dlFactor).toFixed(1)}`} math={`${fmt$2(baseResult.totalFullDesignLabor)} × ${assumptions.digitalLicensePtg}%`} value={`+${fmt$2(baseResult.totalFullDesignLabor * dlFactor)}`} dim />
+            )}
+            <Row label="Design subtotal" value={fmt$2(displayFullDesign)} dim />
+          </>
+        )}
+
+        {/* Production labor */}
+        {!baseResult.isDigital && baseResult.totalProductionLabor > 0 && (
+          <>
+            <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Production labor</p>
+            {baseResult.itemBreakdown.filter((b) => b.productionLabor > 0).map((b, i) => (
               <Row
+                key={i}
                 indent
-                label="Digital file license ×1.3"
-                math={`${fmt$2(baseResult.itemFees)} × 1.3`}
-                value={`+${fmt$2(digitalBonus)}`}
+                label={b.label}
+                math={`${b.qty} x ${fmtTime(b.prodMin)} x $${assumptions.hourly}/hr`}
+                value={fmt$2(b.productionLabor)}
                 dim
               />
-            )}
-            {baseResult.feeLines.length > 1 && (
-              <Row label="Fees subtotal" value={fmt$2(effectiveItemFees)} dim />
-            )}
+            ))}
+            <Row label="Production subtotal" value={fmt$2(baseResult.totalProductionLabor)} dim />
           </>
+        )}
+
+        {/* Materials — show error margin and sheet cost multipliers */}
+        {!baseResult.isDigital && baseResult.totalMaterials > 0 && (
+          <>
+            <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">
+              Materials{sheetNote}
+            </p>
+            {baseResult.itemBreakdown.filter((b) => b.materialsCost > 0).map((b, i) => (
+              <Row
+                key={i}
+                indent
+                label={b.label}
+                math={`${b.qty} x $${b.materialPerUnitBase.toFixed(2)}/u x ${(1 + assumptions.errorMarginPtg / 100).toFixed(2)} err`}
+                value={fmt$2(b.materialsCost)}
+                dim
+              />
+            ))}
+            <Row label="Materials subtotal" value={fmt$2(baseResult.totalMaterials)} dim />
+          </>
+        )}
+
+        {/* Packaging */}
+        {baseResult.packaging > 0 && (
+          <Row indent label="Packaging" value={fmt$2(baseResult.packaging)} dim />
+        )}
+
+        {/* Revision labor */}
+        {baseResult.revisionLabor > 0 && (
+          <Row
+            indent
+            label={`Revision rounds x${extraRevisions}`}
+            math={`${extraRevisions} x ${fmtTime(assumptions.revisionMin)} x $${assumptions.hourly}/hr`}
+            value={fmt$2(baseResult.revisionLabor)}
+            dim
+          />
+        )}
+
+        <Divider />
+        <Row label="Variable cost total" value={fmt$2(displayFullVariable)} dim />
+
+        {/* ─── MARKUPS ─── */}
+        <SectionLabel>Markups</SectionLabel>
+        <Row
+          indent
+          label={`Admin overhead (${fmtPct(assumptions.adminPtg)})`}
+          value={`+${fmt$2(adjustedAdmin)}`}
+          dim
+        />
+        <Row
+          indent
+          label={`Target profit (${fmtPct(assumptions.targetProfitPtg)})`}
+          value={`+${fmt$2(adjustedProfit)}`}
+          dim
+        />
+
+        {/* ─── ADJUSTMENTS (all discounts / surcharges) ─── */}
+        <SectionLabel>Adjustments</SectionLabel>
+
+        {isReuse && reuseDisplaySavings > 0 && (
+          <Row
+            indent
+            label={`Reuse design (x${assumptions.reuseFactor})`}
+            math={`${fmt$2(displayFullDesign)} × ${(1 - assumptions.reuseFactor).toFixed(2)}`}
+            value={`-${fmt$2(reuseDisplaySavings)}`}
+            dim
+          />
+        )}
+
+        {baseResult.discountPtg > 0 && (
+          <Row
+            indent
+            label={`${pkgDef.name} discount (-${fmtPct(baseResult.discountPtg)})`}
+            value={`-${fmt$2(discountAmount)}`}
+            dim
+          />
+        )}
+
+        {baseResult.vendorIncentivePtg > 0 && (
+          <Row
+            indent
+            label={`Vendor incentive (-${fmtPct(baseResult.vendorIncentivePtg)})`}
+            value={`-${fmt$2(vendorAmount)}`}
+            dim
+          />
+        )}
+
+        {combinedDiscountPtg > 0 && baseResult.vendorIncentivePtg > 0 && (
+          <Row
+            indent
+            label={`Combined discount`}
+            value={`-${fmtPct(combinedDiscountPtg)}`}
+            dim
+          />
         )}
 
         {/* Add-ons */}
         {selectedAddOns.length > 0 && (
           <>
-            <SectionLabel>Add-ons</SectionLabel>
+            <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Add-ons</p>
             {selectedAddOns.map(({ key, label, result }) => (
-              <div key={key} className="pl-3 py-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm text-foreground/80">{label}</span>
-                  <span className="font-mono tabular-nums text-sm text-foreground/80">{fmt$2(result.price)}</span>
-                </div>
-                <div className="text-xs font-mono text-muted-foreground/70 tabular-nums">
-                  {result.qty} units × {fmt$2(result.costPer)} × {result.markup.toFixed(2)}×
-                  {result.itemFee > 0 ? ` + fee ${fmt$2(result.itemFee)}` : ""}
-                </div>
-              </div>
+              <Row key={key} indent label={label} value={`+${fmt$2(result.price)}`} dim />
             ))}
           </>
         )}
 
-        {/* Extras */}
-        {extraRevisions > 0 && (
-          <>
-            <SectionLabel>Extras</SectionLabel>
-            <Row
-              indent
-              label={`Revision rounds ×${extraRevisions}`}
-              math={`${extraRevisions} × ${fmt$(assumptions.feeR)}`}
-              value={`+${fmt$2(revisionsTotal)}`}
-              dim
-            />
-          </>
-        )}
-
+        {/* Rush */}
         {rushFee && (
-          <>
-            {extraRevisions === 0 && <SectionLabel>Extras</SectionLabel>}
-            <Row
-              indent
-              label="Rush fee (+30%)"
-              math={`${fmt$2(subtotalBeforeRush)} × 1.30`}
-              value={`+${fmt$2(rushAmount)}`}
-              dim
-            />
-          </>
+          <Row
+            indent
+            label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
+            math={`${fmt$2(subtotalBeforeRush)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
+            value={`+${fmt$2(rushAmount)}`}
+            dim
+          />
         )}
 
         <Divider strong />
         <Row label="Total client pays" value={fmt$2(finalPrice)} bold />
+
+        {/* Shipping reminder */}
+        {!baseResult.isDigital && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-2 normal-case tracking-normal">
+            Remember to add shipping based on carrier quote
+          </p>
+        )}
+
         <Divider />
 
-        {/* Your costs */}
+        {/* ─── YOUR COSTS (summary with formulas) ─── */}
         <SectionLabel>Your costs</SectionLabel>
-        {totalPrintCost > 0 && (
-          <Row indent label="Print cost (ink + paper)" value={fmt$2(totalPrintCost)} dim />
+
+        {(baseResult.totalDesignLabor + digitalBonus) > 0 && (
+          <Row
+            indent
+            label="Design labor"
+            math={`${fmtTime(totalDesignMin)} × $${assumptions.hourly}/hr${isReuse ? ` × ${assumptions.reuseFactor}` : ""}`}
+            value={fmt$2(baseResult.totalDesignLabor)}
+            dim
+          />
         )}
-        {baseResult.shipCost > 0 && (
-          <Row indent label="Shipping cost (carrier)" value={fmt$2(baseResult.shipCost)} dim />
+
+        {digitalLicense && digitalBonus > 0 && (
+          <Row
+            indent
+            label="Digital license"
+            math={`${fmt$2(baseResult.totalDesignLabor)} × ${assumptions.digitalLicensePtg}%`}
+            value={fmt$2(digitalBonus)}
+            dim
+          />
         )}
-        {baseResult.pkgMaterials > 0 && (
-          <Row indent label="Packaging materials" value={fmt$2(baseResult.pkgMaterials)} dim />
+
+        {!baseResult.isDigital && baseResult.totalProductionLabor > 0 && (
+          <Row
+            indent
+            label="Production labor"
+            math={`${fmtTime(totalProdMinQty)} × $${assumptions.hourly}/hr`}
+            value={fmt$2(baseResult.totalProductionLabor)}
+            dim
+          />
         )}
-        <Row
-          indent
-          label="Labor"
-          math={`${baseResult.hours}h × ${fmt$(assumptions.hourly)}/hr`}
-          value={fmt$2(baseResult.laborCost)}
-          dim
-        />
+
+        {!baseResult.isDigital && (baseResult.totalMaterials + baseResult.packaging) > 0 && (
+          <Row
+            indent
+            label="Materials + packaging"
+            value={fmt$2(baseResult.totalMaterials + baseResult.packaging)}
+            dim
+          />
+        )}
+
+        {baseResult.revisionLabor > 0 && (
+          <Row
+            indent
+            label="Revisions"
+            math={`${extraRevisions} × ${fmtTime(assumptions.revisionMin)} × $${assumptions.hourly}/hr`}
+            value={fmt$2(baseResult.revisionLabor)}
+            dim
+          />
+        )}
+
+        <Divider />
         <Row label="Total your costs" value={fmt$2(yourCosts)} dim />
 
         <Divider />
-        <Row
-          label="Net profit"
-          value={fmt$2(netProfit)}
-          bold
-        />
+        <Row label="Net profit" value={fmt$2(netProfit)} bold />
         <p
           className={cn(
             "text-xs text-right mt-0.5 tabular-nums font-mono",
             marginDiff >= 0 ? "text-green-700" : marginDiff >= -5 ? "text-amber-700" : "text-red-700"
           )}
         >
-          {fmtPct(netMargin)} net margin (target {fmtPct(assumptions.target)})
+          {fmtPct(netMargin)} net margin (target {fmtPct(marginTarget)})
         </p>
       </div>
 
@@ -348,7 +457,7 @@ export function BreakdownPanel({
         onClick={copyQuoteSummary}
         className="mt-5 w-full rounded-lg border border-border py-2.5 text-sm normal-case tracking-normal hover:bg-muted transition-colors"
       >
-        {copied ? "✓ Copied to clipboard!" : "Copy client quote summary"}
+        {copied ? "Copied to clipboard!" : "Copy client quote summary"}
       </button>
     </div>
   );
