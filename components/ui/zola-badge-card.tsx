@@ -1,4 +1,4 @@
-import Script from "next/script";
+import Image from "next/image";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/utils";
 import type { ZolaProfile } from "@/config/site";
@@ -23,13 +23,13 @@ export function ZolaBadgeCard({ zola, className }: ZolaBadgeCardProps) {
       <div className="h-1 w-full bg-accent" />
 
       <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 p-8 md:p-10">
-        <div className="zola-vendor-badge flex-shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            height={160}
-            width={160}
+        <div className="flex-shrink-0">
+          <Image
+            src="/zola.png"
             alt="Featured on Zola"
-            src="https://d1tntvpcrzvon2.cloudfront.net/static-assets/images/badges/featured_on_zola_v3.png"
+            width={160}
+            height={160}
+            className="object-contain"
           />
         </div>
 
@@ -47,11 +47,6 @@ export function ZolaBadgeCard({ zola, className }: ZolaBadgeCardProps) {
         </div>
       </div>
 
-      <Script
-        id="zola-mvjs"
-        src="https://d1tntvpcrzvon2.cloudfront.net/static-assets/js/marketplace/zolaVendorBadge.js"
-        strategy="lazyOnload"
-      />
     </a>
   );
 }
