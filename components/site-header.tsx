@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { Menu } from "lucide-react";
 import { siteConfig } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 export function SiteHeader() {
+  const [open, setOpen] = useState(false);
+
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
@@ -34,7 +37,7 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <Sheet>
+        <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="md:hidden">
               <Menu className="h-5 w-5" />
@@ -47,6 +50,7 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setOpen(false)}
                   className="text-lg font-medium transition-colors hover:text-foreground/70"
                 >
                   {item.title}
