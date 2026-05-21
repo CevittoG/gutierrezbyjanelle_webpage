@@ -49,11 +49,19 @@ export default function InvestmentPage() {
         </div>
       </div>
 
-      <h2 className="font-squarepeg text-2xl sm:text-3xl text-center mb-6">Optimized Value Suites</h2>
+      <div className="flex justify-center mb-12">
+        <div className="w-full max-w-sm">
+          <PriceCard plan={siteConfig.investments.find((p) => p.id === "individual")!} />
+        </div>
+      </div>
+
+      <h2 className="font-squarepeg text-3xl sm:text-4xl md:text-5xl text-center mb-6">Optimized Value Suites</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
-        {siteConfig.investments.map((plan) => (
-          <PriceCard key={plan.id} plan={plan} />
-        ))}
+        {siteConfig.investments
+          .filter((p) => p.id !== "individual")
+          .map((plan) => (
+            <PriceCard key={plan.id} plan={plan} />
+          ))}
       </div>
 
       <div className="mt-16 max-w-5xl mx-auto">
