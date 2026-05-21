@@ -69,7 +69,7 @@ export const siteConfig = {
     paragraphs: [
       "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon! xx",
     ],
-    cta: { label: "Invest in my event", href: "/investment" },
+    cta: { label: "Invest in your event", href: "/investment" },
   } satisfies About,
   weddings: {
     paragraphs: [
