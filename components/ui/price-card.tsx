@@ -1,4 +1,6 @@
 import { cn } from "@/utils";
+import { Check } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { InvestmentTier } from "@/config/site";
 
@@ -10,7 +12,15 @@ interface PriceCardProps {
 export function PriceCard({ plan, className }: PriceCardProps) {
   return (
     <Card className={cn("relative overflow-hidden", className)}>
-<CardHeader>
+      {plan.discount && (
+        <Badge
+          variant="secondary"
+          className="absolute top-3 right-3 border-accent/40 bg-accent/30 text-foreground/80"
+        >
+          Save {plan.discount}%
+        </Badge>
+      )}
+      <CardHeader>
         <CardTitle className="font-squarepeg">{plan.name}</CardTitle>
         <CardDescription>{plan.description}</CardDescription>
       </CardHeader>
@@ -18,7 +28,8 @@ export function PriceCard({ plan, className }: PriceCardProps) {
         <ul className="grid gap-2 text-sm text-muted-foreground">
           {plan.features.map((f) => (
             <li key={f} className="flex items-center gap-2">
-              <span className="text-foreground">✓</span> {f}
+              <Check className="h-4 w-4 text-foreground shrink-0" aria-hidden="true" />
+              {f}
             </li>
           ))}
         </ul>
