@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
+import Image from "next/image";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/utils";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,9 @@ export const StationeryHero = ({
   imageUrl2,
   className,
 }: StationeryHeroProps) => {
+  // Respect user's motion preferences — skip entry animations if requested
+  const prefersReduced = useReducedMotion();
+
   return (
     <section
       className={cn(
@@ -63,7 +67,7 @@ export const StationeryHero = ({
     >
       <motion.div
         className="relative max-w-6xl mx-auto flex min-h-[80vh] items-center justify-center px-8 md:px-12 py-20 lg:flex-row flex-col gap-12 lg:gap-20"
-        initial="hidden"
+        initial={prefersReduced ? false : "hidden"}
         animate="visible"
         variants={containerVariants}
       >
@@ -97,22 +101,44 @@ export const StationeryHero = ({
           variants={cardsVariants}
         >
           <div className="flex flex-row items-center">
-            {/* Left card — smaller */}
-            <motion.img
-              src={imageUrl1}
-              alt="Invitation design"
+            {/* Left card — larger, behind */}
+            <motion.div
               variants={cardItemVariants}
-              whileHover={{ y: -10, rotate: -5, transition: { duration: 0.3 } }}
-              className="h-[17rem] w-44 md:h-[22rem] md:w-56 rounded-xl shadow-2xl object-cover rotate-[-3deg] relative z-10 cursor-pointer"
-            />
-            {/* Right card — larger, slight overlap */}
-            <motion.img
-              src={imageUrl2}
-              alt="Stationery design"
+              whileHover={
+                prefersReduced
+                  ? undefined
+                  : { y: -10, rotate: -5, transition: { duration: 0.3 } }
+              }
+              className="relative h-72 w-48 md:h-96 md:w-64 lg:h-[28rem] lg:w-72 rounded-xl shadow-2xl rotate-[-3deg] overflow-hidden"
+            >
+              <Image
+                src={imageUrl1}
+                alt="Invitation design"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 288px"
+              />
+            </motion.div>
+
+            {/* Right card — smaller, in front, 15 deg tilt */}
+            <motion.div
               variants={cardItemVariants}
-              whileHover={{ y: -10, rotate: 5, transition: { duration: 0.3 } }}
-              className="h-72 w-48 md:h-96 md:w-64 rounded-xl shadow-2xl object-cover rotate-[3deg] -ml-6 md:-ml-8 cursor-pointer"
-            />
+              style={{ rotate: 15, border: "0.1px solid black" }}
+              whileHover={
+                prefersReduced
+                  ? undefined
+                  : { y: -10, rotate: 20, transition: { duration: 0.3 } }
+              }
+              className="relative w-44 md:w-56 lg:w-64 aspect-[1429/2000] rounded-xl shadow-2xl -ml-10 md:-ml-14 z-10 overflow-hidden"
+            >
+              <Image
+                src={imageUrl2}
+                alt="Stationery design"
+                fill
+                className="object-contain"
+                sizes="(max-width: 768px) 176px, (max-width: 1024px) 224px, 256px"
+              />
+            </motion.div>
           </div>
         </motion.div>
       </motion.div>

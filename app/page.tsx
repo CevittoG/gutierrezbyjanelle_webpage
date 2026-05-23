@@ -36,24 +36,18 @@ export default function HomePage() {
       {/* Hero: two vertical invitation-style cards */}
       <StationeryHero
         title={siteConfig.hero.headline}
-        description={
-          <>
-            Custom invitations, décor, signs, and digital resources
-            <br />
-            crafted with love for the moments that matter most.
-          </>
-        }
+        description="Custom invitations, décor, signs, and digital resources crafted with love for the moments that matter most."
         buttonText="Invest in your event"
         buttonLink="/investment"
-        imageUrl1="https://images.unsplash.com/photo-1607344645866-009c320b63e0?auto=format&fit=crop&q=80&w=900"
-        imageUrl2="https://images.unsplash.com/photo-1579165466991-467135ad3110?auto=format&fit=crop&q=80&w=900"
+        imageUrl1="/invitation/invite-4.png"
+        imageUrl2="/invitation/invite-3.png"
       />
 
       {/* About */}
-      <section className="border-t border-border/40 backdrop-blur-sm bg-background/40">
+      <section className="section-panel">
         <div className="container max-w-3xl mx-auto py-24 px-4 md:px-8">
           <h2 className="font-squarepeg text-4xl md:text-5xl text-center mb-10">
-            Welcome, <em>party people!</em>
+            Welcome, <span className="italic">party people!</span>
           </h2>
           <div className="space-y-6">
             {siteConfig.about.paragraphs.map((paragraph, i) => (
@@ -73,10 +67,10 @@ export default function HomePage() {
       </section>
 
       {/* Closing CTA */}
-      <section className="border-t border-border/40 backdrop-blur-sm bg-background/40">
+      <section className="section-panel">
         <div className="container max-w-2xl mx-auto py-24 px-4 md:px-8 text-center">
           <h2 className="font-squarepeg text-4xl md:text-5xl mb-6">
-            Let&apos;s design <em>your</em> day.
+            Let&apos;s design <span className="italic">your</span> day.
           </h2>
           <p className="text-foreground/80 text-lg mb-8">
             Browse the gallery, peek at investment options, or send a note —
