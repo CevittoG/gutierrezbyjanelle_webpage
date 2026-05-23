@@ -24,7 +24,7 @@ export default function HomePage() {
         aria-hidden="true"
       >
         <Image
-          src="/logo.png"
+          src="/logo.svg"
           alt=""
           width={1100}
           height={1100}

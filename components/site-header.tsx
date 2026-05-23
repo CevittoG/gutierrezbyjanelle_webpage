@@ -19,7 +19,7 @@ export function SiteHeader() {
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/" aria-label="Go to homepage" className="flex items-center space-x-2">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt={siteConfig.name}
             width={48}
             height={48}
