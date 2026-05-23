@@ -17,6 +17,8 @@ export type InvestmentTier = {
   description: string;
   features: string[];
   discount?: number;
+  /** Display label for the savings badge. Decoupled from the numeric discount. */
+  savingsLabel?: string;
 };
 
 export type Review = {
@@ -108,6 +110,7 @@ export const siteConfig = {
         "Save the date",
       ],
       discount: 10,
+      savingsLabel: "✦",
     },
     {
       id: "sweet-suite",
@@ -122,6 +125,7 @@ export const siteConfig = {
         "AI-generated renders to envision your event",
       ],
       discount: 12,
+      savingsLabel: "✦✦",
     },
     {
       id: "signature-suite",
@@ -140,6 +144,7 @@ export const siteConfig = {
         "AI-generated renders to envision your event",
       ],
       discount: 15,
+      savingsLabel: "✦✦✦",
     },
     {
       id: "add-ons",

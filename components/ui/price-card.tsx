@@ -3,6 +3,8 @@ import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { InvestmentTier } from "@/config/site";
+import { HoverPreviewItem } from "@/components/ui/hover-preview-item";
+import { getFeaturePreview } from "@/config/item-previews";
 
 interface PriceCardProps {
   plan: InvestmentTier;
@@ -12,12 +14,12 @@ interface PriceCardProps {
 export function PriceCard({ plan, className }: PriceCardProps) {
   return (
     <Card className={cn("relative overflow-hidden", className)}>
-      {plan.discount && (
+      {plan.savingsLabel && (
         <Badge
           variant="secondary"
-          className="absolute top-3 right-3 border-accent/40 bg-accent/30 text-foreground/80"
+          className="absolute top-3 right-3 border-accent/40 bg-accent/30 text-foreground/80 tracking-widest"
         >
-          Save {plan.discount}%
+          {plan.savingsLabel}
         </Badge>
       )}
       <CardHeader>
@@ -29,7 +31,7 @@ export function PriceCard({ plan, className }: PriceCardProps) {
           {plan.features.map((f) => (
             <li key={f} className="flex items-center gap-2">
               <Check className="h-4 w-4 text-foreground shrink-0" aria-hidden="true" />
-              {f}
+              <HoverPreviewItem label={f} imageSrc={getFeaturePreview(f)} />
             </li>
           ))}
         </ul>

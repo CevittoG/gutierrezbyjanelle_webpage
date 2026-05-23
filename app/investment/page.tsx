@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ShoppingBag, ExternalLink } from "lucide-react";
 import { PriceCard } from "@/components/ui/price-card";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
+import { MarqueeTicker } from "@/components/ui/marquee-ticker";
 import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -15,6 +16,8 @@ export const metadata: Metadata = {
 };
 
 export default function InvestmentPage() {
+  const addOnsTier = siteConfig.investments.find((p) => p.id === "add-ons")!;
+
   return (
     <section className="container py-12 px-4 md:px-8">
       <div className="mx-auto flex max-w-3xl flex-col items-center space-y-4 text-center mb-8">
@@ -63,10 +66,21 @@ export default function InvestmentPage() {
       <h2 className="font-squarepeg text-3xl sm:text-4xl md:text-5xl text-center mb-6">Optimized Value Suites</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
         {siteConfig.investments
-          .filter((p) => p.id !== "individual")
+          .filter((p) => p.id !== "individual" && p.id !== "add-ons")
           .map((plan) => (
             <PriceCard key={plan.id} plan={plan} />
           ))}
+      </div>
+
+      {/* Add-Ons — scrolling ticker instead of a card */}
+      <div className="mt-20 max-w-5xl mx-auto">
+        <div className="text-center mb-6">
+          <h2 className="font-squarepeg text-3xl sm:text-4xl">{addOnsTier.name}</h2>
+          <p className="mt-2 text-sm text-muted-foreground max-w-lg mx-auto">
+            {addOnsTier.description}
+          </p>
+        </div>
+        <MarqueeTicker items={addOnsTier.features} />
       </div>
 
       <div className="mt-16 max-w-5xl mx-auto">

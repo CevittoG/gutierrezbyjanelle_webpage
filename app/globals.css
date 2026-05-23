@@ -95,3 +95,9 @@
     box-shadow: 0 4px 20px -4px hsl(var(--accent) / 0.45);
   }
 }
+
+/* MarqueeTicker — seamless horizontal scroll animation */
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
