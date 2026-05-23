@@ -1,3 +1,16 @@
 .env
 .env.local
 .claude/skills/ui-ux-pro-max/*
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Dependencies
+node_modules/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Next.js build output (standalone already tracked for Docker)
+.next/
