@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ShoppingBag, ExternalLink } from "lucide-react";
 import { PriceCard } from "@/components/ui/price-card";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { siteConfig } from "@/config/site";
@@ -33,16 +34,18 @@ export default function InvestmentPage() {
               href={siteConfig.etsyStore.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
             >
+              <ShoppingBag className="w-4 h-4" />
               Etsy
             </a>
             <a
               href={siteConfig.instagram.profileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md border border-border bg-background px-5 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
             >
+              <ExternalLink className="w-4 h-4" />
               Instagram
             </a>
           </div>
