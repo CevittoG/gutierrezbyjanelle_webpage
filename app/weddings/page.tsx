@@ -38,7 +38,17 @@ export default function WeddingsPage() {
               </p>
             ))}
           </div>
-          <div className="flex justify-center mt-10">
+
+          {/* Ornamental divider */}
+          <div className="flex items-center gap-3 my-10" aria-hidden="true">
+            <div className="flex-1 h-px bg-accent/40" />
+            <div className="w-1.5 h-1.5 rounded-full bg-accent/60" />
+            <div className="w-1 h-1 rounded-full bg-accent/40" />
+            <div className="w-1.5 h-1.5 rounded-full bg-accent/60" />
+            <div className="flex-1 h-px bg-accent/40" />
+          </div>
+
+          <div className="flex justify-center">
             <Button asChild size="lg" variant="outline">
               <Link href="/investment">Invest in your event</Link>
             </Button>
