@@ -77,7 +77,7 @@ export default function HomePage() {
             I&apos;d love to hear about your event.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <Button asChild size="lg">
+            <Button asChild size="lg" variant="outline">
               <Link href="/investment">See investment</Link>
             </Button>
             <Button asChild size="lg" variant="outline">

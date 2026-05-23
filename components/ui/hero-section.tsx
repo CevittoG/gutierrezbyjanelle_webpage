@@ -86,7 +86,7 @@ export const StationeryHero = ({
             {description}
           </motion.p>
           <motion.div variants={itemVariants} className="mt-8">
-            <Button asChild size="lg" className="h-12 px-8 text-base">
+            <Button asChild size="lg" variant="outline" className="h-12 px-8 text-base">
               <a href={buttonLink}>
                 {buttonText}
                 <ArrowRight className="ml-2 h-5 w-5" />
