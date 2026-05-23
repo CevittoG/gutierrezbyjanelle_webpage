@@ -10,15 +10,15 @@
  */
 
 export const itemPreviewMap: Record<string, string> = {
-  "invite":                                  "/invitation/invite-3.png",
-  "rsvp card":                               "/invitation/invite-3.png",
-  "rsvp":                                    "/invitation/invite-3.png",
-  "save the date":                           "/invitation/invite-4.png",
-  "detail card":                             "/invitation/invite-4.png",
-  "ceremony cards":                          "/gallery/ceremony-card.jpeg",
-  "welcome sign":                            "/gallery/welcome-sign.jpeg",
-  "drink toppers":                           "/gallery/signature-drink-topper.jpeg",
-  "table top signs (signature drink sign)":  "/gallery/signature-drink-sign.jpeg",
+  // "invite":                                  "/invitation/invite-3.png",
+  // "rsvp card":                               "/invitation/invite-3.png",
+  // "rsvp":                                    "/invitation/invite-3.png",
+  // "save the date":                           "/invitation/invite-4.png",
+  // "detail card":                             "/invitation/invite-4.png",
+  // "ceremony cards":                          "/gallery/ceremony-card.jpeg",
+  // "welcome sign":                            "/gallery/welcome-sign.jpeg",
+  // "drink toppers":                           "/gallery/signature-drink-topper.jpeg",
+  // "table top signs (signature drink sign)":  "/gallery/signature-drink-sign.jpeg",
 };
 
 /**
