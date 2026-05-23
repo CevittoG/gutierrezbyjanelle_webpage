@@ -4,17 +4,20 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { Menu } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { siteConfig } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/utils";
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
-        <Link href="/" className="flex items-center space-x-2">
+        <Link href="/" aria-label="Go to homepage" className="flex items-center space-x-2">
           <Image
             src="/logo.png"
             alt={siteConfig.name}
@@ -30,7 +33,12 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="transition-colors hover:text-foreground/70 text-foreground"
+              className={cn(
+                "transition-colors",
+                pathname === item.href
+                  ? "text-foreground underline decoration-accent decoration-2 underline-offset-4"
+                  : "text-foreground hover:text-foreground/70"
+              )}
             >
               {item.title}
             </Link>
@@ -51,7 +59,12 @@ export function SiteHeader() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="text-lg font-medium transition-colors hover:text-foreground/70"
+                  className={cn(
+                    "text-lg font-medium transition-colors",
+                    pathname === item.href
+                      ? "text-foreground underline decoration-accent decoration-2 underline-offset-4"
+                      : "hover:text-foreground/70"
+                  )}
                 >
                   {item.title}
                 </Link>

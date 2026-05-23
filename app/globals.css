@@ -50,6 +50,21 @@
   text-wrap: balance;
 }
 
+/* Reusable section panel — backdrop-blurred taupe panel with top border */
+.section-panel {
+  @apply border-t border-border/40 backdrop-blur-sm bg-background/40;
+}
+
+/* Respect user motion preferences — disable all CSS transitions & animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @layer components {
   /* Desktop nav links — pink underline on hover */
   header nav a:hover {
@@ -57,6 +72,13 @@
     text-decoration-color: hsl(var(--accent));
     text-underline-offset: 4px;
     text-decoration-thickness: 2px;
+  }
+
+  /* Desktop nav links — visible focus ring for keyboard navigation */
+  header nav a:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 4px;
+    border-radius: 2px;
   }
 
   /* shadcn cards (PriceCard, ReviewCard) — pink border glow on hover */
