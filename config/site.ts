@@ -172,10 +172,12 @@ export const siteConfig = {
     },
   ] satisfies Review[],
   gallery: [
-    { id: "g1", src: "/gallery/placeholder-1.jpg", alt: "Custom wedding invitation suite" },
-    { id: "g2", src: "/gallery/placeholder-2.jpg", alt: "Venue welcome sign" },
-    { id: "g3", src: "/gallery/placeholder-3.jpg", alt: "Seating chart display" },
-    { id: "g4", src: "/gallery/placeholder-4.jpg", alt: "Custom event décor" },
+    { id: "g1", src: "/gallery/ceremony-card.jpeg",         alt: "Ceremony card" },
+    { id: "g2", src: "/gallery/ceremony-card-2.jpeg",       alt: "Ceremony card detail" },
+    { id: "g3", src: "/gallery/signature-drink-sign.jpeg",  alt: "Signature drink sign" },
+    { id: "g4", src: "/gallery/signature-drink-topper.jpeg",alt: "Signature drink topper" },
+    { id: "g5", src: "/gallery/welcome-sign.jpeg",          alt: "Wedding welcome sign" },
+    { id: "g6", src: "/gallery/welcome-sign-2.jpeg",        alt: "Wedding welcome sign detail" },
   ] satisfies GalleryItem[],
   etsyStore: {
     url: "https://xgutierrezbyjanelle.etsy.com",
