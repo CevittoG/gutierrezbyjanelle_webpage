@@ -130,7 +130,7 @@ export const PACKAGES: Record<PkgKey, PackageDef> = {
   sweet: {
     name: "Sweet Suite",
     tagline: "Full invite suite - printed & shipped",
-    description: "All the core invite pieces, professionally printed at home and shipped anywhere in the US.",
+    description: "Begin your wedding brand with this complete invitation suite.",
     items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope"],
     isDigital: false,
     discountKey: "discountSweet",

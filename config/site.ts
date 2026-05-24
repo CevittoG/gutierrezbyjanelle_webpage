@@ -104,7 +104,7 @@ export const siteConfig = {
     {
       id: "diy-digital",
       name: "Short and Suite",
-      description: "High quality print-ready PDF export. No printing included — files shared by email.",
+      description: "Dedicated to those who resignate with “keep it simple.” Perfect for mini or micro wedding preferences.",
       features: [
         "Invite",
         "Save the date",
@@ -115,7 +115,7 @@ export const siteConfig = {
     {
       id: "sweet-suite",
       name: "Sweet Spot Suite",
-      description: "A complete invite suite printed at home and shipped anywhere in the US.",
+      description: "Begin your wedding brand with this complete invitation suite.",
       features: [
         "Save the date",
         "Invite",
