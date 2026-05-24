@@ -129,7 +129,7 @@ export const StationeryHero = ({
                   ? undefined
                   : { y: -10, rotate: 20, transition: { duration: 0.3 } }
               }
-              className="relative w-44 md:w-56 lg:w-64 aspect-[1429/2000] rounded-xl shadow-2xl -ml-10 md:-ml-14 z-10 overflow-hidden"
+              className="relative w-48 md:w-60 lg:w-72 aspect-[1429/2000] rounded-xl shadow-2xl -ml-10 md:-ml-14 z-10 overflow-hidden"
             >
               <Image
                 src={imageUrl2}
