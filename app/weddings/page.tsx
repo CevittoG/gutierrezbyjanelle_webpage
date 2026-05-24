@@ -6,11 +6,11 @@ import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
   title: "Weddings",
-  description: `A personal note to brides from Janelle — your wedding stationery and signage designer.`,
+  description: `A personal note to brides or the grooms from Janelle — your wedding stationery and signage designer.`,
   openGraph: {
     url: `${siteConfig.url}/weddings`,
     title: `Weddings | ${siteConfig.name}`,
-    description: `A personal note to brides from Janelle — your wedding stationery and signage designer.`,
+    description: `A personal note to brides or the grooms from Janelle — your wedding stationery and signage designer.`,
   },
 };
 
@@ -19,7 +19,7 @@ export default function WeddingsPage() {
     <>
       <section className="container flex flex-col items-center justify-center py-24 px-4 md:px-8 text-center space-y-4">
         <h1 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
-          For the Brides
+          For the Brides & Grooms
         </h1>
         <p className="max-w-[500px] text-lg text-muted-foreground">
           A little message from me to you, before we begin.
