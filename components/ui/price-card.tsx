@@ -31,7 +31,7 @@ export function PriceCard({ plan, className }: PriceCardProps) {
           {plan.features.map((f) => (
             <li key={f} className="flex items-center gap-2">
               <Check className="h-4 w-4 text-foreground shrink-0" aria-hidden="true" />
-              <HoverPreviewItem label={f} imageSrc={getFeaturePreview(f)} />
+              <HoverPreviewItem label={f} {...getFeaturePreview(f)} />
             </li>
           ))}
         </ul>
