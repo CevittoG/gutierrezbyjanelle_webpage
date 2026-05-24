@@ -45,6 +45,11 @@
   }
 }
 
+/* Smooth anchor scrolling (disabled by prefers-reduced-motion below) */
+html {
+  scroll-behavior: smooth;
+}
+
 /* Minimalist Aesthetic Extensions */
 .text-balance {
   text-wrap: balance;
