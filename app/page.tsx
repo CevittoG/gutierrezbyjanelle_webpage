@@ -40,7 +40,7 @@ export default function HomePage() {
         buttonText="Invest in your event"
         buttonLink="/investment"
         imageUrl1="/invitation/invite-4.png"
-        imageUrl2="/invitation/invite-3.png"
+        imageUrl2="/invitation/invite-3.jpeg"
       />
 
       {/* About */}

@@ -20,7 +20,7 @@ interface PreviewEntry {
 }
 
 export const itemPreviewMap: Record<string, PreviewEntry> = {
-  "invite":                                  { imageSrc: "/item_preview_map/invite.png",                          orientation: "portrait"  },
+  "invite":                                  { imageSrc: "/item_preview_map/invite.jpeg",                          orientation: "portrait"  },
   "rsvp card":                               { imageSrc: "/item_preview_map/rsvp.jpeg",                           orientation: "landscape" },
   "rsvp":                                    { imageSrc: "/item_preview_map/rsvp.jpeg",                           orientation: "landscape" },
   "save the date":                           { imageSrc: "/item_preview_map/save_the_date.jpeg",                  orientation: "landscape" },
