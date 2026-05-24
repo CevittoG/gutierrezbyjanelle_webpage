@@ -209,7 +209,7 @@ export const siteConfig = {
       id: "r1",
       text: "From our first conversation with Janelle at Gutierrez, we knew we had found someone special. She responded to every email and question right away, and her professionalism made the whole planning process smooth and stress-free. What really set her apart was how she listened to what we wanted and created designs that felt completely unique to us—nothing felt generic or cookie-cutter. The personal touches she added throughout our wedding day showed that she genuinely cared about making it special, going above and beyond what we expected. The quality of her work is stunning, and we couldn't be happier with how everything turned out. We will absolutely use Gutierrez by Janelle again for future events and are already recommending her to friends.",
       author: "Julie Nelson",
-      role: "Mother of the bride, 2026",
+      role: "Bride, 2026",
     },
     {
       id: "r2",
@@ -221,7 +221,7 @@ export const siteConfig = {
       id: "r3",
       text: "When we started planning, we had no idea where to begin with stationery. Janelle answered all of our questions and even created a detailed timeline guide that made the whole process so much easier. She was invested in getting our designs just right, sending proofs and using AI renderings to insert the proofs and show us how everything would actually look in a real life scenario. Her communication was quick and honest the entire time, and she kept tweaking things until we were completely happy. The quality of her work is truly professional and we're so grateful for how much care she put into making our invites and stationary special!!!",
       author: "Michelle M.",
-      role: "Mother of the bride, 2026",
+      role: "Bride, 2026",
     },
   ] satisfies Review[],
   gallery: [
