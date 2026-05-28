@@ -4,6 +4,24 @@ Developer reference for this codebase. Keep this file updated as the project evo
 
 ---
 
+## Design Context
+
+Before any design or UI work, read both:
+
+- [PRODUCT.md](../PRODUCT.md) — strategy: register (`brand`), users, brand personality (*intimate, refined, tasteful*), anti-references, 5 design principles.
+- [DESIGN.md](../DESIGN.md) — visual system: tokens, typography rules, components, do's and don'ts. Creative North Star: **"The Modern Linen Envelope."**
+
+Sidecar at [.impeccable/design.json](../.impeccable/design.json) carries tonal ramps, motion tokens, and self-contained component snippets for tooling.
+
+**Non-negotiable visual rules** (full list in DESIGN.md §6):
+- One accent only — **Powder Rose** (`#EFC8CE`), state-only, ≤10% of any screen.
+- Two fonts only — **Square Peg** (cursive signature) and **Anybody** (weight 132, uppercase, tracked).
+- No pure `#000` or `#FFF` (Card White is the one sanctioned white).
+- Flat by default; shadows are Powder Rose-tinted state revelations, never gray.
+- Layouts must survive longer Spanish strings — bilingual support is a constraint, not an afterthought.
+
+---
+
 ## Stack
 
 - **Next.js 14** — App Router, `output: standalone`, `reactStrictMode: true`; `transpilePackages: ['framer-motion']` configured to share the React instance and prevent SSR errors
@@ -43,18 +61,21 @@ globals.css  →  tailwind.config.ts  →  Tailwind utilities
 ```
 
 **Current palette (Janelle's brand):**
-| Token | Value | Role |
-|-------|-------|------|
-| `--background` | `27 21% 80%` | Warm taupe (`#D6CAC0`) |
-| `--foreground` | `0 0% 0%` | Pure black |
-| `--primary` | `30 35% 72%` | Tan |
-| `--secondary` | `0 0% 100%` | White |
-| `--muted` | `27 21% 74%` | Darker taupe (section backgrounds) |
-| `--card` | `27 15% 90%` | Light taupe (card surfaces) |
-| `--border` | `27 15% 65%` | Mid taupe |
-| `--accent` | `350 60% 90%` | Light pink |
+| Token | Value | Hex | Role |
+|-------|-------|-----|------|
+| `--background` | `30 45% 95%` | `#F8F2ED` | Paper Cream — page background, dominant warm surface |
+| `--foreground` | `22 45% 15%` | `#372215` | Deep Ink — body text and headings (warm brown-black, never pure `#000`) |
+| `--card` | `0 0% 100%` | `#FFFFFF` | Card White — the only true white; reserved for the card layer |
+| `--primary` | `30 38% 68%` | `#CCAD8E` | Warm Tan — primary button fills, brand color |
+| `--secondary` | `0 0% 100%` | `#FFFFFF` | White (same as card) |
+| `--muted` | `30 30% 90%` | `#EDE6DE` | Linen Mist — muted section surfaces, half-step deeper than background |
+| `--muted-foreground` | `25 20% 35%` | `#6B5647` | Muted Bark — captions, descriptions, helper copy |
+| `--accent` | `350 55% 86%` | `#EFC8CE` | Powder Rose — state accent (hover glow, savings badge, focus underline). Guest, not host: ≤10% of any screen |
+| `--border` | `30 20% 82%` | `#DAD1C8` | Warm Thread — all borders. Never colored |
+| `--ring` | `30 38% 55%` | `#B88C61` | Ring Tan — focus rings only; deepened tan meeting WCAG AA against Paper Cream |
+| `--radius` | `0.5rem` | — | Card radius. `rounded-md` = 6px, `rounded-sm` = 4px |
 
-To retheme the entire site, only the `:root` block in `app/globals.css` needs to change.
+To retheme the entire site, only the `:root` block in `app/globals.css` needs to change. Full visual spec (with named rules, component patterns, do's/don'ts) lives in [DESIGN.md](../DESIGN.md).
 
 ---
 
