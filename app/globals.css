@@ -43,6 +43,14 @@
     font-weight: 400;
     letter-spacing: normal;
   }
+  /* Sanctioned exception to the uppercase-body rule for intimate first-person prose
+     (review blockquotes, Janelle's letter). Drops to mixed case with a touch more weight
+     so light Anybody reads warm instead of gossamer. */
+  .font-anybody-prose {
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 300;
+  }
 }
 
 /* Smooth anchor scrolling (disabled by prefers-reduced-motion below) */
