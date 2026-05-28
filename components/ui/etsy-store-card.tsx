@@ -1,6 +1,11 @@
-import { ShoppingBag, ExternalLink } from "lucide-react";
+"use client";
+
+import Image from "next/image";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/utils";
 import type { EtsyStore } from "@/config/site";
+import { useLocale } from "@/lib/locale-context";
+import { pick } from "@/lib/i18n";
 
 interface EtsyStoreCardProps {
   store: EtsyStore;
@@ -8,36 +13,49 @@ interface EtsyStoreCardProps {
 }
 
 export function EtsyStoreCard({ store, className }: EtsyStoreCardProps) {
+  const { locale, t } = useLocale();
+  const tagline = pick(store.tagline, locale);
+
   return (
     <a
       href={store.url}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "block relative overflow-hidden rounded-2xl border border-border bg-background shadow-sm",
-        "transition-all duration-200 hover:shadow-md hover:border-accent/60",
+        "group block rounded-lg border border-border bg-card shadow-sm overflow-hidden",
+        "transition-[border-color,box-shadow] duration-200",
+        "hover:border-accent/80 hover:shadow-[0_2px_16px_-4px_hsl(350_55%_86%/0.4)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}
     >
-      <div className="h-1 w-full bg-accent" />
-
-      <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 p-8 md:p-10">
-        <div className="flex-shrink-0 flex items-center justify-center w-20 h-20 rounded-full bg-accent/40">
-          <ShoppingBag className="w-9 h-9 text-accent-foreground" />
+      <div className="relative flex flex-col items-center gap-6 p-6 md:flex-row md:gap-10 md:p-10">
+        <div className="flex-shrink-0">
+          <Image
+            src="/etsy.jpg"
+            alt=""
+            width={96}
+            height={96}
+            className="object-cover rounded-full aspect-square w-20 h-20 md:w-24 md:h-24"
+          />
         </div>
 
-        <div className="flex-1 text-center md:text-left space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-accent-foreground">
-            Shop on Etsy
+        <div className="flex-1 space-y-1.5 text-center md:text-left">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
+            {t("etsy.eyebrow")}
           </p>
-          <h3 className="font-squarepeg text-3xl md:text-4xl text-foreground flex items-center gap-2 justify-center md:justify-start">
+          <h3 className="font-squarepeg text-2xl md:text-3xl text-foreground">
             {store.name}
-            <ExternalLink className="w-5 h-5 text-muted-foreground" />
           </h3>
-          <p className="text-muted-foreground leading-relaxed max-w-prose">
-            {store.tagline}
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-prose">
+            {tagline}
           </p>
         </div>
+
+        <ExternalLink
+          className="absolute right-5 top-5 w-4 h-4 text-muted-foreground/70 transition-colors duration-200 group-hover:text-foreground"
+          aria-hidden="true"
+        />
       </div>
     </a>
   );

@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/utils";
@@ -87,10 +88,10 @@ export const StationeryHero = ({
           </motion.p>
           <motion.div variants={itemVariants} className="mt-8">
             <Button asChild size="lg" variant="outline" className="h-12 px-8 text-base">
-              <a href={buttonLink}>
+              <Link href={buttonLink}>
                 {buttonText}
                 <ArrowRight className="ml-2 h-5 w-5" />
-              </a>
+              </Link>
             </Button>
           </motion.div>
         </div>
@@ -109,7 +110,7 @@ export const StationeryHero = ({
                   ? undefined
                   : { y: -10, rotate: -5, transition: { duration: 0.3 } }
               }
-              className="relative h-72 w-48 md:h-96 md:w-64 lg:h-[28rem] lg:w-72 rounded-xl shadow-2xl rotate-[-3deg] overflow-hidden"
+              className="relative h-72 w-48 md:h-96 md:w-64 lg:h-[28rem] lg:w-72 rounded-xl shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] rotate-[-3deg] overflow-hidden border border-border/30"
             >
               <Image
                 src={imageUrl1}
@@ -123,13 +124,13 @@ export const StationeryHero = ({
             {/* Right card — smaller, in front, 15 deg tilt */}
             <motion.div
               variants={cardItemVariants}
-              style={{ rotate: 15, border: "0.1px solid black" }}
+              style={{ rotate: 15 }}
               whileHover={
                 prefersReduced
                   ? undefined
                   : { y: -10, rotate: 20, transition: { duration: 0.3 } }
               }
-              className="relative w-48 md:w-60 lg:w-72 aspect-[1429/2000] rounded-xl shadow-2xl -ml-10 md:-ml-14 z-10 overflow-hidden"
+              className="relative w-48 md:w-60 lg:w-72 aspect-[1429/2000] rounded-xl shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] border border-border/30 -ml-10 md:-ml-14 z-10 overflow-hidden"
             >
               <Image
                 src={imageUrl2}

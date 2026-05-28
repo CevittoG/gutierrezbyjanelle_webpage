@@ -15,38 +15,38 @@ export function ZolaBadgeCard({ zola, className }: ZolaBadgeCardProps) {
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "block relative overflow-hidden rounded-2xl border border-border bg-background shadow-sm",
-        "transition-all duration-200 hover:shadow-md hover:border-accent/60",
-        className
+        "relative block rounded-lg border bg-card text-card-foreground shadow-sm",
+        className,
       )}
     >
-      <div className="h-1 w-full bg-accent" />
+      <ExternalLink
+        aria-hidden="true"
+        className="text-muted-foreground/70 absolute right-5 top-5 h-4 w-4"
+      />
 
-      <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 p-8 md:p-10">
+      <div className="flex flex-col items-center gap-6 p-8 md:flex-row md:gap-10 md:p-10">
         <div className="flex-shrink-0">
           <Image
             src="/zola.png"
-            alt="Featured on Zola"
+            alt=""
             width={160}
             height={160}
             className="object-contain"
           />
         </div>
 
-        <div className="flex-1 text-center md:text-left space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-accent-foreground">
+        <div className="flex-1 space-y-3 text-center md:text-left">
+          <span className="border-border bg-muted text-foreground inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs">
             Featured on Zola
-          </p>
-          <h3 className="font-squarepeg text-3xl md:text-4xl text-foreground flex items-center gap-2 justify-center md:justify-start">
+          </span>
+          <h3 className="font-squarepeg text-foreground text-3xl md:text-4xl">
             Find Me on Zola
-            <ExternalLink className="w-5 h-5 text-muted-foreground" />
           </h3>
-          <p className="text-muted-foreground leading-relaxed max-w-prose">
-            Browse my work, read client reviews, and reach out — all through Zola&apos;s wedding vendor marketplace.
+          <p className="text-muted-foreground max-w-prose leading-relaxed">
+            Browse my work, read client reviews, and reach out, all through Zola&apos;s wedding vendor marketplace.
           </p>
         </div>
       </div>
-
     </a>
   );
 }
