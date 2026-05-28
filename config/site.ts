@@ -1,21 +1,25 @@
-export type NavItem = { title: string; href: string };
+import type { Bilingual } from "@/lib/i18n";
+
+const b = (en: string, es: string): Bilingual => ({ en, es });
+
+export type NavItem = { title: string; href: string; i18nKey?: string };
 
 export type Hero = {
-  headline: string;
-  subheadline: string;
-  cta?: { label: string; href: string };
+  headline: Bilingual;
+  subheadline: Bilingual;
+  cta?: { label: Bilingual; href: string };
 };
 
 export type About = {
-  paragraphs: string[];
-  cta: { label: string; href: string };
+  paragraphs: Bilingual[];
+  cta: { label: Bilingual; href: string };
 };
 
 export type InvestmentTier = {
   id: string;
-  name: string;
-  description: string;
-  features: string[];
+  name: Bilingual;
+  description: Bilingual;
+  features: Bilingual[];
   discount?: number;
   /** Display label for the savings badge. Decoupled from the numeric discount. */
   savingsLabel?: string;
@@ -23,23 +27,40 @@ export type InvestmentTier = {
 
 export type Review = {
   id: string;
-  text: string;
+  text: Bilingual;
   author: string;
-  role: string;
+  role: Bilingual;
+  /** Native language of the original quote (for the `lang` attribute on blockquote). */
+  originalLang?: "en" | "es";
 };
+
+export type GalleryCategory = "cards" | "signs" | "details";
+export type GalleryOrientation = "portrait" | "landscape" | "square";
 
 export type GalleryItem = {
   id: string;
   src: string;
   alt: string;
+  /** Curatorial one-line caption (bilingual). */
+  caption?: Bilingual;
+  /** Editorial grouping. Defaults to "details" if omitted. */
+  category?: GalleryCategory;
+  /** Native aspect of the photo. Drives tile shape. Defaults to "square". */
+  orientation?: GalleryOrientation;
 };
 
-export type Weddings = { paragraphs: string[] };
+export type GalleryGroup = {
+  id: GalleryCategory;
+  title: Bilingual;
+  intro: Bilingual;
+};
+
+export type Weddings = { paragraphs: Bilingual[] };
 
 export type EtsyStore = {
   url: string;
   name: string;
-  tagline: string;
+  tagline: Bilingual;
 };
 
 export type ZolaProfile = { vendorUrl: string };
@@ -60,146 +81,197 @@ export type InstagramConfig = {
 export const siteConfig = {
   name: "GutierrezByJanelle",
   description:
-    "Custom invitations, décor, signs, and digital resources for your wedding and events — designed with love by Janelle.",
+    "Custom invitations, décor, signs, and digital resources for your wedding and events. Designed with love by Janelle.",
   url: "https://www.gutierrezbyjanelle.com",
   hero: {
-    headline: "Your dream day, beautifully designed.",
-    subheadline:
-      "Custom invitations, décor, signs, and digital resources — crafted with love for the moments that matter most.",
+    headline: b(
+      "Your dream day, beautifully designed.",
+      "Tu día soñado, bellamente diseñado."
+    ),
+    subheadline: b(
+      "Custom invitations, décor, signs, and digital resources, crafted with love for the moments that matter most.",
+      "Invitaciones personalizadas, decoración, carteles y recursos digitales, creados con amor para los momentos que más importan."
+    ),
   } satisfies Hero,
   about: {
     paragraphs: [
-      "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Though fun, planning any event can become chaotic and stressful… that's where I come in! I can help take your vision from a day dream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site, all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon… xx",
+      b(
+        "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Planning any event can become chaotic and stressful: that's where I come in!",
+        "Estoy muy emocionada de que me hayas elegido para ayudarte a hacer memorable tu evento especial. Comencé este negocio después de planear mi propia boda y enamorarme de cada detalle diseñado. Planear cualquier evento puede volverse caótico y estresante: ¡ahí es donde entro yo!"
+      ),
+      b(
+        "I can help take your vision from a daydream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site; all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon… xx",
+        "Puedo ayudarte a llevar tu visión desde un sueño hasta tenerlo en tus manos. No te preocupes si no ves una combinación perfecta en mi sitio; todos los diseños se pueden personalizar o crear desde cero. ¡Espero con ansias nuestro proceso de diseño! Hablamos pronto… xx"
+      ),
     ],
-    cta: { label: "Invest in your event", href: "/investment" },
+    cta: {
+      label: b("Invest in your event", "Invierte en tu evento"),
+      href: "/investment",
+    },
   } satisfies About,
   weddings: {
     paragraphs: [
-      "Welcome, brides & grooms! Firstly, I'd like to congratulate you on your engagement ♡ You have someone who loves you unconditionally, and you both choose to spend your life together, it's such a beautiful milestone! I'm delighted to dedicate time into illuminating your love to your family and friends.",
-      "Being a fiancée was one of the best and most favorite moments in my life! On the day my husband proposed, a couple we met congratulated us and gave just one piece of advice that made an impact in our relationship and how we felt throughout our engagement. The same advice that was passed on to them… \"never stop celebrating being engaged.\" Simple, yet can get shadowed in the midst of all of the wedding chaos. Never stopping the celebration of our engagement eventually turned into never stop celebrating our love.",
-      "We used that advice during our entire wedding planning period, from the mardi gras parade to the night before we said \"I do.\" That advice became a beautiful excuse for endless dates to discuss each wedding decision, big or small. We used that time to connect in a low-stress conversation about our vision, what we wanted our guests to experience and of course, the infamous wedding budget. One date to discuss, another date to compromise, a date when we finally made up our minds… or changed them! We had so much fun in the midst of the wedding planning craze.",
-      "I would love to be a part of your wedding planning craze and give you one less worry. I fell in love with designing my dream day and I'm excited to help you do the same. I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
+      b(
+        "Welcome, brides & grooms! Firstly, I'd like to congratulate you on your engagement ♡ You have someone who loves you unconditionally, and you both choose to spend your life together, it's such a beautiful milestone! I'm delighted to dedicate time into illuminating your love to your family and friends.",
+        "¡Bienvenidos, novios! Antes que nada, quiero felicitarte por tu compromiso ♡ Tienes a alguien que te ama incondicionalmente, y ambos eligen pasar la vida juntos, ¡es un hito tan hermoso! Me encanta dedicarle tiempo a iluminar tu amor para tu familia y amigos."
+      ),
+      b(
+        "Being a fiancée was one of the best and most favorite moments in my life! On the day my husband proposed, a couple we met congratulated us and gave just one piece of advice that made an impact in our relationship and how we felt throughout our engagement. The same advice that was passed on to them… \"never stop celebrating being engaged.\" Simple, yet can get shadowed in the midst of all of the wedding chaos. Never stopping the celebration of our engagement eventually turned into never stop celebrating our love.",
+        "¡Ser prometida fue uno de los mejores y más favoritos momentos de mi vida! El día que mi esposo me propuso matrimonio, una pareja que conocimos nos felicitó y nos dio solo un consejo que impactó nuestra relación y cómo nos sentimos durante todo el compromiso. El mismo consejo que les habían dado a ellos… \"nunca dejen de celebrar estar comprometidos.\" Simple, pero se puede opacar en medio de todo el caos de la boda. Nunca dejar de celebrar nuestro compromiso eventualmente se convirtió en nunca dejar de celebrar nuestro amor."
+      ),
+      b(
+        "We used that advice during our entire wedding planning period, from the mardi gras parade to the night before we said \"I do.\" That advice became a beautiful excuse for endless dates to discuss each wedding decision, big or small. We used that time to connect in a low-stress conversation about our vision, what we wanted our guests to experience and of course, the infamous wedding budget. One date to discuss, another date to compromise, a date when we finally made up our minds… or changed them! We had so much fun in the midst of the wedding planning craze.",
+        "Usamos ese consejo durante todo nuestro período de planificación de boda, desde el desfile de mardi gras hasta la noche antes de decir \"acepto.\" Ese consejo se convirtió en una hermosa excusa para infinitas citas para discutir cada decisión de boda, grande o pequeña. Usamos ese tiempo para conectar en una conversación de bajo estrés sobre nuestra visión, lo que queríamos que nuestros invitados experimentaran y por supuesto, el infame presupuesto de boda. Una cita para discutir, otra cita para llegar a un acuerdo, una cita cuando finalmente decidimos… ¡o cambiamos de opinión! Nos divertimos muchísimo en medio de la locura de la planificación de boda."
+      ),
+      b(
+        "I would love to be a part of your wedding planning craze and give you one less worry. I fell in love with designing my dream day and I'm excited to help you do the same. I'll help you take the stress out of your wedding stationery and signs so you can put the effort into the truly stressful situation… figuring out your seating chart!",
+        "Me encantaría ser parte de la locura de la planificación de tu boda y darte una preocupación menos. Me enamoré de diseñar el día de mis sueños y estoy emocionada de ayudarte a hacer lo mismo. Te ayudaré a quitarle el estrés a tu papelería y carteles de boda para que puedas poner el esfuerzo en la situación verdaderamente estresante… ¡decidir el mapa de mesas!"
+      ),
     ],
   } satisfies Weddings,
   mainNav: [
-    { title: "Home", href: "/" },
-    { title: "Weddings", href: "/weddings" },
-    { title: "Gallery", href: "/gallery" },
-    { title: "Reviews", href: "/reviews" },
-    { title: "Investment", href: "/investment" },
+    { title: "Home", href: "/", i18nKey: "nav.home" },
+    { title: "Weddings", href: "/weddings", i18nKey: "nav.weddings" },
+    { title: "Gallery", href: "/gallery", i18nKey: "nav.gallery" },
+    { title: "Reviews", href: "/reviews", i18nKey: "nav.reviews" },
+    { title: "Investment", href: "/investment", i18nKey: "nav.investment" },
   ] satisfies NavItem[],
   investments: [
     {
       id: "individual",
-      name: "Individual Item",
-      description: "Buy any single stationery piece — invite, thank you note, RSVP, menu, and more. Mix and match to suit your event.",
+      name: b("Individual Item", "Pieza Individual"),
+      description: b(
+        "Buy any single stationery piece: invite, thank you note, RSVP, menu, and more. Mix and match to suit your event.",
+        "Compra cualquier pieza individual de papelería: invitación, tarjeta de agradecimiento, RSVP, menú y más. Combínalas como mejor le quede a tu evento."
+      ),
       features: [
-        "Invite",
-        "Thank you note",
-        "RSVP card",
-        "Menu",
-        "And more — inquire for the full list",
+        b("Invite", "Invitación"),
+        b("Thank you note", "Tarjeta de agradecimiento"),
+        b("RSVP card", "Tarjeta RSVP"),
+        b("Menu", "Menú"),
+        b("And more (inquire for the full list)", "Y más (consulta por la lista completa)"),
       ],
     },
     {
       id: "diy-digital",
-      name: "Short and Suite",
-      description: "Dedicated to those who resignate with “keep it simple.” Perfect for mini or micro wedding preferences.",
+      name: b("Short and Suite", "Corto y Dulce"),
+      description: b(
+        "Dedicated to those who resignate with “keep it simple.” Perfect for mini or micro wedding preferences.",
+        "Dedicado a quienes prefieren \"mantenerlo simple.\" Perfecto para bodas mini o micro."
+      ),
       features: [
-        "Invite",
-        "Save the date",
+        b("Save the date", "Reserva la fecha"),
+        b("Invite", "Invitación"),
       ],
       discount: 10,
       savingsLabel: "✦",
     },
     {
       id: "sweet-suite",
-      name: "Sweet Spot Suite",
-      description: "Begin your wedding brand with this complete invitation suite.",
+      name: b("Sweet Spot Suite", "Colección Punto Dulce"),
+      description: b(
+        "Begin your wedding brand with this complete invitation suite.",
+        "Comienza la identidad de tu boda con esta colección completa de invitaciones."
+      ),
       features: [
-        "Save the date",
-        "Invite",
-        "Detail card",
-        "RSVP",
-        "Envelopes",
-        "AI-generated renders to envision your event",
+        b("Save the date", "Reserva la fecha"),
+        b("Invite", "Invitación"),
+        b("Detail card", "Tarjeta de detalles"),
+        b("RSVP", "RSVP"),
+        b("Envelopes", "Sobres"),
+        b("AI-generated renders to envision your event", "Renders con IA para visualizar tu evento"),
       ],
       discount: 12,
       savingsLabel: "✦✦",
     },
     {
       id: "signature-suite",
-      name: "Signature Suite",
-      description: "The full wedding stationery experience — every detail, beautifully coordinated.",
+      name: b("Signature Suite", "Colección Firma"),
+      description: b(
+        "The full wedding stationery experience, every detail beautifully coordinated.",
+        "La experiencia completa de papelería de boda, con cada detalle hermosamente coordinado."
+      ),
       features: [
-        "Save the date",
-        "Invite",
-        "Detail card",
-        "RSVP",
-        "Envelopes",
-        "Ceremony card front",
-        "Ceremony card back",
-        "Personalized guest settings",
-        "Seating chart",
-        "AI-generated renders to envision your event",
+        b("Save the date", "Reserva la fecha"),
+        b("Invite", "Invitación"),
+        b("Detail card", "Tarjeta de detalles"),
+        b("RSVP", "RSVP"),
+        b("Envelopes", "Sobres"),
+        b("Ceremony card front", "Tarjeta de ceremonia (frente)"),
+        b("Ceremony card back", "Tarjeta de ceremonia (reverso)"),
+        b("Personalized guest settings", "Lugares personalizados para invitados"),
+        b("Seating chart", "Mapa de mesas"),
+        b("AI-generated renders to envision your event", "Renders con IA para visualizar tu evento"),
       ],
       discount: 15,
       savingsLabel: "✦✦✦",
     },
     {
       id: "add-ons",
-      name: "Add-Ons",
-      description: "Enhance any suite with these extra touches — available individually alongside any investment.",
+      name: b("Add-Ons", "Complementos"),
+      description: b(
+        "Enhance any suite with these extra touches, available individually alongside any investment.",
+        "Realza cualquier colección con estos toques extra, disponibles individualmente junto con cualquier inversión."
+      ),
       features: [
-        "Menu",
-        "Drink toppers",
-        "Table top signs (signature drink sign)",
-        "Place cards",
-        "Thank you cards",
-        "Party favor tags",
-        "Full color designs",
-        "Textured paper",
+        b("Menu", "Menú"),
+        b("Drink toppers", "Toppers para bebidas"),
+        b("Table top signs (signature drink sign)", "Carteles de mesa (cartel de bebida especial)"),
+        b("Place cards", "Tarjetas de lugar"),
+        b("Thank you cards", "Tarjetas de agradecimiento"),
+        b("Party favor tags", "Etiquetas para recuerdos"),
+        b("Full color designs", "Diseños a todo color"),
+        b("Textured paper", "Papel texturizado"),
       ],
     },
   ] satisfies InvestmentTier[],
   eventInvestments: [
     {
       id: "event-basics",
-      name: "The Basics",
-      description: "A clean, cohesive foundation for any event — everything you need to set the tone.",
+      name: b("The Basics", "Lo Esencial"),
+      description: b(
+        "A clean, cohesive foundation for any event: everything you need to set the tone.",
+        "Una base limpia y cohesiva para cualquier evento: todo lo que necesitas para marcar el tono."
+      ),
       features: [
-        "Invite",
-        "Thank you cards",
+        b("Invite", "Invitación"),
+        b("Thank you cards", "Tarjetas de agradecimiento"),
       ],
       savingsLabel: "✦",
     },
     {
       id: "event-fun",
-      name: "Add Some Fun",
-      description: "Take it up a notch with extra pieces that keep the party going from start to sweet finish.",
+      name: b("Add Some Fun", "Agrega Diversión"),
+      description: b(
+        "Take it up a notch with extra pieces that keep the party going from start to sweet finish.",
+        "Sube el nivel con piezas extra que mantienen la fiesta desde el inicio hasta el dulce final."
+      ),
       features: [
-        "Invite",
-        "Thank you cards",
-        "Menus",
-        "Event sign",
-        "Dessert sign",
+        b("Invite", "Invitación"),
+        b("Thank you cards", "Tarjetas de agradecimiento"),
+        b("Menus", "Menús"),
+        b("Event sign", "Cartel del evento"),
+        b("Dessert sign", "Cartel de postres"),
       ],
       savingsLabel: "✦✦",
     },
     {
       id: "event-works",
-      name: "Give Me the Works",
-      description: "The full event stationery experience — every detail covered so your guests feel every bit of the celebration.",
+      name: b("Give Me the Works", "Dame Todo"),
+      description: b(
+        "The full event stationery experience: every detail covered so your guests feel every bit of the celebration.",
+        "La experiencia completa de papelería para eventos: cada detalle cubierto para que tus invitados sientan toda la celebración."
+      ),
       features: [
-        "Invite",
-        "Thank you cards",
-        "Food menu",
-        "Dessert menu",
-        "Bar menu",
-        "Welcome sign",
-        "Table top event sign",
-        "Dessert sign",
-        "Signature drink sign",
+        b("Invite", "Invitación"),
+        b("Thank you cards", "Tarjetas de agradecimiento"),
+        b("Food menu", "Menú de comida"),
+        b("Dessert menu", "Menú de postres"),
+        b("Bar menu", "Menú de bar"),
+        b("Welcome sign", "Cartel de bienvenida"),
+        b("Table top event sign", "Cartel de mesa del evento"),
+        b("Dessert sign", "Cartel de postres"),
+        b("Signature drink sign", "Cartel de bebida especial"),
       ],
       savingsLabel: "✦✦✦",
     },
@@ -207,35 +279,127 @@ export const siteConfig = {
   reviews: [
     {
       id: "r1",
-      text: "From our first conversation with Janelle at Gutierrez, we knew we had found someone special. She responded to every email and question right away, and her professionalism made the whole planning process smooth and stress-free. What really set her apart was how she listened to what we wanted and created designs that felt completely unique to us—nothing felt generic or cookie-cutter. The personal touches she added throughout our wedding day showed that she genuinely cared about making it special, going above and beyond what we expected. The quality of her work is stunning, and we couldn't be happier with how everything turned out. We will absolutely use Gutierrez by Janelle again for future events and are already recommending her to friends.",
+      text: b(
+        "From our first conversation with Janelle at Gutierrez, we knew we had found someone special. She responded to every email and question right away, and her professionalism made the whole planning process smooth and stress-free. What really set her apart was how she listened to what we wanted and created designs that felt completely unique to us—nothing felt generic or cookie-cutter. The personal touches she added throughout our wedding day showed that she genuinely cared about making it special, going above and beyond what we expected. The quality of her work is stunning, and we couldn't be happier with how everything turned out. We will absolutely use Gutierrez by Janelle again for future events and are already recommending her to friends.",
+        "Desde nuestra primera conversación con Janelle de Gutierrez, supimos que habíamos encontrado a alguien especial. Respondía cada correo y pregunta de inmediato, y su profesionalismo hizo que todo el proceso de planificación fuera fluido y sin estrés. Lo que realmente la distinguió fue cómo escuchó lo que queríamos y creó diseños que se sintieron completamente únicos para nosotros, nada se sintió genérico ni copiado. Los toques personales que agregó durante todo el día de nuestra boda demostraron que de verdad le importaba hacerlo especial, yendo más allá de lo que esperábamos. La calidad de su trabajo es impresionante y no podríamos estar más felices con cómo quedó todo. Definitivamente usaremos a Gutierrez by Janelle de nuevo para futuros eventos y ya se la estamos recomendando a nuestros amigos."
+      ),
       author: "Julie N.",
-      role: "Bride, 2026",
+      role: b("Bride, 2026", "Novia, 2026"),
+      originalLang: "en",
     },
     {
       id: "r2",
-      text: "Agradezco tu disposición y amabilidad en el trabajo, realmente lograste que la Boda sea maravillosa con tantas reseñas. Me encantó que los diseños estén en los dos idiomas para guiar a los invitados.",
+      text: b(
+        "I appreciate your willingness and kindness in the work; you truly made the wedding wonderful with so many beautiful pieces. I loved that the designs were in both languages to guide the guests.",
+        "Agradezco tu disposición y amabilidad en el trabajo, realmente lograste que la Boda sea maravillosa con tantas reseñas. Me encantó que los diseños estén en los dos idiomas para guiar a los invitados."
+      ),
       author: "Liliana M.",
-      role: "Mother of the groom, 2025",
+      role: b("Mother of the groom, 2025", "Madre del novio, 2025"),
+      originalLang: "es",
     },
     {
       id: "r3",
-      text: "When we started planning, we had no idea where to begin with stationery. Janelle answered all of our questions and even created a detailed timeline guide that made the whole process so much easier. She was invested in getting our designs just right, sending proofs and using AI renderings to insert the proofs and show us how everything would actually look in a real life scenario. Her communication was quick and honest the entire time, and she kept tweaking things until we were completely happy. The quality of her work is truly professional and we're so grateful for how much care she put into making our invites and stationary special!!!",
+      text: b(
+        "When we started planning, we had no idea where to begin with stationery. Janelle answered all of our questions and even created a detailed timeline guide that made the whole process so much easier. She was invested in getting our designs just right, sending proofs and using AI renderings to insert the proofs and show us how everything would actually look in a real life scenario. Her communication was quick and honest the entire time, and she kept tweaking things until we were completely happy. The quality of her work is truly professional and we're so grateful for how much care she put into making our invites and stationary special!!!",
+        "Cuando empezamos a planear, no teníamos idea por dónde comenzar con la papelería. Janelle respondió todas nuestras preguntas e incluso creó una guía detallada de tiempos que hizo todo el proceso mucho más fácil. Se dedicó por completo a que nuestros diseños quedaran perfectos, enviando pruebas y usando renders con IA para mostrarnos cómo se vería todo en un escenario real. Su comunicación fue rápida y honesta todo el tiempo, y siguió ajustando cosas hasta que quedamos completamente felices. La calidad de su trabajo es verdaderamente profesional y estamos muy agradecidas por todo el cuidado que puso en hacer nuestras invitaciones y papelería especiales!!!"
+      ),
       author: "Michelle M.",
-      role: "Bride, 2026",
+      role: b("Bride, 2026", "Novia, 2026"),
+      originalLang: "en",
     },
   ] satisfies Review[],
+  galleryGroups: [
+    {
+      id: "cards",
+      title: b("Cards in hand", "Tarjetas en mano"),
+      intro: b(
+        "Ceremony pieces and stationery that set the first tone.",
+        "Piezas de ceremonia y papelería que marcan el primer tono."
+      ),
+    },
+    {
+      id: "signs",
+      title: b("Signs that set the room", "Carteles que arman el salón"),
+      intro: b(
+        "Welcome boards and signage at human scale.",
+        "Carteles de bienvenida y señalización a escala humana."
+      ),
+    },
+    {
+      id: "details",
+      title: b("Quiet little details", "Pequeños detalles silenciosos"),
+      intro: b(
+        "The small pieces that make a room feel finished.",
+        "Los pequeños detalles que hacen que un espacio se sienta completo."
+      ),
+    },
+  ] satisfies GalleryGroup[],
   gallery: [
-    { id: "g1", src: "/gallery/ceremony-card.jpeg",         alt: "Ceremony card" },
-    { id: "g2", src: "/gallery/ceremony-card-2.jpeg",       alt: "Ceremony card detail" },
-    { id: "g3", src: "/gallery/welcome-sign.jpeg",          alt: "Wedding welcome sign" },
-    { id: "g4", src: "/gallery/signature-drink-sign.jpeg",  alt: "Signature drink sign" },
-    { id: "g5", src: "/gallery/signature-drink-topper.jpeg",alt: "Signature drink topper" },
-    { id: "g6", src: "/gallery/welcome-sign-2.jpeg",        alt: "Wedding welcome sign detail" },
+    {
+      id: "g1",
+      src: "/gallery/ceremony-card.jpeg",
+      alt: "Ceremony program card on a paper background",
+      caption: b("Ceremony program, hand to hand.", "Programa de ceremonia, en mano."),
+      category: "cards",
+      orientation: "square",
+    },
+    {
+      id: "g2",
+      src: "/gallery/ceremony-card-2.jpeg",
+      alt: "Ceremony card, close detail",
+      caption: b("Same suite, the close-up.", "La misma colección, en detalle."),
+      category: "cards",
+      orientation: "square",
+    },
+    {
+      id: "g3",
+      src: "/gallery/welcome-sign.jpeg",
+      alt: "Tall welcome sign at a wedding entrance",
+      caption: b(
+        "Welcome sign, made to be the first thing your guests see.",
+        "Cartel de bienvenida, lo primero que ven tus invitados."
+      ),
+      category: "signs",
+      orientation: "portrait",
+    },
+    {
+      id: "g6",
+      src: "/gallery/welcome-sign-2.jpeg",
+      alt: "Welcome sign, second look",
+      caption: b("A second welcome, another couple.", "Otra bienvenida, otra pareja."),
+      category: "signs",
+      orientation: "portrait",
+    },
+    {
+      id: "g4",
+      src: "/gallery/signature-drink-sign.jpeg",
+      alt: "Signature drink sign on a bar table",
+      caption: b(
+        "Signature drink sign, sitting on the bar.",
+        "Cartel de coctel especial, sobre la barra."
+      ),
+      category: "signs",
+      orientation: "landscape",
+    },
+    {
+      id: "g5",
+      src: "/gallery/signature-drink-topper.jpeg",
+      alt: "Signature drink topper",
+      caption: b(
+        "The same drink, finished with a topper.",
+        "El mismo coctel, terminado con un topper."
+      ),
+      category: "details",
+      orientation: "landscape",
+    },
   ] satisfies GalleryItem[],
   etsyStore: {
     url: "https://xgutierrezbyjanelle.etsy.com",
     name: "GutierrezByJanelle",
-    tagline: "Ready-to-customize designs and digital stationery packs — available now in my Etsy shop.",
+    tagline: b(
+      "Ready-to-customize designs and digital stationery packs, available now in my Etsy shop.",
+      "Diseños listos para personalizar y paquetes digitales de papelería, disponibles ahora en mi tienda de Etsy."
+    ),
   } satisfies EtsyStore,
   zola: {
     vendorUrl: "https://www.zola.com/wedding-vendors/wedding-extras/gutierrez-by-janelle",
@@ -245,4 +409,6 @@ export const siteConfig = {
     profileUrl: "https://www.instagram.com/gutierrez.byjanelle",
     posts: [] as InstagramPost[],
   } satisfies InstagramConfig,
+  /** Contact email displayed on the Investment inquiry section. */
+  contactEmail: "gutierrezbyjanelle@gmail.com",
 };
