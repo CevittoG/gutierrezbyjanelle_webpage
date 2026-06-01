@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import { cn } from "@/utils";
-import { Check, ImageIcon } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { InvestmentTier } from "@/config/site";
-import { HoverPreviewItem } from "@/components/ui/hover-preview-item";
+import { FeaturePreviewList } from "@/components/ui/feature-preview-list";
 import { getFeaturePreview } from "@/config/item-previews";
 import { useLocale } from "@/lib/locale-context";
 import { pick } from "@/lib/i18n";
@@ -61,18 +61,18 @@ export function PriceCard({ plan, imageSrc, imageAlt, showPlaceholder, className
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ul className="grid gap-2 text-sm text-muted-foreground">
-          {plan.features.map((f) => {
+        <FeaturePreviewList
+          items={plan.features.map((f) => {
             // Preview lookup uses the EN key so the map stays locale-agnostic.
-            const label = pick(f, locale);
-            return (
-              <li key={f.en} className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-foreground shrink-0" aria-hidden="true" />
-                <HoverPreviewItem label={label} {...getFeaturePreview(f.en)} />
-              </li>
-            );
+            const preview = getFeaturePreview(f.en);
+            return {
+              key: f.en,
+              label: pick(f, locale),
+              imageSrc: preview?.imageSrc,
+              orientation: preview?.orientation,
+            };
           })}
-        </ul>
+        />
       </CardContent>
     </Card>
   );
