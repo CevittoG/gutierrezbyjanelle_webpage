@@ -22,9 +22,7 @@ export function EtsyStoreCard({ store, className }: EtsyStoreCardProps) {
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "group block rounded-lg border border-border bg-card shadow-sm overflow-hidden",
-        "transition-[border-color,box-shadow] duration-200",
-        "hover:border-accent/80 hover:shadow-[0_2px_16px_-4px_hsl(350_55%_86%/0.4)]",
+        "glass group block rounded-2xl border border-border overflow-hidden",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}

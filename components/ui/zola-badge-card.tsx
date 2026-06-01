@@ -15,7 +15,7 @@ export function ZolaBadgeCard({ zola, className }: ZolaBadgeCardProps) {
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "relative block rounded-lg border bg-card text-card-foreground shadow-sm",
+        "glass relative block rounded-2xl border border-border text-card-foreground",
         className,
       )}
     >
