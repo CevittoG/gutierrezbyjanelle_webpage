@@ -83,6 +83,13 @@ export const siteConfig = {
   description:
     "Custom invitations, décor, signs, and digital resources for your wedding and events. Designed with love by Janelle.",
   url: "https://www.gutierrezbyjanelle.com",
+  locale: "en_US",
+  alternateLocales: ["es_ES"],
+  ogImages: [
+    { url: "/logo.svg", width: 1785, height: 1785, alt: "GutierrezByJanelle logo", type: "image/svg+xml" },
+    { url: "/opengraph-image", width: 1200, height: 630, alt: "GutierrezByJanelle", type: "image/png" },
+  ],
+  twitterImages: ["/opengraph-image"],
   hero: {
     headline: b(
       "Your dream day, beautifully designed.",

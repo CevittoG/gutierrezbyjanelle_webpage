@@ -18,18 +18,19 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: siteConfig.locale,
+    alternateLocale: siteConfig.alternateLocales,
     url: siteConfig.url,
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: siteConfig.name }],
+    images: siteConfig.ogImages,
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
-    images: ["/opengraph-image"],
+    images: siteConfig.twitterImages,
   },
   icons: { icon: "/icon", shortcut: "/icon" },
 };
