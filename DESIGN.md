@@ -137,7 +137,7 @@ The canonical source of truth is HSL on CSS custom properties in `app/globals.cs
 
 ### Named Rules
 
-**The Powder Rose Rule.** Powder Rose is a guest, not a host. It appears on ≤10% of any screen, as state only: hover glow, savings badge, focus underline. It is forbidden as a section background, as a button fill, as body text color, and inside any gradient.
+**The Powder Rose Rule.** Powder Rose carries the brand pink throughout the chrome — as gradient stops inside the `.glass` / `.glass-soft` card and outline-button surfaces, as the inset lit-edge ring, as the hover glow, as the savings badge fill, and as the focus underline. It is *still* forbidden as a section background fill, as a primary-button fill (Warm Tan owns that), as body text color, and as a solid card fill. The gradient form is fine; opaque fills are not.
 
 **The No True Black Rule.** Pure `#000` is prohibited. All "dark" values are Deep Ink (`#372215`) or warmer. Even on shadow values: tint toward the paper.
 
@@ -175,7 +175,16 @@ Two state-driven elevation moves carry the system:
 
 - **Card hover glow** (`box-shadow: 0 2px 16px -4px hsl(350 55% 86% / 0.4)`): Cards (pricing, reviews) gain a soft Powder Rose halo on hover. The shadow is *colored*, not gray — this is what makes it feel like blush ink bleeding into paper, not like a generic SaaS hover.
 - **Vendor card hover glow** (`box-shadow: 0 4px 20px -4px hsl(350 55% 86% / 0.45)`): A deeper version of the same shadow, for vendor-linked cards (Zola, Etsy). Slightly stronger because these cards are conversion-critical.
-- **Frosted section panel** (`backdrop-filter: blur(4px); background-color: hsl(30 45% 95% / 0.4)`): The `.section-panel` utility — used over photography or below the watermarked logo on the homepage — creates the only "glass" effect in the system. It is purposeful, never decorative.
+- **Frosted section panel** (`backdrop-filter: blur(4px); background-color: hsl(30 45% 95% / 0.4)`): The `.section-panel` utility — used over photography or below the watermarked logo on the homepage. Purposeful, never decorative.
+- **Pink-Glossy Vellum** (`.glass`, `.glass-soft` — site-wide default for cards and outline buttons):
+  The default surface treatment for cards and outline buttons. Reads as polished vellum with a Powder Rose specular catch — *not* corporate frosted glass.
+  - Body: 3-stop diagonal gradient `Powder Rose/0.32 → Card White/0.60 → Powder Rose/0.22` (`.glass`) or the softer 0.28 / 0.55 / 0.18 stops (`.glass-soft` for smaller surfaces). The base `background-color` is `transparent`, never `bg-card`, so the underlying section bleeds through and tints the glass warmly.
+  - Blur: `backdrop-filter: blur(12px)` on `.glass`, `8px` on `.glass-soft`.
+  - Inset ring: 1px Powder Rose/0.40 (`.glass`) or 0.35 (`.glass-soft`) — the "lit edge" highlight that makes the surface read as polished, not flat.
+  - Outer shadow: Powder Rose halo — `0 14px 40px -14px hsl(--accent / 0.55)` (`.glass`) or `0 6px 18px -8px hsl(--accent / 0.50)` (`.glass-soft`), lifting on hover.
+  - Radius: `rounded-2xl` (16px) for cards; `rounded-md` (6px) for buttons.
+
+  This replaces the old `shadow-sm` flat-card spec as the default. The recipe is centralized in `app/globals.css` under `.glass` and `.glass-soft` so the entire site changes by editing one rule.
 
 ### Named Rules
 
@@ -183,22 +192,24 @@ Two state-driven elevation moves carry the system:
 
 **The Tinted-Shadow Rule.** When a shadow appears, it is tinted with Powder Rose, never pure gray or black. A `rgba(0,0,0,...)` shadow anywhere on this site is a bug.
 
+**The Pink-Glossy Default Rule.** Cards and outline buttons use the `.glass` / `.glass-soft` treatment by default — a Powder Rose + Card White gradient with backdrop blur and a Powder Rose inset ring and halo. This is sanctioned site-wide (not just on narrative-scroll surfaces). What stays *out* of glass: navigation chrome, badges, primary CTAs (the Warm Tan fill is the brand color and must remain solid), inputs, and any surface where translucency would harm legibility. The `.section-panel` frosted utility remains its own thing for photography watermarks.
+
 ## 5. Components
 
 ### Buttons
 - **Shape:** Subtly rounded corners (`6px`, `rounded-md`). Pill buttons are reserved for vendor links (Etsy, Zola, Instagram).
 - **Primary:** `Warm Tan` background, `Deep Ink` text, `8px 16px` padding, `40px` height. Hover deepens to `Ring Tan`. Used for: primary CTAs (`Invest in your event`, `Inquire`).
-- **Outline:** Transparent on `Paper Cream`, `Warm Thread` border, `Deep Ink` text. Hover fills with `Powder Rose` and keeps Deep Ink text. Used for: secondary CTAs that should feel quieter.
+- **Outline:** `.glass-soft` pink-glossy surface (Powder Rose + Card White gradient + backdrop blur + inset Powder Rose ring), `Warm Thread` border, `Deep Ink` text. The Powder Rose halo intensifies on hover. Used for: secondary CTAs that should feel quieter than the primary Warm Tan fill but still carry the brand pink.
 - **Ghost:** No border, transparent background, `Deep Ink` text. Hover gains a Powder Rose fill. Used for: nav items, icon-only buttons, in-card actions.
 - **Link:** Underlined `Warm Tan` text, no fill, no border. Used for inline text actions.
 - **Hover / Focus:** Color transitions (200ms). Focus-visible ring is a 2px `Ring Tan` outline with 2px offset. Never animate the border-radius or transform on focus.
 - **Vendor pill buttons** (Etsy, Zola, Instagram): full-radius pill shape (`rounded-full`), thin Warm Thread border, icon + label inside. The only place pill shapes are allowed.
 
 ### Cards
-- **Corner Style:** Rounded `8px` (`rounded-lg`).
-- **Background:** `Card White` (`#FFFFFF`). The only fill allowed. Tinted backgrounds (`bg-muted`, etc.) are forbidden on cards.
-- **Border:** `1px solid Warm Thread` (`#DAD1C8`).
-- **Shadow Strategy:** `shadow-sm` at rest. On hover, border deepens to `Powder Rose / 0.8` and the card gains the Card hover glow box-shadow (see Elevation). Transition: `border-color 200ms ease, box-shadow 200ms ease`.
+- **Corner Style:** Rounded `16px` (`rounded-2xl`). The pink-glossy surface reads softer than the old flat card, so the radius opens up a step.
+- **Surface:** `.glass` — pink-glossy vellum (see §4 Elevation). Card White as a solid background is reserved for places where translucency would harm legibility (inputs, modals).
+- **Border:** `1px solid Warm Thread` (`#DAD1C8`), plus the inset Powder Rose lit-edge ring from `.glass`.
+- **Hover:** The `.glass` halo intensifies (deeper Powder Rose box-shadow). No separate border-color hover — the inset ring carries that role.
 - **Internal Padding:** `16px` on mobile, `24px` on `md+`.
 - **Nested cards are forbidden.** If a card needs to contain another card, the layout is wrong.
 
@@ -259,7 +270,7 @@ Two state-driven elevation moves carry the system:
 - **Don't** use heart bullets (`♡`, `❤`), heart-emoji decorations, or any pictogram of love. Janelle's own copy carries the warmth; the design must not redecorate it.
 - **Don't** use `border-left` greater than 1px as a colored accent stripe on cards, callouts, or alerts. Side-stripe borders are forbidden.
 - **Don't** use `background-clip: text` on a gradient. Gradient text is forbidden. Emphasis comes from weight or size.
-- **Don't** reach for glassmorphism by default. The `.section-panel` frosted-glass utility is the *only* sanctioned use; anywhere else is decorative and forbidden.
+- **Don't** apply glass to primary CTAs (Warm Tan buttons), inputs, navigation chrome, badges, or anywhere translucency would harm legibility. The `.glass` / `.glass-soft` defaults are for cards and outline buttons; anywhere else needs explicit consideration.
 - **Don't** open a modal as the first thought. Modals are usually laziness; exhaust inline/progressive alternatives first.
 - **Don't** use em dashes (—) or `--` in copy. Use commas, colons, semicolons, periods, or parentheses.
 - **Don't** put Square Peg in body copy, navigation, buttons, captions, or any block longer than ~8 words. If you find cursive in a paragraph, you've broken the system.
