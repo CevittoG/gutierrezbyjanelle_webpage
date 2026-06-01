@@ -94,18 +94,50 @@ html {
     border-radius: 2px;
   }
 
-  /* shadcn cards (PriceCard, ReviewCard) — pink border glow on hover */
-  .rounded-lg.border.bg-card {
-    transition: border-color 200ms ease, box-shadow 200ms ease;
+  /* ── Pink-Glossy Vellum surface (site-wide default for cards + outline buttons) ──
+     One linear-gradient (Powder Rose → Card White → Powder Rose) + backdrop blur +
+     Powder-Rose-tinted inset ring + Powder Rose halo. Sized for cards. */
+  .glass {
+    background-color: transparent;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--accent) / 0.32) 0%,
+      hsl(var(--card)   / 0.60) 45%,
+      hsl(var(--accent) / 0.22) 100%
+    );
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--accent) / 0.40),
+      0 14px 40px -14px hsl(var(--accent) / 0.55);
+    transition: box-shadow 300ms ease, background-image 300ms ease;
   }
-  .rounded-lg.border.bg-card:hover {
-    border-color: hsl(var(--accent) / 0.8);
-    box-shadow: 0 2px 16px -4px hsl(var(--accent) / 0.4);
+  .glass:hover {
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--accent) / 0.55),
+      0 18px 48px -12px hsl(var(--accent) / 0.75);
   }
 
-  /* Vendor linked cards (ZolaBadgeCard, EtsyStoreCard) — deepen the pink glow on hover */
-  a.rounded-2xl.border:hover {
-    box-shadow: 0 4px 20px -4px hsl(var(--accent) / 0.45);
+  /* Same recipe, dialed down for smaller surfaces (outline buttons, badges). */
+  .glass-soft {
+    background-color: transparent;
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--accent) / 0.28) 0%,
+      hsl(var(--card)   / 0.55) 50%,
+      hsl(var(--accent) / 0.18) 100%
+    );
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--accent) / 0.35),
+      0 6px 18px -8px hsl(var(--accent) / 0.50);
+    transition: box-shadow 300ms ease, background-image 300ms ease;
+  }
+  .glass-soft:hover {
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--accent) / 0.50),
+      0 8px 22px -8px hsl(var(--accent) / 0.65);
   }
 }
 
