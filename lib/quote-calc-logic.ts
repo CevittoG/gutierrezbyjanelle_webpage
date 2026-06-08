@@ -361,7 +361,29 @@ export function calcAddOn(
   fullColor?: boolean,
   customPaper?: boolean,
 ): AddOnResult {
-  const itemQty = getItemQty(itemKey, qty);
+  return calcAddOnInternal(itemKey, getItemQty(itemKey, qty), mode, s, fullColor, customPaper);
+}
+
+// Add-on calc using an explicit piece count entered by the user (no household multiplier).
+export function calcAddOnRaw(
+  itemKey: string,
+  pieceCount: number,
+  mode: PricingMode,
+  s: QuoteState,
+  fullColor?: boolean,
+  customPaper?: boolean,
+): AddOnResult {
+  return calcAddOnInternal(itemKey, Math.max(0, Math.round(pieceCount)), mode, s, fullColor, customPaper);
+}
+
+function calcAddOnInternal(
+  itemKey: string,
+  itemQty: number,
+  mode: PricingMode,
+  s: QuoteState,
+  fullColor?: boolean,
+  customPaper?: boolean,
+): AddOnResult {
   const designMin = stateVal(s, itemKey + "_dt");
   const prodMin = stateVal(s, itemKey + "_pt");
   const rawSheetCost = stateVal(s, itemKey + "_sc");
