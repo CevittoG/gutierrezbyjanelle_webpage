@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import {
-  DEFAULTS,
   ITEM_CATALOG,
   QuoteState,
   timeToHM,
@@ -13,6 +12,7 @@ import {
   importSettings,
 } from "@/lib/quote-calc-logic";
 import { cn } from "@/utils";
+import { ItemAssumptionRow } from "./ItemAssumptionRow";
 
 interface Props {
   assumptions: QuoteState;
@@ -222,62 +222,41 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad }: Pro
                 <strong>Sheet $</strong> — material cost per sheet.{" "}
                 <strong>Yield</strong> — units per sheet.
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+              {/* Mobile: card list */}
+              <div className="space-y-2 md:hidden">
+                {ITEM_CATALOG.map((item) => (
+                  <ItemAssumptionRow
+                    key={item.key}
+                    item={item}
+                    assumptions={assumptions}
+                    onUpdate={onUpdate}
+                    layout="card"
+                  />
+                ))}
+              </div>
+
+              {/* Tablet+: table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-1.5 pr-2 text-muted-foreground font-semibold normal-case tracking-normal">Item</th>
-                      <th className="text-right py-1.5 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Design time</th>
-                      <th className="text-right py-1.5 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Prod time</th>
-                      <th className="text-right py-1.5 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Sheet $</th>
-                      <th className="text-right py-1.5 pl-1 text-muted-foreground font-semibold normal-case tracking-normal">Yield</th>
+                      <th className="text-left py-2 pr-2 text-muted-foreground font-semibold normal-case tracking-normal">Item</th>
+                      <th className="text-right py-2 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Design time</th>
+                      <th className="text-right py-2 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Prod time</th>
+                      <th className="text-right py-2 px-1 text-muted-foreground font-semibold normal-case tracking-normal">Sheet $</th>
+                      <th className="text-right py-2 pl-1 text-muted-foreground font-semibold normal-case tracking-normal">Yield</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {ITEM_CATALOG.map((item) => {
-                      const isEnvelope = item.key === "iEnvelope";
-                      return (
-                        <tr key={item.key} className="border-b border-border/40 hover:bg-muted/20">
-                          <td className="py-1.5 pr-2 font-medium normal-case tracking-normal whitespace-nowrap">{item.label}</td>
-                          <td className="py-1.5 px-1">
-                            {isEnvelope ? (
-                              <span className="text-muted-foreground/50 block text-right">-</span>
-                            ) : (
-                              <TimeInput
-                                stateKey={`${item.key}_dt` as keyof QuoteState}
-                                value={assumptions[`${item.key}_dt` as keyof QuoteState] as number}
-                                onUpdate={onUpdate}
-                              />
-                            )}
-                          </td>
-                          <td className="py-1.5 px-1">
-                            <TimeInput
-                              stateKey={`${item.key}_pt` as keyof QuoteState}
-                              value={assumptions[`${item.key}_pt` as keyof QuoteState] as number}
-                              onUpdate={onUpdate}
-                            />
-                          </td>
-                          <td className="py-1.5 px-1 text-right">
-                            <input
-                              type="number"
-                              value={assumptions[`${item.key}_sc` as keyof QuoteState] as number}
-                              min={0} max={500} step={0.05}
-                              onChange={(e) => onUpdate(`${item.key}_sc` as keyof QuoteState, parseFloat(e.target.value) || 0)}
-                              className="w-16 rounded border border-border bg-background px-1 py-0.5 text-right font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-ring text-xs"
-                            />
-                          </td>
-                          <td className="py-1.5 pl-1 text-right">
-                            <input
-                              type="number"
-                              value={assumptions[`${item.key}_y` as keyof QuoteState] as number}
-                              min={1} max={100} step={1}
-                              onChange={(e) => onUpdate(`${item.key}_y` as keyof QuoteState, parseInt(e.target.value) || 1)}
-                              className="w-12 rounded border border-border bg-background px-1 py-0.5 text-right font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-ring text-xs"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {ITEM_CATALOG.map((item) => (
+                      <ItemAssumptionRow
+                        key={item.key}
+                        item={item}
+                        assumptions={assumptions}
+                        onUpdate={onUpdate}
+                        layout="table"
+                      />
+                    ))}
                   </tbody>
                 </table>
               </div>

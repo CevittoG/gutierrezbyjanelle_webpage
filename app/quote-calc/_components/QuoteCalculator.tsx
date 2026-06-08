@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ADD_ON_KEYS,
   DEFAULTS,
@@ -9,51 +9,151 @@ import {
   PkgKey,
   PricingMode,
   QuoteState,
-  calcAddOn,
+  calcAddOnRaw,
   calcPackage,
   fmt$,
-  fmtPct,
-  loadSavedDefaults,
   getDiscountPtg,
+  loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
+import {
+  DEFAULT_CONFIG,
+  Draft,
+  DraftClientInfo,
+  DraftConfig,
+  EMPTY_CLIENT_INFO,
+  LastSession,
+  createDraft,
+  loadDrafts,
+  loadLastSession,
+  saveLastSession,
+  upsertDraft,
+} from "@/lib/quote-calc-drafts";
 import { cn } from "@/utils";
-import { BreakdownPanel } from "./BreakdownPanel";
+import { AddOnRow } from "./AddOnRow";
 import { AssumptionsPanel } from "./AssumptionsPanel";
+import { BreakdownPanel } from "./BreakdownPanel";
+import { ClientInfoSection } from "./ClientInfoSection";
+import { DraftsBar } from "./DraftsBar";
+import { MobileBreakdownSheet } from "./MobileBreakdownSheet";
 
 const PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
 
 export function QuoteCalculator() {
-  const [pkg, setPkg] = useState<PkgKey>("sweet");
-  const [mode, setMode] = useState<PricingMode>("fresh");
-  const [qty, setQty] = useState(75);
-  const [addOns, setAddOns] = useState<Set<string>>(new Set());
-  const [rushFee, setRushFee] = useState(false);
-  const [extraRevisions, setExtraRevisions] = useState(0);
-  const [digitalLicense, setDigitalLicense] = useState(false);
+  // --- Config state (mirrors DraftConfig) ---
+  const [pkg, setPkg] = useState<PkgKey>(DEFAULT_CONFIG.pkg);
+  const [mode, setMode] = useState<PricingMode>(DEFAULT_CONFIG.mode);
+  const [qty, setQty] = useState(DEFAULT_CONFIG.qty);
+  const [addOns, setAddOns] = useState<Record<string, number>>({ ...DEFAULT_CONFIG.addOns });
+  const [rushFee, setRushFee] = useState(DEFAULT_CONFIG.rushFee);
+  const [extraRevisions, setExtraRevisions] = useState(DEFAULT_CONFIG.extraRevisions);
+  const [digitalLicense, setDigitalLicense] = useState(DEFAULT_CONFIG.digitalLicense);
+  const [vendorIncentive, setVendorIncentive] = useState(DEFAULT_CONFIG.vendorIncentive);
+  const [fullColor, setFullColor] = useState(DEFAULT_CONFIG.fullColor);
+  const [customPaper, setCustomPaper] = useState(DEFAULT_CONFIG.customPaper);
+  const [individualItem, setIndividualItem] = useState(DEFAULT_CONFIG.individualItem);
+  const [individualDigital, setIndividualDigital] = useState(DEFAULT_CONFIG.individualDigital);
+
+  // --- Client info ---
+  const [client, setClient] = useState<DraftClientInfo>(EMPTY_CLIENT_INFO);
+
+  // --- Assumptions ---
   const [assumptions, setAssumptions] = useState<QuoteState>({ ...DEFAULTS });
 
-  const [vendorIncentive, setVendorIncentive] = useState(false);
-  const [fullColor, setFullColor] = useState(false);
-  const [customPaper, setCustomPaper] = useState(false);
+  // --- Drafts ---
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [draftDirty, setDraftDirty] = useState(false);
 
-  const [individualItem, setIndividualItem] = useState("iInvite");
-  const [individualDigital, setIndividualDigital] = useState(false);
-
+  // --- Misc UI ---
   const [tooltipPkg, setTooltipPkg] = useState<PkgKey | null>(null);
 
-  useEffect(() => {
-    setAssumptions(loadSavedDefaults());
+  const hydratedRef = useRef(false);
+
+  // Build a DraftConfig from current state.
+  const config: DraftConfig = useMemo(
+    () => ({
+      pkg,
+      mode,
+      qty,
+      addOns,
+      rushFee,
+      extraRevisions,
+      digitalLicense,
+      vendorIncentive,
+      fullColor,
+      customPaper,
+      individualItem,
+      individualDigital,
+    }),
+    [pkg, mode, qty, addOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, fullColor, customPaper, individualItem, individualDigital],
+  );
+
+  // Apply a draft (or a LastSession config) into state.
+  const applyConfig = useCallback((c: DraftConfig) => {
+    setPkg(c.pkg);
+    setMode(c.mode);
+    setQty(c.qty);
+    setAddOns({ ...c.addOns });
+    setRushFee(c.rushFee);
+    setExtraRevisions(c.extraRevisions);
+    setDigitalLicense(c.digitalLicense);
+    setVendorIncentive(c.vendorIncentive);
+    setFullColor(c.fullColor);
+    setCustomPaper(c.customPaper);
+    setIndividualItem(c.individualItem);
+    setIndividualDigital(c.individualDigital);
   }, []);
+
+  // Hydrate on mount: drafts + last session + saved assumptions defaults.
+  useEffect(() => {
+    const savedAssumptions = loadSavedDefaults();
+    setAssumptions(savedAssumptions);
+    setDrafts(loadDrafts());
+
+    const last = loadLastSession();
+    if (last) {
+      setClient(last.client);
+      applyConfig(last.config);
+      setCurrentDraftId(last.currentDraftId);
+      // Whether the last session has unsaved edits relative to a draft is tracked
+      // by the saved currentDraftId — we treat the restored state as clean. Any
+      // edit after hydration flips dirty true.
+    }
+    // Mark hydration finished AFTER state writes settle.
+    requestAnimationFrame(() => {
+      hydratedRef.current = true;
+    });
+  }, [applyConfig]);
+
+  // Mark dirty on any tracked change AFTER hydration.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    setDraftDirty(true);
+  }, [config, client]);
+
+  // Debounced autosave of last session.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const handle = window.setTimeout(() => {
+      const session: LastSession = { client, config, currentDraftId };
+      saveLastSession(session);
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [client, config, currentDraftId]);
 
   function updateAssumption(key: keyof QuoteState, value: number) {
     setAssumptions((prev) => ({ ...prev, [key]: value }));
+    if (hydratedRef.current) setDraftDirty(true);
   }
 
-  function toggleAddOn(key: string) {
+  function setAddOnQty(key: string, q: number) {
     setAddOns((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      const next = { ...prev };
+      if (q <= 0) {
+        delete next[key];
+      } else {
+        next[key] = q;
+      }
       return next;
     });
   }
@@ -68,37 +168,151 @@ export function QuoteCalculator() {
 
   const selectedAddOns = useMemo(
     () =>
-      ADD_ON_KEYS.filter((k) => addOns.has(k)).map((k) => ({
-        key: k,
-        label: ITEM_CATALOG.find((i) => i.key === k)!.label,
-        result: calcAddOn(k, qty, mode, assumptions, fullColor, customPaper),
-      })),
-    [addOns, qty, mode, assumptions, fullColor, customPaper],
+      Object.entries(addOns)
+        .filter(([, q]) => q > 0)
+        .map(([k, q]) => ({
+          key: k,
+          qty: q,
+          label: ITEM_CATALOG.find((i) => i.key === k)!.label,
+          result: calcAddOnRaw(k, q, mode, assumptions, fullColor, customPaper),
+        })),
+    [addOns, mode, assumptions, fullColor, customPaper],
   );
 
   const addOnPreviews = useMemo(
     () =>
       Object.fromEntries(
-        ADD_ON_KEYS.map((k) => [k, calcAddOn(k, qty, mode, assumptions, fullColor, customPaper)])
+        ADD_ON_KEYS.map((k) => [k, calcAddOnRaw(k, addOns[k] ?? 0, mode, assumptions, fullColor, customPaper)])
       ),
-    [qty, mode, assumptions, fullColor, customPaper],
+    [addOns, mode, assumptions, fullColor, customPaper],
   );
 
+  // Compute the final total + net margin once at the parent so the mobile bar
+  // and the breakdown panel agree. Mirrors the formula inside BreakdownPanel.
+  const totals = useMemo(() => {
+    const dlFactor = assumptions.digitalLicensePtg / 100;
+    const digitalBonus = digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
+    const adjustedVariable = baseResult.totalVariable + digitalBonus;
+    const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
+    const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
+    const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
+    const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
+    const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
+    const addOnsTotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
+    const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
+    const addOnsLabor = selectedAddOns.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
+    const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
+    const rushAmount = rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
+    const finalPrice = subtotalBeforeRush + rushAmount;
+    const yourCosts =
+      baseResult.totalDirectCosts +
+      addOnsMaterials +
+      baseResult.totalLaborCost +
+      addOnsLabor +
+      digitalBonus;
+    const netProfit = finalPrice - yourCosts;
+    const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
+    const marginDiff = netMargin - assumptions.targetProfitPtg;
+    return { finalPrice, netMargin, marginDiff };
+  }, [assumptions, baseResult, digitalLicense, rushFee, selectedAddOns]);
+
+  // --- Draft handlers ---
+
+  function handleNewDraft() {
+    if (draftDirty || currentDraftId !== null) {
+      if (!window.confirm("Start a new quote? Unsaved changes will be lost.")) return;
+    }
+    applyConfig(DEFAULT_CONFIG);
+    setClient(EMPTY_CLIENT_INFO);
+    setCurrentDraftId(null);
+    requestAnimationFrame(() => setDraftDirty(false));
+  }
+
+  function handleSave() {
+    // Save: if there's a currentDraftId, update it in place; else fall back to Save As.
+    if (currentDraftId === null) {
+      handleSaveAs();
+      return;
+    }
+    const existing = drafts.find((d) => d.id === currentDraftId);
+    if (!existing) {
+      handleSaveAs();
+      return;
+    }
+    const updated: Draft = {
+      ...existing,
+      client,
+      config,
+      assumptionsSnapshot: { ...assumptions },
+      cachedTotal: totals.finalPrice,
+    };
+    const next = upsertDraft(updated);
+    setDrafts(next);
+    setDraftDirty(false);
+  }
+
+  function handleSaveAs() {
+    const defaultName =
+      client.name?.trim() ||
+      (client.eventType ? `${client.eventType} quote` : "Untitled quote");
+    const name = window.prompt("Name this quote", defaultName);
+    if (name === null) return;
+    const draft = createDraft(name, client, config, assumptions, totals.finalPrice);
+    const next = upsertDraft(draft);
+    setDrafts(next);
+    setCurrentDraftId(draft.id);
+    setDraftDirty(false);
+  }
+
+  function handleLoadDraft(id: string) {
+    const draft = drafts.find((d) => d.id === id);
+    if (!draft) return;
+    if (draftDirty) {
+      if (!window.confirm("Discard unsaved changes and load this draft?")) return;
+    }
+    setClient(draft.client);
+    setAssumptions(draft.assumptionsSnapshot);
+    applyConfig(draft.config);
+    setCurrentDraftId(draft.id);
+    requestAnimationFrame(() => setDraftDirty(false));
+  }
+
+  const currentName =
+    drafts.find((d) => d.id === currentDraftId)?.name ?? "Untitled quote";
+
   return (
-    <div className="container py-8 px-4 md:px-8 normal-case tracking-normal">
-      <div className="mb-7">
+    <div className="container py-6 px-4 md:px-8 normal-case tracking-normal pb-32 lg:pb-8">
+      <div className="mb-5">
         <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
           Internal tool · not indexed
         </p>
         <h1 className="font-squarepeg text-4xl md:text-5xl mb-1">Quote Calculator</h1>
         <p className="text-sm text-muted-foreground">
-          Configure a package, adjust assumptions, and see every dollar exposed in real time.
+          Draft, save, and share quotes. Assumptions stay flexible — drafts snapshot their own prices.
         </p>
+      </div>
+
+      <div className="mb-5">
+        <DraftsBar
+          drafts={drafts}
+          currentDraftId={currentDraftId}
+          currentName={currentName}
+          dirty={draftDirty}
+          onLoadDraft={handleLoadDraft}
+          onNew={handleNewDraft}
+          onSave={handleSave}
+          onSaveAs={handleSaveAs}
+          onDraftsChange={setDrafts}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
         {/* Left: configuration panel */}
         <div className="lg:col-span-3 space-y-5">
+          {/* 0. Client info */}
+          <Section title="Client">
+            <ClientInfoSection client={client} onChange={setClient} />
+          </Section>
 
           {/* 1. Package selector */}
           <Section title="Package">
@@ -180,7 +394,7 @@ export function QuoteCalculator() {
                     <select
                       value={individualItem}
                       onChange={(e) => setIndividualItem(e.target.value)}
-                      className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       {ITEM_CATALOG.map((item) => (
                         <option key={item.key} value={item.key}>{item.label}</option>
@@ -198,7 +412,7 @@ export function QuoteCalculator() {
                           key={String(isDigital)}
                           onClick={() => setIndividualDigital(isDigital)}
                           className={cn(
-                            "px-5 py-2 text-sm font-medium transition-colors",
+                            "h-11 px-5 text-sm font-medium transition-colors",
                             individualDigital === isDigital
                               ? "bg-foreground text-background"
                               : "bg-card text-foreground hover:bg-muted"
@@ -228,7 +442,7 @@ export function QuoteCalculator() {
                       key={m}
                       onClick={() => setMode(m)}
                       className={cn(
-                        "px-5 py-2 text-sm font-medium transition-colors",
+                        "h-11 px-5 text-sm font-medium transition-colors",
                         mode === m
                           ? "bg-foreground text-background"
                           : "bg-card text-foreground hover:bg-muted"
@@ -257,12 +471,13 @@ export function QuoteCalculator() {
                   <input
                     id="qty"
                     type="number"
+                    inputMode="numeric"
                     value={qty}
-                    min={10}
+                    min={1}
                     max={500}
                     step={5}
                     onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-28 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="h-11 w-32 rounded-lg border border-border bg-background px-3 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <span className="text-sm text-muted-foreground">households</span>
                 </div>
@@ -273,39 +488,21 @@ export function QuoteCalculator() {
           {/* 3. Add-ons */}
           <Section title="Add-ons">
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Sold a la carte on top of any package. Always physical (printed). No bundle discount applied.
+              Sold a la carte on top of any package. Enter an explicit piece count for each — use Suggest to pre-fill from {qty} households.
             </p>
             <div className="space-y-2">
               {ADD_ON_KEYS.map((key) => {
                 const item = ITEM_CATALOG.find((i) => i.key === key)!;
-                const preview = addOnPreviews[key];
-                const isChecked = addOns.has(key);
+                const currentQty = addOns[key] ?? 0;
                 return (
-                  <label
+                  <AddOnRow
                     key={key}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                      isChecked
-                        ? "border-foreground/40 bg-muted"
-                        : "border-border bg-card hover:bg-muted/40"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleAddOn(key)}
-                      className="h-4 w-4 rounded accent-foreground cursor-pointer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium">{item.label}</span>
-                      <span className="text-xs text-muted-foreground ml-2">{item.notes}</span>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-sm font-mono tabular-nums font-medium">
-                        {fmt$(Math.round(preview.price))}
-                      </span>
-                    </div>
-                  </label>
+                    item={item}
+                    qty={currentQty}
+                    packageQty={qty}
+                    preview={addOnPreviews[key]}
+                    onChange={(next) => setAddOnQty(key, next)}
+                  />
                 );
               })}
             </div>
@@ -317,7 +514,7 @@ export function QuoteCalculator() {
               {/* Rush fee */}
               <label
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
                   rushFee ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
                 )}
               >
@@ -325,7 +522,7 @@ export function QuoteCalculator() {
                   type="checkbox"
                   checked={rushFee}
                   onChange={(e) => setRushFee(e.target.checked)}
-                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium">Rush fee +30%</span>
@@ -347,15 +544,17 @@ export function QuoteCalculator() {
                   <button
                     onClick={() => setExtraRevisions((v) => Math.max(0, v - 1))}
                     disabled={extraRevisions === 0}
-                    className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-sm hover:bg-muted disabled:opacity-30 transition-colors"
+                    aria-label="Fewer revisions"
+                    className="h-11 w-11 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
                   >
                     -
                   </button>
-                  <span className="w-6 text-center font-mono text-sm tabular-nums">{extraRevisions}</span>
+                  <span className="w-7 text-center font-mono text-base tabular-nums">{extraRevisions}</span>
                   <button
                     onClick={() => setExtraRevisions((v) => Math.min(5, v + 1))}
                     disabled={extraRevisions === 5}
-                    className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-sm hover:bg-muted disabled:opacity-30 transition-colors"
+                    aria-label="More revisions"
+                    className="h-11 w-11 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
                   >
                     +
                   </button>
@@ -365,7 +564,7 @@ export function QuoteCalculator() {
               {/* Digital file license */}
               <label
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
                   digitalLicense ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
                 )}
               >
@@ -373,7 +572,7 @@ export function QuoteCalculator() {
                   type="checkbox"
                   checked={digitalLicense}
                   onChange={(e) => setDigitalLicense(e.target.checked)}
-                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium">Digital file license (+{assumptions.digitalLicensePtg}%)</span>
@@ -386,7 +585,7 @@ export function QuoteCalculator() {
               {/* Vendor incentive */}
               <label
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
                   vendorIncentive ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
                 )}
               >
@@ -394,7 +593,7 @@ export function QuoteCalculator() {
                   type="checkbox"
                   checked={vendorIncentive}
                   onChange={(e) => setVendorIncentive(e.target.checked)}
-                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium">Vendor incentive (-{assumptions.vendorIncentivePtg}%)</span>
@@ -407,7 +606,7 @@ export function QuoteCalculator() {
               {/* Full color designs */}
               <label
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
                   fullColor ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
                 )}
               >
@@ -415,7 +614,7 @@ export function QuoteCalculator() {
                   type="checkbox"
                   checked={fullColor}
                   onChange={(e) => setFullColor(e.target.checked)}
-                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium">Full color designs (x{assumptions.fullColorFactor})</span>
@@ -428,7 +627,7 @@ export function QuoteCalculator() {
               {/* Custom paper */}
               <label
                 className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
                   customPaper ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
                 )}
               >
@@ -436,7 +635,7 @@ export function QuoteCalculator() {
                   type="checkbox"
                   checked={customPaper}
                   onChange={(e) => setCustomPaper(e.target.checked)}
-                  className="h-4 w-4 rounded accent-foreground cursor-pointer"
+                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
                 />
                 <div className="flex-1">
                   <span className="text-sm font-medium">Custom paper (x{assumptions.customPaperFactor})</span>
@@ -449,8 +648,8 @@ export function QuoteCalculator() {
           </Section>
         </div>
 
-        {/* Right: price breakdown */}
-        <div className="lg:col-span-2">
+        {/* Right: price breakdown — hidden on mobile */}
+        <div className="lg:col-span-2 hidden lg:block">
           <BreakdownPanel
             pkg={pkg}
             mode={mode}
@@ -477,6 +676,29 @@ export function QuoteCalculator() {
           onLoad={(s) => setAssumptions(s)}
         />
       </div>
+
+      {/* Mobile sticky bottom bar + sheet */}
+      <MobileBreakdownSheet
+        total={totals.finalPrice}
+        netMargin={totals.netMargin}
+        marginDiff={totals.marginDiff}
+      >
+        <BreakdownPanel
+          pkg={pkg}
+          mode={mode}
+          qty={qty}
+          assumptions={assumptions}
+          baseResult={baseResult}
+          selectedAddOns={selectedAddOns}
+          rushFee={rushFee}
+          extraRevisions={extraRevisions}
+          digitalLicense={digitalLicense}
+          vendorIncentive={vendorIncentive}
+          fullColor={fullColor}
+          customPaper={customPaper}
+          embedded
+        />
+      </MobileBreakdownSheet>
     </div>
   );
 }

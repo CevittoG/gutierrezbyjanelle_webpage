@@ -19,6 +19,7 @@ import { cn } from "@/utils";
 interface SelectedAddOn {
   key: string;
   label: string;
+  qty: number;
   result: AddOnResult;
 }
 
@@ -35,6 +36,8 @@ interface Props {
   vendorIncentive: boolean;
   fullColor: boolean;
   customPaper: boolean;
+  /** When true, render without the sticky/card chrome (used inside the mobile sheet). */
+  embedded?: boolean;
 }
 
 function Row({
@@ -99,6 +102,7 @@ export function BreakdownPanel({
   vendorIncentive,
   fullColor,
   customPaper,
+  embedded,
 }: Props) {
   const [copied, setCopied] = useState(false);
 
@@ -202,7 +206,13 @@ export function BreakdownPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 sticky top-4">
+    <div
+      className={cn(
+        embedded
+          ? ""
+          : "rounded-xl border border-border bg-card p-5 sticky top-4"
+      )}
+    >
       {/* Big total */}
       <div className="text-center mb-4">
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Total Quote</p>
@@ -356,8 +366,14 @@ export function BreakdownPanel({
         {selectedAddOns.length > 0 && (
           <>
             <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Add-ons</p>
-            {selectedAddOns.map(({ key, label, result }) => (
-              <Row key={key} indent label={label} value={`+${fmt$2(result.price)}`} dim />
+            {selectedAddOns.map(({ key, label, qty: addOnQty, result }) => (
+              <Row
+                key={key}
+                indent
+                label={`${label} · ${addOnQty} ${addOnQty === 1 ? "pc" : "pcs"}`}
+                value={`+${fmt$2(result.price)}`}
+                dim
+              />
             ))}
           </>
         )}
