@@ -30,6 +30,7 @@ Sidecar at [.impeccable/design.json](../.impeccable/design.json) carries tonal r
 - **Docker** — multi-stage Dockerfile (dev and prod targets); `docker-compose` for local dev
 - **clsx + tailwind-merge** — used together in a `cn()` helper for className composition
 - **framer-motion ^11.3.0** — used for `StationeryHero` entrance stagger and per-card hover animations
+- **google-auth-library ~9.15** — service-account JWT signing for Sheets API; `googleapis` is intentionally excluded to stay within Render's 512 MB RAM limit
 
 ---
 
@@ -227,17 +228,25 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 | File | Role |
 |------|------|
-| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (15 items), `PACKAGES` (4 tiers), `calcPackage()`, `calcAddOn()`, persistence helpers |
-| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI: package selector, individual item dropdown, extras toggles, qty/mode controls |
-| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown: variable costs → markups → adjustments → your costs → margin |
-| `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, package discounts, extras, per-item table with time spinners |
+| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items), `PACKAGES` (7 tiers: 4 wedding + 3 events), `calcPackage()`, `calcAddOn()`, `calcAddOnRaw()`, `PkgItem` type with per-item multiplier/displayLabel support |
+| `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `miscAddOns: MiscAddOn[]`, schema v2 migration (iDrinkTop→iWedgeTop), `SyncStatus` type, `reconcileDrafts()` |
+| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST: list / upsert / soft-archive |
+| `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`) around the `/quote-calc/api/drafts` routes |
+| `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; checks `quote_auth` cookie; returns 503 when Sheets not configured |
+| `app/quote-calc/api/drafts/[id]/route.ts` | `DELETE` soft-archive by id |
+| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI: Wedding/Events tab toggle, package grid, add-on qty steppers, misc add-on section, extras, Sheet sync on mount/save |
+| `app/quote-calc/_components/MiscAddOnSection.tsx` | One-off line items (name, qty, unit selling price) for special client requests outside the catalog |
+| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown; renders misc add-on lines and PkgItem displayLabel overrides |
+| `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table |
 | `app/quote-calc/_components/PasswordGate.tsx` | Simple password gate wrapping the calculator |
 
 ### Data model
 
 All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`). Per-item fields follow the pattern `i{ItemKey}_{suffix}` where suffix is `_dt` (design time, minutes), `_pt` (production time/unit, minutes), `_sc` (sheet cost, $), `_y` (yield per sheet). Time values are stored as minutes internally, displayed as `Xh Ym` with dual number spinners.
 
-Settings persist to `localStorage` and can be exported/imported as JSON files.
+`DraftConfig` holds the full quote state per draft including `miscAddOns: MiscAddOn[]` for one-off client items. `Draft.schemaVersion` is currently `2`; v1 drafts are auto-migrated on load (iDrinkTop qty moved to iWedgeTop).
+
+**Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` with headers A1:M1 created manually once.
 
 ---
 
@@ -252,7 +261,10 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - `app/opengraph-image.tsx` — JSX-based 1200×630 OG image
 - `app/icon.tsx` — JSX-based 32×32 monogram favicon
 - `app/sitemap.ts` and `app/robots.ts`
-- Quote calculator with cost-plus pricing, 4 packages, 15 item catalog, 6 add-ons
+- Quote calculator with cost-plus pricing, 7 packages (4 wedding + 3 events), 17-item catalog, 8 add-ons
+- Google Sheets persistence for drafts (service-account JWT, cache-first sync, graceful offline fallback)
+- Misc add-on section for one-off client requests (selling price, no markup applied)
+- Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
 - Real gallery photos — 6 JPEGs in `public/gallery/`; `GalleryGrid` upgraded to `next/image` with hover overlay
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
