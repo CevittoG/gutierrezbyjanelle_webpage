@@ -1,5 +1,8 @@
 .env
 .env.local
+
+# Google service account key files — never commit credentials
+gutierrezbyjanelle-*.json
 .claude/skills/ui-ux-pro-max/*
 
 # macOS metadata
