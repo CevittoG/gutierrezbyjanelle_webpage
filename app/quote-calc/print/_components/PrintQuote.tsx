@@ -6,13 +6,12 @@ import {
   CatalogItem,
   ITEM_CATALOG,
   PACKAGES,
-  calcAddOnRaw,
-  calcPackage,
   fmt$,
   fmt$2,
   fmtTime,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
+import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
 import { mergeRemoteConfig } from "@/lib/quote-calc-config";
 import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
 import {
@@ -113,77 +112,7 @@ export function PrintQuote() {
 
   const computed = useMemo(() => {
     if (!snap) return null;
-    const { config, assumptions } = snap;
-    const overrideItems = config.pkg === "individual" ? [config.individualItem] : undefined;
-    const overrideDigital = config.pkg === "individual" ? config.individualDigital : undefined;
-    const baseResult = calcPackage(
-      config.pkg,
-      config.qty,
-      config.mode,
-      assumptions,
-      config.extraRevisions,
-      overrideItems,
-      overrideDigital,
-      config.fullColor,
-      config.customPaper,
-      config.vendorIncentive,
-      catalog,
-    );
-
-    const addOnLines = Object.entries(config.addOns)
-      .filter(([, q]) => q > 0)
-      .map(([key, q]) => {
-        const cat = catalog.find((i) => i.key === key);
-        return {
-          key,
-          label: cat?.label ?? key,
-          qty: q,
-          result: calcAddOnRaw(key, q, config.mode, assumptions, config.fullColor, config.customPaper),
-        };
-      });
-
-    const miscLines = (config.miscAddOns ?? [])
-      .filter((m) => m.qty > 0 && m.unitPrice > 0 && (m.label ?? "").trim().length > 0)
-      .map((m) => ({
-        id: m.id,
-        label: m.label.trim(),
-        qty: m.qty,
-        unitPrice: m.unitPrice,
-        total: m.qty * m.unitPrice,
-      }));
-
-    const dlFactor = assumptions.digitalLicensePtg / 100;
-    const digitalBonus = config.digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
-    const adjustedVariable = baseResult.totalVariable + digitalBonus;
-    const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
-    const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
-    const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
-
-    const discountAmount = adjustedBeforeDiscount * (baseResult.discountPtg / 100);
-    const vendorAmount = adjustedBeforeDiscount * (baseResult.vendorIncentivePtg / 100);
-    const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
-    const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
-
-    const addOnsTotal = addOnLines.reduce((s, a) => s + a.result.price, 0);
-    const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
-    const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
-    const rushAmount = config.rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-    const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
-
-    return {
-      baseResult,
-      addOnLines,
-      miscLines,
-      adjustedBeforeDiscount,
-      discountAmount,
-      vendorAmount,
-      rushAmount,
-      basePriceAdjusted,
-      addOnsTotal,
-      miscTotal,
-      subtotalBeforeRush,
-      finalPrice,
-    };
+    return computeQuoteBreakdown(snap.config, snap.assumptions, catalog);
   }, [snap, catalog]);
 
   if (!hydrated) return null;
