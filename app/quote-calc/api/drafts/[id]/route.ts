@@ -2,15 +2,15 @@
 //
 // Mounted under /quote-calc so the auth cookie (Path=/quote-calc) is sent.
 
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { archiveDraftRow, isSheetsConfigured } from "@/lib/quote-calc-sheets";
+import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function DELETE(_req: Request, ctx: { params: { id: string } }) {
-  if (cookies().get("quote_auth")?.value !== "1") {
+  if (!isQuoteAuthValid()) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   if (!isSheetsConfigured()) {

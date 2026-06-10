@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
 import { PasswordGate } from "./_components/PasswordGate";
 import { QuoteCalculator } from "./_components/QuoteCalculator";
+import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
 export const metadata = {
   title: "Tools",
@@ -8,10 +8,7 @@ export const metadata = {
 };
 
 export default function QuoteCalcPage() {
-  const cookieStore = cookies();
-  const isAuthenticated = cookieStore.get("quote_auth")?.value === "1";
-
-  if (!isAuthenticated) {
+  if (!isQuoteAuthValid()) {
     return <PasswordGate />;
   }
 

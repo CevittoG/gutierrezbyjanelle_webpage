@@ -1,7 +1,7 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { PrintQuote } from "./_components/PrintQuote";
+import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
 export const metadata = {
   title: "Quote",
@@ -9,10 +9,7 @@ export const metadata = {
 };
 
 export default function QuotePrintPage() {
-  const cookieStore = cookies();
-  const isAuthenticated = cookieStore.get("quote_auth")?.value === "1";
-
-  if (!isAuthenticated) {
+  if (!isQuoteAuthValid()) {
     redirect("/quote-calc");
   }
 
