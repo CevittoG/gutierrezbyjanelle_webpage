@@ -9,14 +9,15 @@ interface Props {
   packageQty: number;
   preview: AddOnResult;
   onChange: (qty: number) => void;
+  catalog?: CatalogItem[];
 }
 
 const STEP = 1;
 const MAX = 9999;
 
-export function AddOnRow({ item, qty, packageQty, preview, onChange }: Props) {
+export function AddOnRow({ item, qty, packageQty, preview, onChange, catalog }: Props) {
   const isSelected = qty > 0;
-  const suggested = getItemQty(item.key, packageQty);
+  const suggested = getItemQty(item.key, packageQty, catalog);
 
   function set(next: number) {
     onChange(Math.max(0, Math.min(MAX, Math.round(next))));

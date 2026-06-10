@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   PackageResult,
   AddOnResult,
+  CatalogItem,
   PkgKey,
   PricingMode,
   QuoteState,
@@ -38,6 +39,8 @@ interface Props {
   vendorIncentive: boolean;
   fullColor: boolean;
   customPaper: boolean;
+  /** Catalog at the time the breakdown is rendered. Falls back to bundled defaults. */
+  catalog?: CatalogItem[];
   /** When true, render without the sticky/card chrome (used inside the mobile sheet). */
   embedded?: boolean;
 }
@@ -105,6 +108,7 @@ export function BreakdownPanel({
   vendorIncentive,
   fullColor,
   customPaper,
+  catalog = ITEM_CATALOG,
   embedded,
 }: Props) {
   const [copied, setCopied] = useState(false);
@@ -179,9 +183,9 @@ export function BreakdownPanel({
     const packageItems = pkgDef.items
       .map((it) => {
         if (typeof it === "string") {
-          return ITEM_CATALOG.find((i) => i.key === it)?.label;
+          return catalog.find((i) => i.key === it)?.label;
         }
-        return it.displayLabel || ITEM_CATALOG.find((i) => i.key === it.key)?.label;
+        return it.displayLabel || catalog.find((i) => i.key === it.key)?.label;
       })
       .filter(Boolean)
       .join(", ");

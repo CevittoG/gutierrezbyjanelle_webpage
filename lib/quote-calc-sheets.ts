@@ -11,11 +11,25 @@ import "server-only";
 import { JWT } from "google-auth-library";
 import type { Draft } from "./quote-calc-drafts";
 import { normalizeIncomingDraft } from "./quote-calc-drafts";
+import type {
+  ConfigWarning,
+  RemoteConfig,
+  RemoteItem,
+  RemoteSetting,
+} from "./quote-calc-config";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
 const RANGE_ALL = `${SHEET_TAB}!A${FIRST_DATA_ROW}:M`;
 const NUM_COLS = 13; // A..M
+
+// --- Phase 1: config tabs ---
+const SETTINGS_TAB = "Settings";
+const SETTINGS_RANGE = `${SETTINGS_TAB}!A2:B`;
+const ITEMS_TAB = "Items";
+// A: key, B: label, C: designMin, D: prodMin, E: sheetCost, F: yield, G: qty, H: fixed
+const ITEMS_RANGE = `${ITEMS_TAB}!A2:H`;
+const CONFIG_CACHE_TTL_MS = 60_000;
 
 type Row = (string | number)[];
 
@@ -210,6 +224,190 @@ export async function archiveDraftRow(id: string): Promise<boolean> {
     throw new Error(`Sheets archive failed: ${res.status} ${body.slice(0, 200)}`);
   }
   return true;
+}
+
+// --- Config (Items + Settings) reader ---
+
+interface ConfigCacheEntry {
+  config: RemoteConfig;
+  expiresAt: number;
+}
+let cachedConfig: ConfigCacheEntry | null = null;
+let inflightConfig: Promise<RemoteConfig> | null = null;
+
+function parseNumber(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  // Tolerate "$1.50", "10%", "1,250" — Janelle is editing this in Sheets.
+  const cleaned = trimmed.replace(/[$,%\s]/g, "");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchSheetRange(docId: string, range: string): Promise<Row[] | "tab-missing"> {
+  const res = await sheetsFetch(
+    `${docId}/values/${encodeURIComponent(range)}?majorDimension=ROWS`,
+  );
+  if (res.status === 400 || res.status === 404) {
+    // Sheets returns 400 when the tab name doesn't exist.
+    return "tab-missing";
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets read failed (${range}): ${res.status} ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { values?: Row[] };
+  return data.values ?? [];
+}
+
+async function readConfigFromSheet(cfg: SheetsConfig): Promise<RemoteConfig> {
+  const warnings: ConfigWarning[] = [];
+  const settings: RemoteSetting[] = [];
+  const items: RemoteItem[] = [];
+
+  const [settingsRes, itemsRes] = await Promise.all([
+    fetchSheetRange(cfg.docId, SETTINGS_RANGE).catch((err): "fetch-failed" => {
+      warnings.push({
+        kind: "fetch-failed",
+        tab: "Settings",
+        sheetRow: null,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+      return "fetch-failed";
+    }),
+    fetchSheetRange(cfg.docId, ITEMS_RANGE).catch((err): "fetch-failed" => {
+      warnings.push({
+        kind: "fetch-failed",
+        tab: "Items",
+        sheetRow: null,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+      return "fetch-failed";
+    }),
+  ]);
+
+  if (settingsRes === "tab-missing") {
+    warnings.push({
+      kind: "tab-missing",
+      tab: "Settings",
+      sheetRow: null,
+      detail: 'No tab named "Settings" found in the Sheet.',
+    });
+  } else if (Array.isArray(settingsRes)) {
+    if (settingsRes.length === 0) {
+      warnings.push({
+        kind: "empty",
+        tab: "Settings",
+        sheetRow: null,
+        detail: 'The "Settings" tab has no data rows.',
+      });
+    }
+    settingsRes.forEach((row, i) => {
+      const sheetRow = i + 2; // skip header row
+      const key = String(row[0] ?? "").trim();
+      if (!key) return; // silent skip on blank rows
+      const value = parseNumber(row[1]);
+      if (value === null) {
+        warnings.push({
+          kind: "invalid-row",
+          tab: "Settings",
+          sheetRow,
+          detail: `Row ${sheetRow} (${key}): value "${row[1] ?? ""}" is not a number.`,
+        });
+        return;
+      }
+      settings.push({ key, value, sheetRow });
+    });
+  }
+
+  if (itemsRes === "tab-missing") {
+    warnings.push({
+      kind: "tab-missing",
+      tab: "Items",
+      sheetRow: null,
+      detail: 'No tab named "Items" found in the Sheet.',
+    });
+  } else if (Array.isArray(itemsRes)) {
+    if (itemsRes.length === 0) {
+      warnings.push({
+        kind: "empty",
+        tab: "Items",
+        sheetRow: null,
+        detail: 'The "Items" tab has no data rows.',
+      });
+    }
+    itemsRes.forEach((row, i) => {
+      const sheetRow = i + 2;
+      const key = String(row[0] ?? "").trim();
+      if (!key) return;
+      const label = String(row[1] ?? "").trim();
+      const designMin = parseNumber(row[2]);
+      const prodMin = parseNumber(row[3]);
+      const sheetCost = parseNumber(row[4]);
+      const yieldVal = parseNumber(row[5]);
+      const qty = parseNumber(row[6]);
+      const fixedRaw = row[7];
+      const fixed =
+        fixedRaw === undefined || fixedRaw === null || String(fixedRaw).trim() === ""
+          ? null
+          : parseNumber(fixedRaw);
+      if (
+        designMin === null ||
+        prodMin === null ||
+        sheetCost === null ||
+        yieldVal === null ||
+        qty === null
+      ) {
+        warnings.push({
+          kind: "invalid-row",
+          tab: "Items",
+          sheetRow,
+          detail: `Row ${sheetRow} (${key}): one or more numeric columns are blank or non-numeric.`,
+        });
+        return;
+      }
+      items.push({
+        key,
+        label,
+        designMin,
+        prodMin,
+        sheetCost,
+        yield: yieldVal,
+        qty,
+        fixed: fixed ?? null,
+        sheetRow,
+      });
+    });
+  }
+
+  return { settings, items, warnings };
+}
+
+export async function listConfig(options?: { force?: boolean }): Promise<RemoteConfig> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+
+  const now = Date.now();
+  if (!options?.force && cachedConfig && cachedConfig.expiresAt > now) {
+    return cachedConfig.config;
+  }
+  if (inflightConfig) return inflightConfig;
+
+  inflightConfig = (async () => {
+    const result = await readConfigFromSheet(cfg);
+    cachedConfig = { config: result, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
+    return result;
+  })().finally(() => {
+    inflightConfig = null;
+  });
+
+  return inflightConfig;
+}
+
+export function invalidateConfigCache(): void {
+  cachedConfig = null;
 }
 
 export { SheetsUnconfiguredError, NUM_COLS };

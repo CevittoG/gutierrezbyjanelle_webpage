@@ -228,16 +228,22 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 | File | Role |
 |------|------|
-| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items), `PACKAGES` (7 tiers: 4 wedding + 3 events), `calcPackage()`, `calcAddOn()`, `calcAddOnRaw()`, `PkgItem` type with per-item multiplier/displayLabel support |
+| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items — bundled fallback), `PACKAGES` (7 tiers: 4 wedding + 3 events), `calcPackage()`/`calcAddOn()`/`getItemQty()` accept an optional `catalog` arg so the engine treats catalog as data, `calcAddOnRaw()`, `PkgItem` type with per-item multiplier/displayLabel support |
+| `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
+| `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
 | `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `miscAddOns: MiscAddOn[]`, schema v2 migration (iDrinkTop→iWedgeTop), `SyncStatus` type, `reconcileDrafts()` |
-| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST: list / upsert / soft-archive |
+| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST: list / upsert / soft-archive drafts + `listConfig()` reader with 60s cache and `?force` invalidation for the Settings + Items tabs |
 | `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`) around the `/quote-calc/api/drafts` routes |
-| `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; checks `quote_auth` cookie; returns 503 when Sheets not configured |
+| `lib/quote-calc-config-remote.ts` | Client wrapper for `GET /quote-calc/api/config` (RemoteResult-shaped, supports `refresh: true`) |
+| `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; uses `isQuoteAuthValid()`; returns 503 when Sheets not configured |
 | `app/quote-calc/api/drafts/[id]/route.ts` | `DELETE` soft-archive by id |
-| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI: Wedding/Events tab toggle, package grid, add-on qty steppers, misc add-on section, extras, Sheet sync on mount/save |
+| `app/quote-calc/api/config/route.ts` | `GET` merged Settings + Items payload from the Sheet; `?refresh=1` bypasses the cache |
+| `app/api/quote-auth/route.ts` | `POST` issues a signed session cookie on password match; `DELETE` clears it. Requires `QUOTE_CALC_PASSWORD` and `QUOTE_CALC_SESSION_SECRET` |
+| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI: Wedding/Events tab toggle, package grid, add-on qty steppers, misc add-on section, extras, Sheet sync on mount/save; pulls live `catalog` + `assumptions` from `/api/config` on mount |
 | `app/quote-calc/_components/MiscAddOnSection.tsx` | One-off line items (name, qty, unit selling price) for special client requests outside the catalog |
-| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown; renders misc add-on lines and PkgItem displayLabel overrides |
-| `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table |
+| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown; accepts a `catalog` prop, renders misc add-on lines and PkgItem displayLabel overrides |
+| `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table (driven by the passed-in `catalog`) |
+| `app/quote-calc/_components/ConfigBanner.tsx` | Inline warning banner shown above the calculator when the Sheet config fails to load or contains invalid/unknown rows. Names the offending tab/row; has a Retry button that calls `/api/config?refresh=1` |
 | `app/quote-calc/_components/PasswordGate.tsx` | Simple password gate wrapping the calculator |
 
 ### Data model
@@ -247,6 +253,21 @@ All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`
 `DraftConfig` holds the full quote state per draft including `miscAddOns: MiscAddOn[]` for one-off client items. `Draft.schemaVersion` is currently `2`; v1 drafts are auto-migrated on load (iDrinkTop qty moved to iWedgeTop).
 
 **Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` with headers A1:M1 created manually once.
+
+### Auth (Phase 0)
+
+The `/quote-calc` gate uses an HMAC-SHA256 signed cookie carrying an `exp` claim, verified in constant time by `isQuoteAuthValid()` in `lib/quote-calc-auth.ts`. Requires `QUOTE_CALC_SESSION_SECRET` (≥32 chars). Rotating the secret invalidates every active session. The legacy forgeable `quote_auth=1` constant is gone.
+
+### Runtime config from the Sheet (Phase 1)
+
+Pricing data is loaded at runtime from two extra tabs in the same Google Sheet, so Janelle can edit numbers without touching the codebase. The engine stays in TS.
+
+- **`Settings` tab** — two columns: `key` (A), `value` (B). One row per global rate. Whitelisted keys: `hourly`, `adminPtg`, `targetProfitPtg`, `errorMarginPtg`, `packagingCost`, `reuseFactor`, `revisionMin`, `vendorIncentivePtg`, `fullColorFactor`, `customPaperFactor`, `rushFeePtg`, `digitalLicensePtg`, `discountIndividual`, `discountDiy`, `discountSweet`, `discountSignature`, `discountEventBasics`, `discountEventFun`, `discountEventWorks`. Unknown keys are ignored and surfaced in the banner. Row 1 is the header.
+- **`Items` tab** — eight columns: `key` (A), `label` (B), `designMin` (C), `prodMin` (D), `sheetCost` (E), `yield` (F), `qty` (G — per-household), `fixed` (H — flat count, blank means use `qty`). Unknown keys (typos) are ignored and listed in the banner. Row 1 is the header.
+
+Both tabs must be created and headered manually once. The app reads but never writes them. Reads are cached server-side for 60 seconds; the calculator's Retry button calls `/api/config?refresh=1` to bypass the cache.
+
+The Sheet is the source of truth — its values overlay locally-saved `assumptions` defaults on every fetch. If either tab is missing, empty, contains non-numeric values, or returns an error, the calculator falls back to bundled `DEFAULTS`/`ITEM_CATALOG` and `ConfigBanner` shows what failed (with tab + row number when known).
 
 ---
 
@@ -263,6 +284,8 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - `app/sitemap.ts` and `app/robots.ts`
 - Quote calculator with cost-plus pricing, 7 packages (4 wedding + 3 events), 17-item catalog, 8 add-ons
 - Google Sheets persistence for drafts (service-account JWT, cache-first sync, graceful offline fallback)
+- Phase 0: HMAC-signed expiring session cookie for `/quote-calc` (forged-cookie regression test in roadmap)
+- Phase 1: pricing data externalized to `Settings` + `Items` sheet tabs with 60s cache, validated merge, and an in-app fallback banner naming bad rows
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons

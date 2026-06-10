@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  CatalogItem,
   ITEM_CATALOG,
   PACKAGES,
   calcAddOnRaw,
@@ -12,6 +13,8 @@ import {
   fmtTime,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
+import { mergeRemoteConfig } from "@/lib/quote-calc-config";
+import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
 import {
   Draft,
   DraftClientInfo,
@@ -85,11 +88,28 @@ export function PrintQuote() {
   const draftId = searchParams.get("draft");
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogItem[]>(ITEM_CATALOG);
 
   useEffect(() => {
     setSnap(loadSnapshot(draftId));
     setHydrated(true);
   }, [draftId]);
+
+  // Pull the live catalog so printed labels match the current Sheet. Falls
+  // back silently to bundled defaults — no banner on the print view.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await fetchRemoteConfig();
+      if (cancelled) return;
+      if (result.ok) {
+        setCatalog(mergeRemoteConfig(result.value).catalog);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const computed = useMemo(() => {
     if (!snap) return null;
@@ -107,15 +127,16 @@ export function PrintQuote() {
       config.fullColor,
       config.customPaper,
       config.vendorIncentive,
+      catalog,
     );
 
     const addOnLines = Object.entries(config.addOns)
       .filter(([, q]) => q > 0)
       .map(([key, q]) => {
-        const cat = ITEM_CATALOG.find((i) => i.key === key)!;
+        const cat = catalog.find((i) => i.key === key);
         return {
           key,
-          label: cat.label,
+          label: cat?.label ?? key,
           qty: q,
           result: calcAddOnRaw(key, q, config.mode, assumptions, config.fullColor, config.customPaper),
         };
@@ -163,7 +184,7 @@ export function PrintQuote() {
       subtotalBeforeRush,
       finalPrice,
     };
-  }, [snap]);
+  }, [snap, catalog]);
 
   if (!hydrated) return null;
 
@@ -200,15 +221,16 @@ export function PrintQuote() {
   const includedItems: DisplayItem[] =
     config.pkg === "individual"
       ? (() => {
-          const cat = ITEM_CATALOG.find((i) => i.key === config.individualItem)!;
+          const cat = catalog.find((i) => i.key === config.individualItem);
+          if (!cat) return [];
           return [{ rowKey: cat.key, label: cat.label, fixed: cat.fixed, catalogQty: cat.qty }];
         })()
       : pkgDef.items.map((it, idx) => {
           const k = typeof it === "string" ? it : it.key;
           const label = (typeof it !== "string" && it.displayLabel)
-            || ITEM_CATALOG.find((i) => i.key === k)?.label
+            || catalog.find((i) => i.key === k)?.label
             || k;
-          const cat = ITEM_CATALOG.find((i) => i.key === k);
+          const cat = catalog.find((i) => i.key === k);
           return {
             rowKey: `${k}-${idx}`,
             label,

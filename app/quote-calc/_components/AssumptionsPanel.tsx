@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import {
+  CatalogItem,
   ITEM_CATALOG,
   QuoteState,
   timeToHM,
@@ -19,6 +20,7 @@ interface Props {
   onUpdate: (key: keyof QuoteState, value: number) => void;
   onReset: () => void;
   onLoad: (s: QuoteState) => void;
+  catalog?: CatalogItem[];
 }
 
 function NumInput({
@@ -125,7 +127,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad }: Props) {
+export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad, catalog = ITEM_CATALOG }: Props) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -231,7 +233,7 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad }: Pro
               </p>
               {/* Mobile: card list */}
               <div className="space-y-2 md:hidden">
-                {ITEM_CATALOG.map((item) => (
+                {catalog.map((item) => (
                   <ItemAssumptionRow
                     key={item.key}
                     item={item}
@@ -255,7 +257,7 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad }: Pro
                     </tr>
                   </thead>
                   <tbody>
-                    {ITEM_CATALOG.map((item) => (
+                    {catalog.map((item) => (
                       <ItemAssumptionRow
                         key={item.key}
                         item={item}

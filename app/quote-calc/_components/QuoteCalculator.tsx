@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ADD_ON_KEYS,
+  CatalogItem,
   DEFAULTS,
   ITEM_CATALOG,
   PACKAGES,
@@ -16,6 +17,8 @@ import {
   getDiscountPtg,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
+import { mergeRemoteConfig } from "@/lib/quote-calc-config";
+import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
 import {
   DEFAULT_CONFIG,
   Draft,
@@ -44,6 +47,7 @@ import { AddOnRow } from "./AddOnRow";
 import { AssumptionsPanel } from "./AssumptionsPanel";
 import { BreakdownPanel } from "./BreakdownPanel";
 import { ClientInfoSection } from "./ClientInfoSection";
+import { ConfigBanner, ConfigBannerState } from "./ConfigBanner";
 import { DraftsBar } from "./DraftsBar";
 import { MiscAddOnSection } from "./MiscAddOnSection";
 import { MobileBreakdownSheet } from "./MobileBreakdownSheet";
@@ -79,6 +83,11 @@ export function QuoteCalculator() {
 
   // --- Assumptions ---
   const [assumptions, setAssumptions] = useState<QuoteState>({ ...DEFAULTS });
+
+  // --- Runtime config (Phase 1: pulled from the Settings + Items sheet tabs) ---
+  const [catalog, setCatalog] = useState<CatalogItem[]>(ITEM_CATALOG);
+  const [bannerState, setBannerState] = useState<ConfigBannerState>({ kind: "hidden" });
+  const [configRetrying, setConfigRetrying] = useState(false);
 
   // --- Drafts ---
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -149,6 +158,37 @@ export function QuoteCalculator() {
     }
   }
 
+  // Pull the latest Settings + Items from the Sheet. Falls back to bundled
+  // defaults on failure and surfaces a banner so Janelle knows.
+  const loadRemoteConfig = useCallback(
+    async (opts?: { refresh?: boolean }) => {
+      setConfigRetrying(true);
+      try {
+        const result = await fetchRemoteConfig(opts);
+        if (!result.ok) {
+          // Hard failure: bundled DEFAULTS + ITEM_CATALOG, banner explains why.
+          setCatalog(ITEM_CATALOG);
+          setBannerState({ kind: "fallback", reason: result.failure.kind });
+          return;
+        }
+        const merged = mergeRemoteConfig(result.value);
+        setCatalog(merged.catalog);
+        // Sheet is the source of truth — its values win over the locally-saved
+        // defaults so editing the Sheet + Retry actually re-prices the quote.
+        // Per-draft snapshots are preserved separately on Load (draft.assumptionsSnapshot).
+        setAssumptions((prev) => ({ ...prev, ...merged.assumptions }));
+        setBannerState(
+          merged.warnings.length > 0
+            ? { kind: "ok", warnings: merged.warnings }
+            : { kind: "hidden" },
+        );
+      } finally {
+        setConfigRetrying(false);
+      }
+    },
+    [],
+  );
+
   // Hydrate on mount: drafts + last session + saved assumptions defaults.
   // Then attempt to refresh from the remote Sheet in the background.
   useEffect(() => {
@@ -181,7 +221,10 @@ export function QuoteCalculator() {
         setSyncStatus(failureToStatus(result.failure));
       }
     })();
-  }, [applyConfig]);
+
+    // Config load runs in parallel with drafts sync.
+    void loadRemoteConfig();
+  }, [applyConfig, loadRemoteConfig]);
 
   // Manual refresh from Sheet (triggered by DraftsBar).
   const handleRefreshFromRemote = useCallback(async () => {
@@ -234,8 +277,8 @@ export function QuoteCalculator() {
   const overrideDigital = pkg === "individual" ? individualDigital : undefined;
 
   const baseResult = useMemo(
-    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive),
-    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive],
+    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive, catalog),
+    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive, catalog],
   );
 
   const selectedAddOns = useMemo(
@@ -245,10 +288,10 @@ export function QuoteCalculator() {
         .map(([k, q]) => ({
           key: k,
           qty: q,
-          label: ITEM_CATALOG.find((i) => i.key === k)!.label,
+          label: catalog.find((i) => i.key === k)?.label ?? k,
           result: calcAddOnRaw(k, q, mode, assumptions, fullColor, customPaper),
         })),
-    [addOns, mode, assumptions, fullColor, customPaper],
+    [addOns, mode, assumptions, fullColor, customPaper, catalog],
   );
 
   const addOnPreviews = useMemo(
@@ -410,6 +453,12 @@ export function QuoteCalculator() {
         </p>
       </div>
 
+      <ConfigBanner
+        state={bannerState}
+        onRetry={() => void loadRemoteConfig({ refresh: true })}
+        retrying={configRetrying}
+      />
+
       <div className="mb-5">
         <DraftsBar
           drafts={drafts}
@@ -461,7 +510,7 @@ export function QuoteCalculator() {
               {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
                 const isSelected = pkg === key;
-                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive);
+                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, catalog);
                 const discount = getDiscountPtg(key, assumptions);
                 return (
                   <div key={key} className="relative group">
@@ -504,7 +553,7 @@ export function QuoteCalculator() {
                           {def.items.map((it, idx) => {
                             const isObj = typeof it !== "string";
                             const k = isObj ? it.key : it;
-                            const label = (isObj && it.displayLabel) || ITEM_CATALOG.find((i) => i.key === k)?.label || k;
+                            const label = (isObj && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
                             return <li key={`${k}-${idx}`}>· {label}</li>;
                           })}
                         </ul>
@@ -539,7 +588,7 @@ export function QuoteCalculator() {
                       onChange={(e) => setIndividualItem(e.target.value)}
                       className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      {ITEM_CATALOG.map((item) => (
+                      {catalog.map((item) => (
                         <option key={item.key} value={item.key}>{item.label}</option>
                       ))}
                     </select>
@@ -635,7 +684,8 @@ export function QuoteCalculator() {
             </p>
             <div className="space-y-2">
               {ADD_ON_KEYS.map((key) => {
-                const item = ITEM_CATALOG.find((i) => i.key === key)!;
+                const item = catalog.find((i) => i.key === key);
+                if (!item) return null;
                 const currentQty = addOns[key] ?? 0;
                 return (
                   <AddOnRow
@@ -645,6 +695,7 @@ export function QuoteCalculator() {
                     packageQty={qty}
                     preview={addOnPreviews[key]}
                     onChange={(next) => setAddOnQty(key, next)}
+                    catalog={catalog}
                   />
                 );
               })}
@@ -812,6 +863,7 @@ export function QuoteCalculator() {
             vendorIncentive={vendorIncentive}
             fullColor={fullColor}
             customPaper={customPaper}
+            catalog={catalog}
           />
         </div>
       </div>
@@ -823,6 +875,7 @@ export function QuoteCalculator() {
           onUpdate={updateAssumption}
           onReset={() => setAssumptions({ ...DEFAULTS })}
           onLoad={(s) => setAssumptions(s)}
+          catalog={catalog}
         />
       </div>
 
@@ -839,12 +892,14 @@ export function QuoteCalculator() {
           assumptions={assumptions}
           baseResult={baseResult}
           selectedAddOns={selectedAddOns}
+          miscAddOns={miscAddOns}
           rushFee={rushFee}
           extraRevisions={extraRevisions}
           digitalLicense={digitalLicense}
           vendorIncentive={vendorIncentive}
           fullColor={fullColor}
           customPaper={customPaper}
+          catalog={catalog}
           embedded
         />
       </MobileBreakdownSheet>

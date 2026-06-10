@@ -247,8 +247,12 @@ function stateVal(s: QuoteState, key: string): number {
   return (s as unknown as Record<string, number>)[key] ?? 0;
 }
 
-export function getItemQty(itemKey: string, packageQty: number): number {
-  const item = ITEM_CATALOG.find((i) => i.key === itemKey);
+export function getItemQty(
+  itemKey: string,
+  packageQty: number,
+  catalog: CatalogItem[] = ITEM_CATALOG,
+): number {
+  const item = catalog.find((i) => i.key === itemKey);
   if (!item) return 0;
   if (item.fixed !== undefined) return item.fixed;
   return item.qty * packageQty;
@@ -338,6 +342,7 @@ export function calcPackage(
   fullColor?: boolean,
   customPaper?: boolean,
   vendorIncentive?: boolean,
+  catalog: CatalogItem[] = ITEM_CATALOG,
 ): PackageResult {
   const pkg = PACKAGES[pkgKey];
   const items = (overrideItems ?? pkg.items).map(normalizePkgItem);
@@ -354,13 +359,13 @@ export function calcPackage(
 
   for (const norm of items) {
     const itemKey = norm.key;
-    const itemQty = getItemQty(itemKey, qty) * norm.multiplier;
+    const itemQty = getItemQty(itemKey, qty, catalog) * norm.multiplier;
     const designMin = stateVal(s, itemKey + "_dt");
     const prodMin = stateVal(s, itemKey + "_pt");
     const rawSheetCost = stateVal(s, itemKey + "_sc");
     const sheetCost = rawSheetCost * sheetMultiplier;
     const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
-    const catalogItem = ITEM_CATALOG.find((i) => i.key === itemKey)!;
+    const catalogItem = catalog.find((i) => i.key === itemKey)!;
 
     const fullDesignLabor = (designMin / 60) * s.hourly;
     const designLabor = fullDesignLabor * (isReuse ? s.reuseFactor : 1);
@@ -439,8 +444,9 @@ export function calcAddOn(
   s: QuoteState,
   fullColor?: boolean,
   customPaper?: boolean,
+  catalog: CatalogItem[] = ITEM_CATALOG,
 ): AddOnResult {
-  return calcAddOnInternal(itemKey, getItemQty(itemKey, qty), mode, s, fullColor, customPaper);
+  return calcAddOnInternal(itemKey, getItemQty(itemKey, qty, catalog), mode, s, fullColor, customPaper);
 }
 
 // Add-on calc using an explicit piece count entered by the user (no household multiplier).
