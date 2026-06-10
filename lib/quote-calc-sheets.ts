@@ -8,6 +8,7 @@
 // /api/drafts costs at most one outbound fetch to Google.
 
 import "server-only";
+import { timingSafeEqual } from "crypto";
 import { JWT } from "google-auth-library";
 import type { Draft } from "./quote-calc-drafts";
 import { normalizeIncomingDraft } from "./quote-calc-drafts";
@@ -17,21 +18,27 @@ import type {
   RemoteItem,
   RemoteSetting,
 } from "./quote-calc-config";
+import type { LinkStatus, PortalMeta } from "./quote-calc-portal";
 import { packageDisplayName, summarizeLineItems } from "./quote-calc-summary";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
-const RANGE_ALL = `${SHEET_TAB}!A${FIRST_DATA_ROW}:M`;
-const HEADER_RANGE = `${SHEET_TAB}!A1:M1`;
-const NUM_COLS = 13; // A..M
+// Draft data (A–M) is written by the draft pipeline. Portal metadata (N–R) is
+// written only by the portal accessors below, so a quote save never clobbers a
+// public token. The header spans the full A–R width.
+const HEADER_RANGE = `${SHEET_TAB}!A1:R1`;
+const NUM_COLS = 13; // A..M (draft readable columns)
 
 // --- Phase 2: human-readable Quotes tab + separate _data payload tab ---
 //
-// New "Quotes" schema (header row in A1:M1):
+// "Quotes" schema (header row in A1:R1):
 //   A  Quote ID    | B  Status      | C  Client       | D  Event type
 //   E  Event date  | F  Quote name  | G  Package      | H  Quantity
 //   I  Line items  | J  Total       | K  Notes        | L  Created
 //   M  Updated
+//   --- Phase 3 portal metadata (server-managed; Janelle-editable) ---
+//   N  Drive folder | O  Public token | P  Link status | Q  Expires
+//   R  Approved (reserved)
 //
 // New "_data" tab (header row in A1:B1): A Quote ID | B Payload (JSON)
 //
@@ -58,6 +65,12 @@ const NEW_HEADER_ROW: Row = [
   "Notes",
   "Created",
   "Updated",
+  // Phase 3 portal metadata (N–R).
+  "Drive folder",
+  "Public token",
+  "Link status",
+  "Expires",
+  "Approved",
 ];
 
 const DATA_TAB = "_data";
@@ -90,6 +103,20 @@ const LEGACY_COL = {
   status: 2,
   payload: 12,
 } as const;
+
+// Phase 3 portal metadata columns (0-indexed; N–R).
+const PORTAL_COL = {
+  driveFolderId: 13, // N
+  publicToken: 14, // O
+  linkStatus: 15, // P
+  expiresAt: 16, // Q
+  approvedAt: 17, // R
+} as const;
+
+// 0-indexed column → A1 letter. Valid for the A–R range we use (0–17).
+function colLetter(index: number): string {
+  return String.fromCharCode("A".charCodeAt(0) + index);
+}
 
 // --- Phase 1: config tabs ---
 const SETTINGS_TAB = "Settings";
@@ -144,7 +171,14 @@ async function getAccessToken(): Promise<string> {
     const jwt = new JWT({
       email: cfg.email,
       key: cfg.privateKey,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      scopes: [
+        "https://www.googleapis.com/auth/spreadsheets",
+        // Phase 3: create the per-quote subfolder (drive.file) and read the
+        // proofs Janelle uploads into it (drive.readonly — those files are
+        // owned by her, so drive.file alone can't see them).
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive.readonly",
+      ],
     });
     const res = await jwt.authorize();
     if (!res.access_token) throw new Error("Google Auth: no access_token returned");
@@ -203,7 +237,7 @@ async function readRange(docId: string, range: string): Promise<Row[]> {
 async function readQuotesTab(
   docId: string,
 ): Promise<{ schema: Schema; header: Row; rows: Row[] }> {
-  const all = await readRange(docId, `${SHEET_TAB}!A1:M`);
+  const all = await readRange(docId, `${SHEET_TAB}!A1:R`);
   if (all.length === 0) return { schema: "empty", header: [], rows: [] };
   const header = all[0] ?? [];
   const rows = all.slice(1);
@@ -370,8 +404,9 @@ async function migrateLegacyQuotesTab(
 
   await ensureDataTabExists(docId);
 
-  // Wipe existing data rows so column meanings don't get mixed.
-  await clearRange(docId, `${SHEET_TAB}!A2:M`);
+  // Wipe existing data rows (incl. any stale portal columns) so column
+  // meanings don't get mixed.
+  await clearRange(docId, `${SHEET_TAB}!A2:R`);
 
   // Write new header.
   await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
@@ -392,7 +427,14 @@ async function ensureNewSchema(
   docId: string,
 ): Promise<{ rows: Row[] }> {
   const view = await readQuotesTab(docId);
-  if (view.schema === "new") return { rows: view.rows };
+  if (view.schema === "new") {
+    // Backfill the wider A–R header on a sheet that was migrated before Phase 3
+    // added the portal columns. One-time; idempotent once the header is full.
+    if (view.header.length < NEW_HEADER_ROW.length) {
+      await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
+    }
+    return { rows: view.rows };
+  }
 
   if (view.schema === "empty") {
     // Brand-new sheet: just write headers + create _data tab.
@@ -494,6 +536,159 @@ export async function archiveDraftRow(id: string): Promise<boolean> {
     [["archived"]],
   );
   return true;
+}
+
+// Read a single Draft by id straight from the _data payload tab, regardless of
+// archive status. Used by the public portal (token → id → payload) so it never
+// has to load the whole draft list.
+export async function getDraftById(id: string): Promise<Draft | null> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const dataRows = await readRange(cfg.docId, DATA_RANGE);
+  const row = dataRows.find((r) => String(r[0] ?? "").trim() === id);
+  if (!row) return null;
+  const payload = row[1];
+  if (typeof payload !== "string" || !payload) return null;
+  try {
+    return normalizeIncomingDraft(JSON.parse(payload));
+  } catch {
+    return null;
+  }
+}
+
+// --- Phase 3: portal metadata (columns N–R) ---
+//
+// Token resolution happens on every public-portal hit, so the N–R columns are
+// cached at module scope (~30s). Revocation/expiry edits in the Sheet take
+// effect within the TTL — effectively instant for a manual edit, while a link
+// shared widely never hammers the Sheets API.
+
+const PORTAL_CACHE_TTL_MS = 30_000;
+
+interface PortalCacheEntry {
+  metaById: Map<string, PortalMeta>;
+  expiresAt: number;
+}
+let cachedPortal: PortalCacheEntry | null = null;
+let inflightPortal: Promise<Map<string, PortalMeta>> | null = null;
+
+function rowToPortalMeta(row: Row): PortalMeta | null {
+  const id = String(row[NEW_COL.id] ?? "").trim();
+  if (!id) return null;
+  const status = String(row[PORTAL_COL.linkStatus] ?? "").trim().toLowerCase();
+  const linkStatus: LinkStatus =
+    status === "active" || status === "revoked" ? (status as LinkStatus) : "";
+  return {
+    id,
+    driveFolderId: String(row[PORTAL_COL.driveFolderId] ?? "").trim(),
+    publicToken: String(row[PORTAL_COL.publicToken] ?? "").trim(),
+    linkStatus,
+    expiresAt: String(row[PORTAL_COL.expiresAt] ?? "").trim(),
+    approvedAt: String(row[PORTAL_COL.approvedAt] ?? "").trim(),
+  };
+}
+
+async function loadPortalMeta(force = false): Promise<Map<string, PortalMeta>> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+
+  const now = Date.now();
+  if (!force && cachedPortal && cachedPortal.expiresAt > now) {
+    return cachedPortal.metaById;
+  }
+  if (inflightPortal) return inflightPortal;
+
+  inflightPortal = (async () => {
+    const rows = await readRange(cfg.docId, `${SHEET_TAB}!A${FIRST_DATA_ROW}:R`);
+    const metaById = new Map<string, PortalMeta>();
+    for (const row of rows) {
+      const meta = rowToPortalMeta(row);
+      if (meta) metaById.set(meta.id, meta);
+    }
+    cachedPortal = { metaById, expiresAt: Date.now() + PORTAL_CACHE_TTL_MS };
+    return metaById;
+  })().finally(() => {
+    inflightPortal = null;
+  });
+
+  return inflightPortal;
+}
+
+function invalidatePortalCache(): void {
+  cachedPortal = null;
+}
+
+// Map of Quote ID → portal metadata, for the admin Explorer's join with
+// listDrafts(). Includes quotes that have no public link yet.
+export async function listPortalMeta(options?: { force?: boolean }): Promise<Map<string, PortalMeta>> {
+  return loadPortalMeta(options?.force);
+}
+
+export async function getPortalMetaById(
+  id: string,
+  options?: { force?: boolean },
+): Promise<PortalMeta | null> {
+  const map = await loadPortalMeta(options?.force);
+  return map.get(id) ?? null;
+}
+
+// Resolve a public token to its quote. Constant-time compare over the small set
+// of issued tokens. Returns the metadata regardless of status/expiry; the
+// caller decides whether the link is live (see isLinkActive in quote-calc-portal).
+export async function findByPublicToken(token: string): Promise<PortalMeta | null> {
+  const raw = (token ?? "").trim();
+  if (!raw) return null;
+  const map = await loadPortalMeta();
+  const candidate = Buffer.from(raw);
+  for (const meta of Array.from(map.values())) {
+    if (!meta.publicToken) continue;
+    const stored = Buffer.from(meta.publicToken);
+    if (stored.length === candidate.length && timingSafeEqual(stored, candidate)) {
+      return meta;
+    }
+  }
+  return null;
+}
+
+// Write a contiguous run of portal cells (N–R) on the row for `id`. Locates the
+// row by id via the new schema, so it never collides with the draft A–M write.
+async function writePortalCells(
+  id: string,
+  startCol: number,
+  values: (string | number)[],
+): Promise<boolean> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const { rows } = await ensureNewSchema(cfg.docId);
+  const idx = rows.findIndex((row) => String(row[NEW_COL.id] ?? "") === id);
+  if (idx < 0) return false;
+  const rowNumber = FIRST_DATA_ROW + idx;
+  const startLetter = colLetter(startCol);
+  const endLetter = colLetter(startCol + values.length - 1);
+  await writeRange(
+    cfg.docId,
+    `${SHEET_TAB}!${startLetter}${rowNumber}:${endLetter}${rowNumber}`,
+    [values],
+  );
+  invalidatePortalCache();
+  return true;
+}
+
+export async function setDriveFolderId(id: string, folderId: string): Promise<boolean> {
+  return writePortalCells(id, PORTAL_COL.driveFolderId, [folderId]);
+}
+
+// Generate/regenerate a public link: write token + active status + (optional) expiry.
+export async function activatePublicLink(
+  id: string,
+  token: string,
+  expiresAt = "",
+): Promise<boolean> {
+  return writePortalCells(id, PORTAL_COL.publicToken, [token, "active", expiresAt]);
+}
+
+export async function revokePublicLink(id: string): Promise<boolean> {
+  return writePortalCells(id, PORTAL_COL.linkStatus, ["revoked"]);
 }
 
 // --- Config (Items + Settings) reader ---
@@ -680,4 +875,4 @@ export function invalidateConfigCache(): void {
   cachedConfig = null;
 }
 
-export { SheetsUnconfiguredError, NUM_COLS };
+export { SheetsUnconfiguredError, NUM_COLS, getAccessToken as getGoogleAccessToken };
