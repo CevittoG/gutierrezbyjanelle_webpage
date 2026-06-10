@@ -9,6 +9,7 @@ import {
   listDrafts,
   upsertDraftRow,
 } from "@/lib/quote-calc-sheets";
+import { ensureQuoteFolder } from "@/lib/quote-calc-drive";
 import { normalizeIncomingDraft } from "@/lib/quote-calc-drafts";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
@@ -58,9 +59,17 @@ export async function POST(req: NextRequest) {
   }
   try {
     await upsertDraftRow(draft);
-    return NextResponse.json({ ok: true });
   } catch (err) {
     console.warn("[/quote-calc/api/drafts POST] failed", err);
     return NextResponse.json({ ok: false, error: "server" }, { status: 500 });
   }
+  // Best-effort: auto-create the quote's Drive folder. A Drive hiccup must not
+  // fail the save — the draft is already persisted above.
+  let driveFolderId: string | null = null;
+  try {
+    driveFolderId = await ensureQuoteFolder(draft);
+  } catch (err) {
+    console.warn("[/quote-calc/api/drafts POST] folder ensure failed", err);
+  }
+  return NextResponse.json({ ok: true, driveFolderId });
 }
