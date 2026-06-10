@@ -232,7 +232,8 @@ final_price = price_before_discount × (1 - combined_discount%)
 | `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
 | `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
 | `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `miscAddOns: MiscAddOn[]`, schema v2 migration (iDrinkTop→iWedgeTop), `SyncStatus` type, `reconcileDrafts()` |
-| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST: list / upsert / soft-archive drafts + `listConfig()` reader with 60s cache and `?force` invalidation for the Settings + Items tabs |
+| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST. Schema-aware Quotes reads (legacy JSON-in-col-M or new readable + `_data` payload tab), auto-migrates legacy rows on first write, soft-archive by id. Also exposes `listConfig()` with a 60s cache for the Settings + Items tabs |
+| `lib/quote-calc-summary.ts` | Pure formatter — turns a `Draft` into the multiline "Line items" string that lands in column I of the new Quotes tab |
 | `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`) around the `/quote-calc/api/drafts` routes |
 | `lib/quote-calc-config-remote.ts` | Client wrapper for `GET /quote-calc/api/config` (RemoteResult-shaped, supports `refresh: true`) |
 | `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; uses `isQuoteAuthValid()`; returns 503 when Sheets not configured |
@@ -269,6 +270,19 @@ Both tabs must be created and headered manually once. The app reads but never wr
 
 The Sheet is the source of truth — its values overlay locally-saved `assumptions` defaults on every fetch. If either tab is missing, empty, contains non-numeric values, or returns an error, the calculator falls back to bundled `DEFAULTS`/`ITEM_CATALOG` and `ConfigBanner` shows what failed (with tab + row number when known).
 
+### Quotes tab schema (Phase 2)
+
+The `Quotes` tab is now human-readable — Janelle sees client / event / package / line items / total / status, not a JSON blob. The full `Draft` payload was moved to a separate hidden `_data` tab keyed by Quote ID. Reads join the two tabs; writes update both.
+
+**`Quotes` tab columns** (header row in A1:M1, written automatically on first upsert):
+A=Quote ID · B=Status (`active` / `archived`) · C=Client · D=Event type · E=Event date · F=Quote name · G=Package (display name) · H=Quantity · I=Line items (multiline) · J=Total · K=Notes · L=Created · M=Updated.
+
+**`_data` tab** (hidden, two columns): A=Quote ID · B=full Draft JSON. The app creates this tab automatically on first write if it's missing.
+
+**Schema migration is automatic.** `listDrafts` detects the old schema (JSON in col M) by checking whether `A1 == "Quote ID"` and parses either format. The first `upsertDraftRow` call after deploy migrates any legacy rows over: parse each legacy JSON, write new readable rows to `Quotes`, write payloads to `_data`. Subsequent reads use the readable path. Idempotent — calling on an already-migrated sheet is a no-op.
+
+Line items in column I are produced by `lib/quote-calc-summary.ts` from the bundled `ITEM_CATALOG` labels. Catalog overrides Janelle has set in the `Items` tab aren't applied to the summary at write time (this is a deliberate scope cut — the readable label drifts at most a quote away from the real one).
+
 ---
 
 ## Current Status
@@ -286,6 +300,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Google Sheets persistence for drafts (service-account JWT, cache-first sync, graceful offline fallback)
 - Phase 0: HMAC-signed expiring session cookie for `/quote-calc` (forged-cookie regression test in roadmap)
 - Phase 1: pricing data externalized to `Settings` + `Items` sheet tabs with 60s cache, validated merge, and an in-app fallback banner naming bad rows
+- Phase 2: `Quotes` tab restructured to human-readable columns (client, event, package, line items, total) with the full Draft JSON moved to a hidden `_data` tab; legacy rows auto-migrate on first write
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
