@@ -443,14 +443,22 @@ export function QuoteCalculator() {
 
   return (
     <div className="container py-6 px-4 md:px-8 normal-case tracking-normal pb-32 lg:pb-8">
-      <div className="mb-5">
-        <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
-          Internal tool · not indexed
-        </p>
-        <h1 className="font-squarepeg text-4xl md:text-5xl mb-1">Quote Calculator</h1>
-        <p className="text-sm text-muted-foreground">
-          Draft, save, and share quotes. Assumptions stay flexible — drafts snapshot their own prices.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+            Internal tool · not indexed
+          </p>
+          <h1 className="font-squarepeg text-4xl md:text-5xl mb-1">Quote Calculator</h1>
+          <p className="text-sm text-muted-foreground">
+            Draft, save, and share quotes. Assumptions stay flexible — drafts snapshot their own prices.
+          </p>
+        </div>
+        <a
+          href="/quote-calc/explorer"
+          className="shrink-0 mt-1 h-9 px-4 rounded-lg border border-border text-sm normal-case tracking-normal hover:bg-muted transition-colors inline-flex items-center"
+        >
+          Quote Explorer →
+        </a>
       </div>
 
       <ConfigBanner
