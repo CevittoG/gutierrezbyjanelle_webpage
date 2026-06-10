@@ -1,5 +1,13 @@
-export type PkgKey = "individual" | "diy" | "sweet" | "signature";
+export type PkgKey =
+  | "individual"
+  | "diy"
+  | "sweet"
+  | "signature"
+  | "event-basics"
+  | "event-fun"
+  | "event-works";
 export type PricingMode = "fresh" | "reuse";
+export type PackageType = "wedding" | "events";
 
 export interface QuoteState {
   hourly: number;
@@ -14,6 +22,9 @@ export interface QuoteState {
   discountDiy: number;
   discountSweet: number;
   discountSignature: number;
+  discountEventBasics: number;
+  discountEventFun: number;
+  discountEventWorks: number;
 
   vendorIncentivePtg: number;
   fullColorFactor: number;
@@ -32,11 +43,13 @@ export interface QuoteState {
   iWelcome_dt: number;  iWelcome_pt: number;   iWelcome_sc: number;  iWelcome_y: number;
   iSeating_dt: number;  iSeating_pt: number;   iSeating_sc: number;  iSeating_y: number;
   iMenu_dt: number;     iMenu_pt: number;      iMenu_sc: number;     iMenu_y: number;
-  iDrinkTop_dt: number; iDrinkTop_pt: number;  iDrinkTop_sc: number; iDrinkTop_y: number;
+  iWedgeTop_dt: number; iWedgeTop_pt: number; iWedgeTop_sc: number; iWedgeTop_y: number;
+  iWaferTop_dt: number; iWaferTop_pt: number; iWaferTop_sc: number; iWaferTop_y: number;
   iTableSign_dt: number; iTableSign_pt: number; iTableSign_sc: number; iTableSign_y: number;
   iPlaceCard_dt: number; iPlaceCard_pt: number; iPlaceCard_sc: number; iPlaceCard_y: number;
   iThankYou_dt: number; iThankYou_pt: number;  iThankYou_sc: number; iThankYou_y: number;
   iPartyFavor_dt: number; iPartyFavor_pt: number; iPartyFavor_sc: number; iPartyFavor_y: number;
+  iGames_dt: number;    iGames_pt: number;     iGames_sc: number;    iGames_y: number;
 }
 
 export const DEFAULTS: QuoteState = {
@@ -44,6 +57,7 @@ export const DEFAULTS: QuoteState = {
   packagingCost: 2.5, reuseFactor: 0.25, revisionMin: 30,
 
   discountIndividual: 0, discountDiy: 10, discountSweet: 12, discountSignature: 15,
+  discountEventBasics: 0, discountEventFun: 0, discountEventWorks: 0,
 
   vendorIncentivePtg: 10, fullColorFactor: 1.5, customPaperFactor: 1.3, rushFeePtg: 30, digitalLicensePtg: 30,
 
@@ -58,11 +72,13 @@ export const DEFAULTS: QuoteState = {
   iWelcome_dt: 30,       iWelcome_pt: 1,    iWelcome_sc: 22,     iWelcome_y: 1,
   iSeating_dt: 60,       iSeating_pt: 1,    iSeating_sc: 22,     iSeating_y: 1,
   iMenu_dt: 15,          iMenu_pt: 2,       iMenu_sc: 0.55,      iMenu_y: 1,
-  iDrinkTop_dt: 30,      iDrinkTop_pt: 4,   iDrinkTop_sc: 0.55,  iDrinkTop_y: 12,
+  iWedgeTop_dt: 30,      iWedgeTop_pt: 4,   iWedgeTop_sc: 0.55,  iWedgeTop_y: 8,
+  iWaferTop_dt: 20,      iWaferTop_pt: 3,   iWaferTop_sc: 0.55,  iWaferTop_y: 16,
   iTableSign_dt: 15,     iTableSign_pt: 1,  iTableSign_sc: 0.55, iTableSign_y: 1,
   iPlaceCard_dt: 15,     iPlaceCard_pt: 3,  iPlaceCard_sc: 0.55, iPlaceCard_y: 6,
   iThankYou_dt: 30,      iThankYou_pt: 2,   iThankYou_sc: 0.55,  iThankYou_y: 4,
   iPartyFavor_dt: 15,    iPartyFavor_pt: 4, iPartyFavor_sc: 0.55, iPartyFavor_y: 10,
+  iGames_dt: 20,         iGames_pt: 2,      iGames_sc: 0.55,     iGames_y: 4,
 };
 
 export interface CatalogItem {
@@ -84,27 +100,37 @@ export const ITEM_CATALOG: CatalogItem[] = [
   { key: "iWelcome",      label: "Welcome sign",               qty: 0, fixed: 1, notes: "1 per event - large format" },
   { key: "iSeating",      label: "Seating chart",              qty: 0, fixed: 1, notes: "1 per event - time-intensive" },
   { key: "iMenu",         label: "Menu",                       qty: 2, notes: "~2 per household" },
-  { key: "iDrinkTop",     label: "Drink toppers",              qty: 4, notes: "~4 per household - easy upsell" },
+  { key: "iWedgeTop",     label: "Wedge topper",               qty: 4, notes: "Larger format topper" },
+  { key: "iWaferTop",     label: "Wafer topper",               qty: 4, notes: "Smaller round topper" },
   { key: "iTableSign",    label: "Table top signs",            qty: 0, fixed: 8, notes: "~8 tables typical" },
   { key: "iPlaceCard",    label: "Place cards",                qty: 2, notes: "~2 per household - great margin at scale" },
   { key: "iThankYou",     label: "Thank you cards",            qty: 1, notes: "Common reorder after the event" },
   { key: "iPartyFavor",   label: "Party favor tags",           qty: 2, notes: "~2 per household - small format" },
+  { key: "iGames",        label: "Games",                      qty: 1, notes: "Activity card per setting" },
 ];
 
 export const ADD_ON_KEYS = [
-  "iMenu", "iDrinkTop", "iTableSign", "iPlaceCard", "iThankYou", "iPartyFavor",
+  "iMenu", "iWedgeTop", "iWaferTop", "iTableSign", "iPlaceCard", "iThankYou", "iPartyFavor", "iGames",
 ];
+
+export type PkgItem = string | { key: string; multiplier?: number; displayLabel?: string };
 
 export interface PackageDef {
   name: string;
   tagline: string;
   description: string;
-  items: string[];
+  items: PkgItem[];
   isDigital: boolean;
   discountKey: keyof QuoteState;
+  type: PackageType;
   colorClass: string;
   selectedColorClass: string;
 }
+
+const SHARED_PKG_COLORS = {
+  colorClass: "border-accent-foreground/20 bg-accent/20",
+  selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+};
 
 export const PACKAGES: Record<PkgKey, PackageDef> = {
   individual: {
@@ -114,8 +140,8 @@ export const PACKAGES: Record<PkgKey, PackageDef> = {
     items: ["iInvite"],
     isDigital: false,
     discountKey: "discountIndividual",
-    colorClass: "border-accent-foreground/20 bg-accent/20",
-    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+    type: "wedding",
+    ...SHARED_PKG_COLORS,
   },
   diy: {
     name: "Design Suite",
@@ -124,8 +150,8 @@ export const PACKAGES: Record<PkgKey, PackageDef> = {
     items: ["iSaveDate", "iInvite"],
     isDigital: true,
     discountKey: "discountDiy",
-    colorClass: "border-accent-foreground/20 bg-accent/20",
-    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+    type: "wedding",
+    ...SHARED_PKG_COLORS,
   },
   sweet: {
     name: "Sweet Suite",
@@ -134,8 +160,8 @@ export const PACKAGES: Record<PkgKey, PackageDef> = {
     items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope"],
     isDigital: false,
     discountKey: "discountSweet",
-    colorClass: "border-accent-foreground/20 bg-accent/20",
-    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+    type: "wedding",
+    ...SHARED_PKG_COLORS,
   },
   signature: {
     name: "Signature Suite",
@@ -144,8 +170,54 @@ export const PACKAGES: Record<PkgKey, PackageDef> = {
     items: ["iSaveDate", "iInvite", "iDetail", "iRSVP", "iEnvelope", "iCeremony", "iGuestSetting", "iWelcome", "iSeating"],
     isDigital: false,
     discountKey: "discountSignature",
-    colorClass: "border-accent-foreground/20 bg-accent/20",
-    selectedColorClass: "border-accent-foreground/60 bg-accent/40 ring-2 ring-accent-foreground/20",
+    type: "wedding",
+    ...SHARED_PKG_COLORS,
+  },
+  "event-basics": {
+    name: "The Basics",
+    tagline: "Invite + thank yous",
+    description: "A clean, cohesive foundation for any event - everything you need to set the tone.",
+    items: ["iInvite", "iThankYou"],
+    isDigital: false,
+    discountKey: "discountEventBasics",
+    type: "events",
+    ...SHARED_PKG_COLORS,
+  },
+  "event-fun": {
+    name: "Add Some Fun",
+    tagline: "Invite + menus + signage",
+    description: "Extra pieces that keep the party going from start to sweet finish.",
+    items: [
+      "iInvite",
+      "iThankYou",
+      { key: "iMenu", displayLabel: "Menus" },
+      { key: "iTableSign", displayLabel: "Event sign" },
+      { key: "iTableSign", displayLabel: "Dessert sign" },
+    ],
+    isDigital: false,
+    discountKey: "discountEventFun",
+    type: "events",
+    ...SHARED_PKG_COLORS,
+  },
+  "event-works": {
+    name: "Give Me the Works",
+    tagline: "Full event suite - menus, signage, day-of",
+    description: "Every detail covered so your guests feel every bit of the celebration.",
+    items: [
+      "iInvite",
+      "iThankYou",
+      { key: "iMenu", displayLabel: "Food menu" },
+      { key: "iMenu", displayLabel: "Dessert menu" },
+      { key: "iMenu", displayLabel: "Bar menu" },
+      "iWelcome",
+      { key: "iTableSign", displayLabel: "Event sign" },
+      { key: "iTableSign", displayLabel: "Dessert sign" },
+      { key: "iTableSign", displayLabel: "Signature drink sign" },
+    ],
+    isDigital: false,
+    discountKey: "discountEventWorks",
+    type: "events",
+    ...SHARED_PKG_COLORS,
   },
 };
 
@@ -249,20 +321,26 @@ export interface AddOnResult {
 
 // --- Calculations ---
 
+function normalizePkgItem(it: PkgItem): { key: string; multiplier: number; displayLabel?: string } {
+  return typeof it === "string"
+    ? { key: it, multiplier: 1 }
+    : { key: it.key, multiplier: it.multiplier ?? 1, displayLabel: it.displayLabel };
+}
+
 export function calcPackage(
   pkgKey: PkgKey,
   qty: number,
   mode: PricingMode,
   s: QuoteState,
   extraRevisions: number,
-  overrideItems?: string[],
+  overrideItems?: PkgItem[],
   overrideDigital?: boolean,
   fullColor?: boolean,
   customPaper?: boolean,
   vendorIncentive?: boolean,
 ): PackageResult {
   const pkg = PACKAGES[pkgKey];
-  const items = overrideItems ?? pkg.items;
+  const items = (overrideItems ?? pkg.items).map(normalizePkgItem);
   const isDigital = overrideDigital ?? pkg.isDigital;
   const isReuse = mode === "reuse";
 
@@ -274,8 +352,9 @@ export function calcPackage(
 
   const sheetMultiplier = (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
 
-  for (const itemKey of items) {
-    const itemQty = getItemQty(itemKey, qty);
+  for (const norm of items) {
+    const itemKey = norm.key;
+    const itemQty = getItemQty(itemKey, qty) * norm.multiplier;
     const designMin = stateVal(s, itemKey + "_dt");
     const prodMin = stateVal(s, itemKey + "_pt");
     const rawSheetCost = stateVal(s, itemKey + "_sc");
@@ -304,7 +383,7 @@ export function calcPackage(
     totalMaterials += materialsCost;
 
     itemBreakdown.push({
-      label: catalogItem.label,
+      label: norm.displayLabel ?? catalogItem.label,
       qty: itemQty,
       designMin,
       designLabor,
