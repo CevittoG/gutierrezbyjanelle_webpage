@@ -246,6 +246,13 @@ final_price = price_before_discount × (1 - combined_discount%)
 | `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table (driven by the passed-in `catalog`) |
 | `app/quote-calc/_components/ConfigBanner.tsx` | Inline warning banner shown above the calculator when the Sheet config fails to load or contains invalid/unknown rows. Names the offending tab/row; has a Retry button that calls `/api/config?refresh=1` |
 | `app/quote-calc/_components/PasswordGate.tsx` | Simple password gate wrapping the calculator |
+| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the price math extracted from `PrintQuote`. Shared by the print view and the public portal so both render identical numbers |
+| `lib/quote-calc-portal.ts` | **Pure** Phase 3 types + helpers: `PortalMeta`, `LinkStatus`, `isLinkActive`/`isLinkExpired`, `PublicQuote` shape, and `buildPublicQuote()` — the projector that strips everything secret down to the client-safe shape |
+| `lib/quote-calc-drive.ts` | **Server-only** Drive v3 REST (no `googleapis`): `createQuoteSubfolder`, `ensureQuoteFolder` (auto-create on save), `listFolderFiles` (60s cache), `streamFile` (alt=media, streamed), `folderWebLink`. Uses the shared SA token from `quote-calc-sheets` |
+| `app/q/[token]/page.tsx` | **Public** read-only quote portal (no admin cookie, `force-dynamic`, noindex). Token → `PublicQuote` + proofs |
+| `app/q/[token]/file/[fileId]/route.ts` | Public streaming file proxy; re-verifies token + folder membership before streaming |
+| `app/quote-calc/explorer/page.tsx` · `[id]/page.tsx` | Admin Quote Explorer list + per-quote detail (proofs gallery, client-facing summary, link controls). Server-gated |
+| `app/quote-calc/api/portal/[id]/{token,revoke,file/[fileId]}/route.ts` | Cookie-gated: generate/regenerate token, revoke link, admin-side file proxy |
 
 ### Data model
 
@@ -253,7 +260,7 @@ All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`
 
 `DraftConfig` holds the full quote state per draft including `miscAddOns: MiscAddOn[]` for one-off client items. `Draft.schemaVersion` is currently `2`; v1 drafts are auto-migrated on load (iDrinkTop qty moved to iWedgeTop).
 
-**Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` with headers A1:M1 created manually once.
+**Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` — the app writes its header row automatically (now A1:R1 with the Phase 3 portal columns) but does not create the tab itself.
 
 ### Auth (Phase 0)
 
@@ -283,6 +290,20 @@ A=Quote ID · B=Status (`active` / `archived`) · C=Client · D=Event type · E=
 
 Line items in column I are produced by `lib/quote-calc-summary.ts` from the bundled `ITEM_CATALOG` labels. Catalog overrides Janelle has set in the `Items` tab aren't applied to the summary at write time (this is a deliberate scope cut — the readable label drifts at most a quote away from the real one).
 
+### Client portal + Drive proofs (Phase 3)
+
+Each quote can map to one Drive folder (proofs + the printed-quote PDF) and one public, tokenized, read-only client link.
+
+**Portal columns N–R** were appended to the `Quotes` tab (header now A1:R1): N=Drive folder · O=Public token · P=Link status (`active`/`revoked`) · Q=Expires · R=Approved (reserved — the client "Approve" action is deferred). These five are **server-managed row metadata, kept out of the `Draft`/`_data` JSON** so a secret token never rides the client-synced draft. The draft pipeline still writes only A:M; the portal accessors in `quote-calc-sheets.ts` (`setDriveFolderId`, `activatePublicLink`, `revokePublicLink`, `findByPublicToken`, `listPortalMeta`, `getPortalMetaById`) write/read N–R via single-cell writes, with a ~30s module cache for token resolution. `ensureNewSchema` backfills the wider header on sheets migrated before Phase 3.
+
+**Drive (read + create).** The SA JWT gained `drive.file` (create the per-quote subfolder) and `drive.readonly` (read the proofs Janelle uploads, which she owns). On quote save, `POST /api/drafts` best-effort calls `ensureQuoteFolder` — if `GBJ_QUOTES_DRIVE_PARENT_ID` is set and the row has no folder yet, it creates `"<client> — <quote name>"` under that parent and registers the id in column N. Idempotent; a Drive failure never fails the save. The app **never uploads file content** (folder creation is metadata-only — Render RAM safe). Set up: share the `GBJ Quotes` root with the SA as **Editor**; optionally set `GBJ_QUOTES_OWNER_EMAIL` to grant Janelle Editor on each created subfolder.
+
+**Public route `/q/[token]`** (outside `/quote-calc`, no admin cookie, `force-dynamic`, noindex). Resolves the token → reads the `_data` Draft **server-side** → recomputes via `computeQuoteBreakdown` → projects to a `PublicQuote` (`buildPublicQuote`). The client-safe shape is deliberately minimal: **included pieces, savings amount, and total only** — never the cost buildup (design/production/admin/margin) or the `Draft` JSON. Proofs stream through `GET /q/[token]/file/[fileId]`, which re-verifies the token and confirms folder membership before streaming (the SA can read the whole tree, so membership is the cross-quote guard). Revocation/expiry is by editing column P/Q in the Sheet; propagates within the ~30s cache TTL.
+
+**Admin Quote Explorer** (`/quote-calc/explorer`, server-gated): list joins `listDrafts()` + `listPortalMeta()`; per-quote detail shows the client-facing summary, the proofs gallery (via a cookie-gated admin file proxy so it works before any public link exists), an "Open folder" link, and link controls (generate/regenerate/revoke + copy). The calculator header links here.
+
+**Env vars:** `GBJ_QUOTES_DRIVE_PARENT_ID` (required for auto-folder; unset ⇒ feature off), `GBJ_QUOTES_OWNER_EMAIL` (optional). Public tokens are raw 128-bit `crypto.randomBytes` — no signing secret needed.
+
 ---
 
 ## Current Status
@@ -301,6 +322,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Phase 0: HMAC-signed expiring session cookie for `/quote-calc` (forged-cookie regression test in roadmap)
 - Phase 1: pricing data externalized to `Settings` + `Items` sheet tabs with 60s cache, validated merge, and an in-app fallback banner naming bad rows
 - Phase 2: `Quotes` tab restructured to human-readable columns (client, event, package, line items, total) with the full Draft JSON moved to a hidden `_data` tab; legacy rows auto-migrate on first write
+- Phase 3: client portal + Drive proofs — auto-created per-quote Drive subfolder (read+create scopes), public tokenized read-only `/q/[token]` route (included pieces + savings + total only), streaming file proxy with folder-membership check, and an admin Quote Explorer with link generate/revoke controls. Portal metadata in `Quotes` columns N–R
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons

@@ -26,7 +26,7 @@ fast, testable, type-safe, and version-controlled. Moving the *formulas* into th
 | 1 | Move all calculation logic into the sheet | **Reject as stated** | Kills the real-time breakdown (every change → network round-trip), trades testable TS for untested cell formulas / Apps Script, and solves a rare problem (formulas rarely change; numbers change often and are already editable). |
 | 2 | Store assumptions + items in the sheet; dynamic item list | **Adopt — the real win** | Removes ~64 per-item fields from `QuoteState` and the per-item table from the UI; "add an item" becomes a one-row edit. Requires runtime config load + cache + validation + fallback. |
 | 3 | Readable records instead of JSON blob | **Adopt — cheap, high value** | Column M JSON is noise to Janelle. Make the Quotes tab human-readable; move the machine payload aside. |
-| 4 | Drive folders + proof files + client portal + shareable links | **Defer to a later phase; design included below** | Real value, but a separate product with a real security surface. Prerequisite: fix the forgeable admin auth first. |
+| 4 | Drive folders + proof files + client portal + shareable links | **Implemented (2026-06)** — see "As built" below | Real value, but a separate product with a real security surface. Prerequisite: fix the forgeable admin auth first (done in Phase 0). |
 
 ---
 
@@ -98,7 +98,22 @@ Goal: delete the per-item table from the UI and the ~64 `i{key}_*` fields from
 
 ---
 
-## Phase 3 detailed design — per-quote Drive folder (read-only) + client link
+## Phase 3 detailed design — per-quote Drive folder + client link
+
+> **As built (2026-06).** The implementation follows the design below with four
+> deliberate changes, decided during planning:
+> 1. **Folders are auto-created, not pasted.** On quote save the app creates a
+>    subfolder under a configured root (`GBJ_QUOTES_DRIVE_PARENT_ID`) and stores
+>    the id — Janelle never copies a share link. This needs **read + create**
+>    Drive access (`drive.file` + `drive.readonly`) and the root shared as
+>    **Editor**, not read-only/Viewer. The app still uploads no file *content*.
+> 2. **The client price view is minimal:** included pieces, savings amount, and
+>    total only — not a per-line cost breakdown. Keeps margin/cost internals off
+>    the public page.
+> 3. **The "Approve" button is deferred.** Column R (`Approved`) is reserved.
+> 4. Portal metadata lives in **`Quotes` columns N–R** (server-managed), not the
+>    `_data` JSON. See CLAUDE.md "Client portal + Drive proofs (Phase 3)" for the
+>    shipped file map and column layout.
 
 ### Goal
 Each quote maps to one Drive folder that serves **two purposes**:
