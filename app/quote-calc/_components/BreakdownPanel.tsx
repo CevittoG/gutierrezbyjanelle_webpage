@@ -14,6 +14,7 @@ import {
   fmtPct,
   fmtTime,
 } from "@/lib/quote-calc-logic";
+import { MiscAddOn } from "@/lib/quote-calc-drafts";
 import { cn } from "@/utils";
 
 interface SelectedAddOn {
@@ -30,6 +31,7 @@ interface Props {
   assumptions: QuoteState;
   baseResult: PackageResult;
   selectedAddOns: SelectedAddOn[];
+  miscAddOns: MiscAddOn[];
   rushFee: boolean;
   extraRevisions: number;
   digitalLicense: boolean;
@@ -96,6 +98,7 @@ export function BreakdownPanel({
   assumptions,
   baseResult,
   selectedAddOns,
+  miscAddOns,
   rushFee,
   extraRevisions,
   digitalLicense,
@@ -139,10 +142,14 @@ export function BreakdownPanel({
   const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
   const addOnsLabor = selectedAddOns.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
 
+  // Misc add-ons (selling price, no markup)
+  const visibleMisc = miscAddOns.filter((m) => m.qty > 0 && m.unitPrice > 0);
+  const miscTotal = visibleMisc.reduce((s, m) => s + m.qty * m.unitPrice, 0);
+
   // Rush
   const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
   const rushAmount = rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-  const finalPrice = subtotalBeforeRush + rushAmount;
+  const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
 
   // Your costs
   const totalDirectCosts = baseResult.totalDirectCosts + addOnsMaterials;
@@ -170,10 +177,18 @@ export function BreakdownPanel({
 
   function copyQuoteSummary() {
     const packageItems = pkgDef.items
-      .map((k) => ITEM_CATALOG.find((i) => i.key === k)?.label)
+      .map((it) => {
+        if (typeof it === "string") {
+          return ITEM_CATALOG.find((i) => i.key === it)?.label;
+        }
+        return it.displayLabel || ITEM_CATALOG.find((i) => i.key === it.key)?.label;
+      })
       .filter(Boolean)
       .join(", ");
-    const addOnNames = selectedAddOns.map((a) => a.label).join(", ");
+    const addOnNames = selectedAddOns.map((a) => `${a.label} (${a.qty})`).join(", ");
+    const miscNames = visibleMisc
+      .map((m) => `${m.label || "Custom item"} (${m.qty} × $${m.unitPrice.toFixed(2)})`)
+      .join(", ");
 
     const lines = [
       "GutierrezByJanelle - Quote Summary",
@@ -183,6 +198,7 @@ export function BreakdownPanel({
       `Quantity:    ${qty} households`,
       `Includes:    ${packageItems}`,
       addOnNames ? `Add-ons:     ${addOnNames}` : null,
+      miscNames ? `Custom:      ${miscNames}` : null,
       extraRevisions > 0 ? `Revisions:   ${extraRevisions} extra round${extraRevisions > 1 ? "s" : ""}` : null,
       rushFee ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
       digitalLicense ? "Digital file license included" : null,
@@ -363,7 +379,7 @@ export function BreakdownPanel({
         )}
 
         {/* Add-ons */}
-        {selectedAddOns.length > 0 && (
+        {(selectedAddOns.length > 0 || visibleMisc.length > 0) && (
           <>
             <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Add-ons</p>
             {selectedAddOns.map(({ key, label, qty: addOnQty, result }) => (
@@ -372,6 +388,16 @@ export function BreakdownPanel({
                 indent
                 label={`${label} · ${addOnQty} ${addOnQty === 1 ? "pc" : "pcs"}`}
                 value={`+${fmt$2(result.price)}`}
+                dim
+              />
+            ))}
+            {visibleMisc.map((m) => (
+              <Row
+                key={m.id}
+                indent
+                label={`${m.label || "Custom item"} · ${m.qty} ${m.qty === 1 ? "pc" : "pcs"}`}
+                math={`${m.qty} × $${m.unitPrice.toFixed(2)}`}
+                value={`+${fmt$2(m.qty * m.unitPrice)}`}
                 dim
               />
             ))}
@@ -455,6 +481,11 @@ export function BreakdownPanel({
 
         <Divider />
         <Row label="Total your costs" value={fmt$2(yourCosts)} dim />
+        {visibleMisc.length > 0 && (
+          <p className="text-xs text-muted-foreground/70 italic mt-1 leading-snug">
+            Custom add-ons are billed at the price you entered — treated as pure margin in this view.
+          </p>
+        )}
 
         <Divider />
         <Row label="Net profit" value={fmt$2(netProfit)} bold />

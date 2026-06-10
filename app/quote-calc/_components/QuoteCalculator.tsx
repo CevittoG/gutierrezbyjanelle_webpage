@@ -6,6 +6,7 @@ import {
   DEFAULTS,
   ITEM_CATALOG,
   PACKAGES,
+  PackageType,
   PkgKey,
   PricingMode,
   QuoteState,
@@ -22,28 +23,48 @@ import {
   DraftConfig,
   EMPTY_CLIENT_INFO,
   LastSession,
+  MiscAddOn,
+  SyncStatus,
   createDraft,
   loadDrafts,
   loadLastSession,
+  reconcileDrafts,
+  saveDrafts,
   saveLastSession,
   upsertDraft,
 } from "@/lib/quote-calc-drafts";
+import {
+  archiveRemoteDraft,
+  fetchRemoteDrafts,
+  pushRemoteDraft,
+  RemoteFailure,
+} from "@/lib/quote-calc-drafts-remote";
 import { cn } from "@/utils";
 import { AddOnRow } from "./AddOnRow";
 import { AssumptionsPanel } from "./AssumptionsPanel";
 import { BreakdownPanel } from "./BreakdownPanel";
 import { ClientInfoSection } from "./ClientInfoSection";
 import { DraftsBar } from "./DraftsBar";
+import { MiscAddOnSection } from "./MiscAddOnSection";
 import { MobileBreakdownSheet } from "./MobileBreakdownSheet";
 
-const PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
+const WEDDING_PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
+const EVENT_PKG_KEYS: PkgKey[] = ["event-basics", "event-fun", "event-works"];
+
+function failureToStatus(f: RemoteFailure): SyncStatus {
+  if (f.kind === "network") return { kind: "offline", reason: "network" };
+  if (f.kind === "unconfigured") return { kind: "offline", reason: "unconfigured" };
+  return { kind: "offline", reason: "server" };
+}
 
 export function QuoteCalculator() {
   // --- Config state (mirrors DraftConfig) ---
   const [pkg, setPkg] = useState<PkgKey>(DEFAULT_CONFIG.pkg);
+  const [pkgType, setPkgType] = useState<PackageType>(PACKAGES[DEFAULT_CONFIG.pkg].type);
   const [mode, setMode] = useState<PricingMode>(DEFAULT_CONFIG.mode);
   const [qty, setQty] = useState(DEFAULT_CONFIG.qty);
   const [addOns, setAddOns] = useState<Record<string, number>>({ ...DEFAULT_CONFIG.addOns });
+  const [miscAddOns, setMiscAddOns] = useState<MiscAddOn[]>([...DEFAULT_CONFIG.miscAddOns]);
   const [rushFee, setRushFee] = useState(DEFAULT_CONFIG.rushFee);
   const [extraRevisions, setExtraRevisions] = useState(DEFAULT_CONFIG.extraRevisions);
   const [digitalLicense, setDigitalLicense] = useState(DEFAULT_CONFIG.digitalLicense);
@@ -63,6 +84,7 @@ export function QuoteCalculator() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: "idle" });
 
   // --- Misc UI ---
   const [tooltipPkg, setTooltipPkg] = useState<PkgKey | null>(null);
@@ -76,6 +98,7 @@ export function QuoteCalculator() {
       mode,
       qty,
       addOns,
+      miscAddOns,
       rushFee,
       extraRevisions,
       digitalLicense,
@@ -85,15 +108,17 @@ export function QuoteCalculator() {
       individualItem,
       individualDigital,
     }),
-    [pkg, mode, qty, addOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, fullColor, customPaper, individualItem, individualDigital],
+    [pkg, mode, qty, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, fullColor, customPaper, individualItem, individualDigital],
   );
 
   // Apply a draft (or a LastSession config) into state.
   const applyConfig = useCallback((c: DraftConfig) => {
     setPkg(c.pkg);
+    setPkgType(PACKAGES[c.pkg].type);
     setMode(c.mode);
     setQty(c.qty);
     setAddOns({ ...c.addOns });
+    setMiscAddOns([...(c.miscAddOns ?? [])]);
     setRushFee(c.rushFee);
     setExtraRevisions(c.extraRevisions);
     setDigitalLicense(c.digitalLicense);
@@ -104,26 +129,73 @@ export function QuoteCalculator() {
     setIndividualDigital(c.individualDigital);
   }, []);
 
+  // Choose a package: also flip pkgType to match (so the right tab stays selected).
+  function selectPackage(key: PkgKey) {
+    setPkg(key);
+    setPkgType(PACKAGES[key].type);
+  }
+
+  // Default fallback per type when the user just toggles tabs.
+  const DEFAULT_PER_TYPE: Record<PackageType, PkgKey> = {
+    wedding: "sweet",
+    events: "event-fun",
+  };
+  function switchPkgType(next: PackageType) {
+    if (next === pkgType) return;
+    setPkgType(next);
+    // Only switch the chosen package if the current one is from the other type.
+    if (PACKAGES[pkg].type !== next) {
+      setPkg(DEFAULT_PER_TYPE[next]);
+    }
+  }
+
   // Hydrate on mount: drafts + last session + saved assumptions defaults.
+  // Then attempt to refresh from the remote Sheet in the background.
   useEffect(() => {
     const savedAssumptions = loadSavedDefaults();
     setAssumptions(savedAssumptions);
-    setDrafts(loadDrafts());
+    const localDrafts = loadDrafts();
+    setDrafts(localDrafts);
 
     const last = loadLastSession();
     if (last) {
       setClient(last.client);
       applyConfig(last.config);
       setCurrentDraftId(last.currentDraftId);
-      // Whether the last session has unsaved edits relative to a draft is tracked
-      // by the saved currentDraftId — we treat the restored state as clean. Any
-      // edit after hydration flips dirty true.
     }
     // Mark hydration finished AFTER state writes settle.
     requestAnimationFrame(() => {
       hydratedRef.current = true;
     });
+
+    // Background remote sync. Failures fall back to local cache silently.
+    (async () => {
+      setSyncStatus({ kind: "syncing" });
+      const result = await fetchRemoteDrafts();
+      if (result.ok) {
+        const merged = reconcileDrafts(localDrafts, result.value);
+        setDrafts(merged);
+        saveDrafts(merged);
+        setSyncStatus({ kind: "synced", at: new Date().toISOString() });
+      } else {
+        setSyncStatus(failureToStatus(result.failure));
+      }
+    })();
   }, [applyConfig]);
+
+  // Manual refresh from Sheet (triggered by DraftsBar).
+  const handleRefreshFromRemote = useCallback(async () => {
+    setSyncStatus({ kind: "syncing" });
+    const result = await fetchRemoteDrafts();
+    if (result.ok) {
+      const merged = reconcileDrafts(loadDrafts(), result.value);
+      setDrafts(merged);
+      saveDrafts(merged);
+      setSyncStatus({ kind: "synced", at: new Date().toISOString() });
+    } else {
+      setSyncStatus(failureToStatus(result.failure));
+    }
+  }, []);
 
   // Mark dirty on any tracked change AFTER hydration.
   useEffect(() => {
@@ -201,9 +273,14 @@ export function QuoteCalculator() {
     const addOnsTotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
     const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
     const addOnsLabor = selectedAddOns.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
+    const miscTotal = miscAddOns.reduce(
+      (s, m) => s + Math.max(0, m.qty) * Math.max(0, m.unitPrice),
+      0,
+    );
     const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
     const rushAmount = rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-    const finalPrice = subtotalBeforeRush + rushAmount;
+    const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
+    // Misc add-ons are treated as pure margin (no internal cost) in v1.
     const yourCosts =
       baseResult.totalDirectCosts +
       addOnsMaterials +
@@ -213,8 +290,8 @@ export function QuoteCalculator() {
     const netProfit = finalPrice - yourCosts;
     const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
     const marginDiff = netMargin - assumptions.targetProfitPtg;
-    return { finalPrice, netMargin, marginDiff };
-  }, [assumptions, baseResult, digitalLicense, rushFee, selectedAddOns]);
+    return { finalPrice, netMargin, marginDiff, miscTotal };
+  }, [assumptions, baseResult, digitalLicense, rushFee, selectedAddOns, miscAddOns]);
 
   // --- Draft handlers ---
 
@@ -226,6 +303,16 @@ export function QuoteCalculator() {
     setClient(EMPTY_CLIENT_INFO);
     setCurrentDraftId(null);
     requestAnimationFrame(() => setDraftDirty(false));
+  }
+
+  async function syncDraftToRemote(d: Draft) {
+    setSyncStatus({ kind: "syncing" });
+    const result = await pushRemoteDraft(d);
+    if (result.ok) {
+      setSyncStatus({ kind: "synced", at: new Date().toISOString() });
+    } else {
+      setSyncStatus(failureToStatus(result.failure));
+    }
   }
 
   function handleSave() {
@@ -249,6 +336,10 @@ export function QuoteCalculator() {
     const next = upsertDraft(updated);
     setDrafts(next);
     setDraftDirty(false);
+    // Find the freshly-stamped version that upsertDraft wrote to disk so the
+    // remote write has the same updatedAt.
+    const fresh = next.find((d) => d.id === updated.id) ?? updated;
+    void syncDraftToRemote(fresh);
   }
 
   function handleSaveAs() {
@@ -262,6 +353,33 @@ export function QuoteCalculator() {
     setDrafts(next);
     setCurrentDraftId(draft.id);
     setDraftDirty(false);
+    const fresh = next.find((d) => d.id === draft.id) ?? draft;
+    void syncDraftToRemote(fresh);
+  }
+
+  async function handleDraftsChange(next: Draft[]) {
+    // Called from DraftsBar after a delete or rename.
+    const prev = drafts;
+    setDrafts(next);
+    // If a draft was deleted, archive it remotely too.
+    const removed = prev.filter((p) => !next.some((n) => n.id === p.id));
+    for (const r of removed) {
+      setSyncStatus({ kind: "syncing" });
+      const result = await archiveRemoteDraft(r.id);
+      if (result.ok) {
+        setSyncStatus({ kind: "synced", at: new Date().toISOString() });
+      } else {
+        setSyncStatus(failureToStatus(result.failure));
+      }
+    }
+    // If a draft was renamed (kept id, different name), push the rename remotely too.
+    const renamed = next.filter((n) => {
+      const before = prev.find((p) => p.id === n.id);
+      return before && before.name !== n.name;
+    });
+    for (const r of renamed) {
+      void syncDraftToRemote(r);
+    }
   }
 
   function handleLoadDraft(id: string) {
@@ -298,11 +416,13 @@ export function QuoteCalculator() {
           currentDraftId={currentDraftId}
           currentName={currentName}
           dirty={draftDirty}
+          syncStatus={syncStatus}
           onLoadDraft={handleLoadDraft}
           onNew={handleNewDraft}
           onSave={handleSave}
           onSaveAs={handleSaveAs}
-          onDraftsChange={setDrafts}
+          onDraftsChange={handleDraftsChange}
+          onRefreshRemote={handleRefreshFromRemote}
         />
       </div>
 
@@ -316,8 +436,29 @@ export function QuoteCalculator() {
 
           {/* 1. Package selector */}
           <Section title="Package">
+            {/* Wedding / Events tab toggle */}
+            <div className="inline-flex rounded-lg border border-border overflow-hidden mb-4">
+              {(["wedding", "events"] as PackageType[]).map((t) => {
+                const count = t === "wedding" ? WEDDING_PKG_KEYS.length : EVENT_PKG_KEYS.length;
+                const isActive = pkgType === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => switchPkgType(t)}
+                    className={cn(
+                      "h-11 px-5 text-sm font-medium transition-colors",
+                      isActive ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    {t === "wedding" ? "Wedding" : "Events"} <span className="text-xs opacity-70">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {PKG_KEYS.map((key) => {
+              {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
                 const isSelected = pkg === key;
                 const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive);
@@ -325,7 +466,7 @@ export function QuoteCalculator() {
                 return (
                   <div key={key} className="relative group">
                     <button
-                      onClick={() => setPkg(key)}
+                      onClick={() => selectPackage(key)}
                       onMouseEnter={() => setTooltipPkg(key)}
                       onMouseLeave={() => setTooltipPkg(null)}
                       className={cn(
@@ -360,9 +501,11 @@ export function QuoteCalculator() {
                       <div className="absolute z-20 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg p-3 text-xs space-y-1.5">
                         <p className="font-semibold text-foreground">{def.name} includes:</p>
                         <ul className="text-muted-foreground space-y-0.5">
-                          {def.items.map((ik) => {
-                            const ci = ITEM_CATALOG.find((i) => i.key === ik);
-                            return <li key={ik}>· {ci?.label ?? ik}</li>;
+                          {def.items.map((it, idx) => {
+                            const isObj = typeof it !== "string";
+                            const k = isObj ? it.key : it;
+                            const label = (isObj && it.displayLabel) || ITEM_CATALOG.find((i) => i.key === k)?.label || k;
+                            return <li key={`${k}-${idx}`}>· {label}</li>;
                           })}
                         </ul>
                         <hr className="border-border" />
@@ -506,6 +649,11 @@ export function QuoteCalculator() {
                 );
               })}
             </div>
+          </Section>
+
+          {/* 3b. Miscellaneous add-ons */}
+          <Section title="Custom add-ons">
+            <MiscAddOnSection items={miscAddOns} onChange={setMiscAddOns} />
           </Section>
 
           {/* 4. Extras */}
@@ -657,6 +805,7 @@ export function QuoteCalculator() {
             assumptions={assumptions}
             baseResult={baseResult}
             selectedAddOns={selectedAddOns}
+            miscAddOns={miscAddOns}
             rushFee={rushFee}
             extraRevisions={extraRevisions}
             digitalLicense={digitalLicense}

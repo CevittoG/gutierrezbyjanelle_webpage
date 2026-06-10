@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Draft, deleteDraft, renameDraft } from "@/lib/quote-calc-drafts";
+import { Draft, SyncStatus, deleteDraft, renameDraft } from "@/lib/quote-calc-drafts";
 import { fmt$ } from "@/lib/quote-calc-logic";
 import { cn } from "@/utils";
 
@@ -10,11 +10,33 @@ interface Props {
   currentDraftId: string | null;
   currentName: string;
   dirty: boolean;
+  syncStatus: SyncStatus;
   onLoadDraft: (id: string) => void;
   onNew: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onDraftsChange: (drafts: Draft[]) => void;
+  onRefreshRemote: () => void;
+}
+
+function syncLabel(s: SyncStatus): { label: string; tone: "neutral" | "good" | "warn" | "bad" } {
+  switch (s.kind) {
+    case "idle":
+      return { label: "Local only", tone: "neutral" };
+    case "syncing":
+      return { label: "Syncing…", tone: "neutral" };
+    case "synced":
+      return { label: "Synced to Sheet", tone: "good" };
+    case "offline":
+      switch (s.reason) {
+        case "network":
+          return { label: "Offline · saved locally", tone: "warn" };
+        case "unconfigured":
+          return { label: "Sheet not configured", tone: "warn" };
+        case "server":
+          return { label: "Sheet unavailable", tone: "bad" };
+      }
+  }
 }
 
 export function DraftsBar({
@@ -22,11 +44,13 @@ export function DraftsBar({
   currentDraftId,
   currentName,
   dirty,
+  syncStatus,
   onLoadDraft,
   onNew,
   onSave,
   onSaveAs,
   onDraftsChange,
+  onRefreshRemote,
 }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -54,6 +78,15 @@ export function DraftsBar({
 
   const canPrint = currentDraftId !== null;
   const printHref = canPrint ? `/quote-calc/print?draft=${currentDraftId}` : "#";
+  const sync = syncLabel(syncStatus);
+  const syncToneClass =
+    sync.tone === "good"
+      ? "text-emerald-700"
+      : sync.tone === "warn"
+      ? "text-amber-700"
+      : sync.tone === "bad"
+      ? "text-red-700"
+      : "text-muted-foreground";
 
   return (
     <div className="rounded-xl border border-border bg-card p-3 flex flex-wrap items-center gap-2">
@@ -67,9 +100,21 @@ export function DraftsBar({
         />
         <span className="text-sm font-medium truncate">{currentName || "Untitled quote"}</span>
         {dirty && <span className="text-xs text-muted-foreground shrink-0">· unsaved changes</span>}
+        <span className={cn("text-xs shrink-0 hidden sm:inline", syncToneClass)} title={sync.label}>
+          · {sync.label}
+        </span>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={onRefreshRemote}
+          disabled={syncStatus.kind === "syncing"}
+          className="h-10 px-3 rounded-lg border border-border text-sm hover:bg-muted transition-colors disabled:opacity-50"
+          title="Refresh from Sheet"
+        >
+          {syncStatus.kind === "syncing" ? "Refreshing…" : "Refresh"}
+        </button>
         <button
           type="button"
           onClick={onNew}

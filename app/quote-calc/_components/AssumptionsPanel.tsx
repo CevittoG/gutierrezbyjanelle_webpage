@@ -195,12 +195,19 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad }: Pro
 
             {/* Column 2 — Package discounts + Extras */}
             <div>
-              <SectionHeader>Package Discounts</SectionHeader>
+              <SectionHeader>Wedding Discounts</SectionHeader>
               <div className="space-y-4">
                 <NumInput label="Individual Item" description="No bundle discount for single items" stateKey="discountIndividual" value={assumptions.discountIndividual} min={0} max={0} step={1} suffix="%" disabled onUpdate={onUpdate} />
                 <NumInput label="DIY Digital" description="Digital-only bundle discount" stateKey="discountDiy" value={assumptions.discountDiy} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Sweet Suite" description="Core invite suite discount" stateKey="discountSweet" value={assumptions.discountSweet} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Signature Suite" description="Full experience discount" stateKey="discountSignature" value={assumptions.discountSignature} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
+              </div>
+
+              <SectionHeader>Event Discounts</SectionHeader>
+              <div className="space-y-4">
+                <NumInput label="The Basics" description="Invite + thank yous discount" stateKey="discountEventBasics" value={assumptions.discountEventBasics} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
+                <NumInput label="Add Some Fun" description="Mid-tier event discount" stateKey="discountEventFun" value={assumptions.discountEventFun} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
+                <NumInput label="Give Me the Works" description="Full event suite discount" stateKey="discountEventWorks" value={assumptions.discountEventWorks} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
               </div>
 
               <SectionHeader>Extras</SectionHeader>

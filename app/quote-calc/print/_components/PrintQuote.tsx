@@ -121,6 +121,16 @@ export function PrintQuote() {
         };
       });
 
+    const miscLines = (config.miscAddOns ?? [])
+      .filter((m) => m.qty > 0 && m.unitPrice > 0 && (m.label ?? "").trim().length > 0)
+      .map((m) => ({
+        id: m.id,
+        label: m.label.trim(),
+        qty: m.qty,
+        unitPrice: m.unitPrice,
+        total: m.qty * m.unitPrice,
+      }));
+
     const dlFactor = assumptions.digitalLicensePtg / 100;
     const digitalBonus = config.digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
     const adjustedVariable = baseResult.totalVariable + digitalBonus;
@@ -134,19 +144,22 @@ export function PrintQuote() {
     const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
 
     const addOnsTotal = addOnLines.reduce((s, a) => s + a.result.price, 0);
+    const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
     const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
     const rushAmount = config.rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-    const finalPrice = subtotalBeforeRush + rushAmount;
+    const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
 
     return {
       baseResult,
       addOnLines,
+      miscLines,
       adjustedBeforeDiscount,
       discountAmount,
       vendorAmount,
       rushAmount,
       basePriceAdjusted,
       addOnsTotal,
+      miscTotal,
       subtotalBeforeRush,
       finalPrice,
     };
@@ -177,15 +190,43 @@ export function PrintQuote() {
 
   const { client, config, assumptions, generatedAt, shortId } = snap;
   const pkgDef = PACKAGES[config.pkg];
-  const includedItems =
+
+  interface DisplayItem {
+    rowKey: string;
+    label: string;
+    fixed?: number;
+    catalogQty: number;
+  }
+  const includedItems: DisplayItem[] =
     config.pkg === "individual"
-      ? [ITEM_CATALOG.find((i) => i.key === config.individualItem)!]
-      : pkgDef.items.map((k) => ITEM_CATALOG.find((i) => i.key === k)!);
+      ? (() => {
+          const cat = ITEM_CATALOG.find((i) => i.key === config.individualItem)!;
+          return [{ rowKey: cat.key, label: cat.label, fixed: cat.fixed, catalogQty: cat.qty }];
+        })()
+      : pkgDef.items.map((it, idx) => {
+          const k = typeof it === "string" ? it : it.key;
+          const label = (typeof it !== "string" && it.displayLabel)
+            || ITEM_CATALOG.find((i) => i.key === k)?.label
+            || k;
+          const cat = ITEM_CATALOG.find((i) => i.key === k);
+          return {
+            rowKey: `${k}-${idx}`,
+            label,
+            fixed: cat?.fixed,
+            catalogQty: cat?.qty ?? 0,
+          };
+        });
   const isDigital = config.pkg === "individual" ? config.individualDigital : pkgDef.isDigital;
+  const packageKindCopy = pkgDef.type === "events" ? "Selected event package" : "Selected wedding suite";
+  const deliveryCopy = isDigital
+    ? "Delivered as print-ready PDF files via email."
+    : pkgDef.type === "events"
+    ? `Printed and shipped — quantities sized for ${config.qty} guest${config.qty === 1 ? "" : "s"}.`
+    : `Printed and shipped — quantities sized for ${config.qty} household${config.qty === 1 ? "" : "s"}.`;
 
   if (!computed) return null;
 
-  const { baseResult, addOnLines, discountAmount, vendorAmount, rushAmount, finalPrice, basePriceAdjusted } = computed;
+  const { baseResult, addOnLines, miscLines, miscTotal, discountAmount, vendorAmount, rushAmount, finalPrice, basePriceAdjusted } = computed;
 
   return (
     <div className="min-h-screen bg-background">
@@ -273,25 +314,23 @@ export function PrintQuote() {
 
           {/* Package summary */}
           <section className="mx-10 my-2 rounded-xl border border-border bg-muted/30 p-6 normal-case tracking-normal">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Selected package</p>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{packageKindCopy}</p>
             <h2 className="font-squarepeg text-3xl leading-tight">{pkgDef.name}</h2>
             <p className="text-sm text-muted-foreground mt-1">{pkgDef.tagline}</p>
             <div className="mt-4">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Included pieces</p>
               <ul className="text-sm space-y-0.5">
                 {includedItems.map((ci) => (
-                  <li key={ci.key} className="flex items-baseline justify-between gap-3">
+                  <li key={ci.rowKey} className="flex items-baseline justify-between gap-3">
                     <span>{ci.label}</span>
                     <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                      {ci.fixed !== undefined ? `${ci.fixed} pcs` : isDigital ? "design" : `${ci.qty * config.qty} pcs`}
+                      {ci.fixed !== undefined ? `${ci.fixed} pcs` : isDigital ? "design" : `${ci.catalogQty * config.qty} pcs`}
                     </span>
                   </li>
                 ))}
               </ul>
               <p className="text-xs text-muted-foreground mt-3">
-                {isDigital
-                  ? "Delivered as print-ready PDF files via email."
-                  : `Printed and shipped — quantities sized for ${config.qty} household${config.qty === 1 ? "" : "s"}.`}
+                {deliveryCopy}
               </p>
             </div>
           </section>
@@ -320,7 +359,7 @@ export function PrintQuote() {
                 />
               )}
 
-              {addOnLines.length > 0 && (
+              {(addOnLines.length > 0 || miscLines.length > 0) && (
                 <>
                   <PrintDivider label="Add-ons" />
                   {addOnLines.map((a) => (
@@ -329,6 +368,14 @@ export function PrintQuote() {
                       label={a.label}
                       detail={`${a.qty} ${a.qty === 1 ? "piece" : "pieces"}`}
                       value={fmt$2(a.result.price)}
+                    />
+                  ))}
+                  {miscLines.map((m) => (
+                    <PrintRow
+                      key={m.id}
+                      label={m.label}
+                      detail={`${m.qty} × ${fmt$2(m.unitPrice)}`}
+                      value={fmt$2(m.total)}
                     />
                   ))}
                 </>
