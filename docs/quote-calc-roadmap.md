@@ -103,7 +103,7 @@ Goal: delete the per-item table from the UI and the ~64 `i{key}_*` fields from
 > **As built (2026-06).** The implementation follows the design below with four
 > deliberate changes, decided during planning:
 > 1. **Folders are auto-created, not pasted.** On quote save the app creates a
->    subfolder under a configured root (`GBJ_QUOTES_DRIVE_PARENT_ID`) and stores
+>    subfolder under a configured root (`GOOGLE_DRIVE_PARENT_FOLDER_ID`) and stores
 >    the id — Janelle never copies a share link. This needs **read + create**
 >    Drive access (`drive.file` + `drive.readonly`) and the root shared as
 >    **Editor**, not read-only/Viewer. The app still uploads no file *content*.

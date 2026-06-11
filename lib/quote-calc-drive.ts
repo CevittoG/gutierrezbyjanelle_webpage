@@ -40,7 +40,7 @@ export function driveFileKind(mimeType: string): DriveFileKind {
 
 /** The root `GBJ Quotes` folder under which per-quote subfolders are created. */
 export function getQuotesParentFolderId(): string | null {
-  const id = process.env.GBJ_QUOTES_DRIVE_PARENT_ID?.trim();
+  const id = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID?.trim();
   return id ? id : null;
 }
 
@@ -186,7 +186,7 @@ function quoteFolderName(draft: Draft): string {
 // Throws on a Drive/Sheets error — the caller treats this as best-effort.
 export async function ensureQuoteFolder(draft: Draft): Promise<string | null> {
   const parentId = getQuotesParentFolderId();
-  if (!parentId) return null; // GBJ_QUOTES_DRIVE_PARENT_ID unset → feature off
+  if (!parentId) return null; // GOOGLE_DRIVE_PARENT_FOLDER_ID unset → feature off
 
   // Read fresh so a stale cache can't trigger a duplicate folder.
   const existing = await getPortalMetaById(draft.id, { force: true });
