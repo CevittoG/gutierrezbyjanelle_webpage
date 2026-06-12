@@ -1,7 +1,12 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { siteConfig } from "../config/site";
 import { useLocale } from "@/lib/locale-context";
+
+// Mirror of SiteHeader: hide the marketing footer on the gated quote tools and
+// the client portal, which carry their own chrome.
+const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q)(\/|$)/;
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
@@ -25,6 +30,10 @@ function InstagramIcon({ className }: { className?: string }) {
 
 export function SiteFooter() {
   const { t } = useLocale();
+  const pathname = usePathname();
+
+  if (pathname && HIDE_CHROME.test(pathname)) return null;
+
   return (
     <footer className="border-t py-6 md:py-0">
       <div className="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row px-4 md:px-8">

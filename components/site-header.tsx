@@ -13,10 +13,17 @@ import { useLocale } from "@/lib/locale-context";
 import type { TranslationKey } from "@/lib/i18n";
 import { cn } from "@/utils";
 
+// Gated quote tools (/quotes, /quote/new, /quote-calc/*) and the client portal
+// (/q/*) render their own chrome (AppShell / standalone presentation), so the
+// public marketing header is suppressed there.
+const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q)(\/|$)/;
+
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const { t } = useLocale();
+
+  if (pathname && HIDE_CHROME.test(pathname)) return null;
 
   const navLabel = (item: { title: string; i18nKey?: string }) =>
     item.i18nKey ? t(item.i18nKey as TranslationKey) : item.title;

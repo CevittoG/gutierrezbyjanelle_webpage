@@ -3,8 +3,8 @@ import { siteConfig } from "@/config/site";
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    // Keep the internal tool and the tokenized client portal out of indexes.
-    rules: { userAgent: "*", allow: "/", disallow: ["/quote-calc", "/q/"] },
+    // Keep the gated studio tools and the tokenized client portal out of indexes.
+    rules: { userAgent: "*", allow: "/", disallow: ["/quotes", "/quote/", "/quote-calc", "/q/"] },
     sitemap: `${siteConfig.url}/sitemap.xml`,
   };
 }
