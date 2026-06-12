@@ -1,16 +1,7 @@
-import { PasswordGate } from "./_components/PasswordGate";
-import { QuoteCalculator } from "./_components/QuoteCalculator";
-import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Tools",
-  robots: { index: false, follow: false },
-};
-
+// The quote tools moved to /quotes (dashboard) and /quote/new (calculator).
+// Keep this path as a back-compat redirect for any existing bookmarks.
 export default function QuoteCalcPage() {
-  if (!isQuoteAuthValid()) {
-    return <PasswordGate />;
-  }
-
-  return <QuoteCalculator />;
+  redirect("/quotes");
 }

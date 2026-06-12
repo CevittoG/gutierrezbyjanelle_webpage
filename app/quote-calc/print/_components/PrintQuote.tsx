@@ -128,10 +128,10 @@ export function PrintQuote() {
           </p>
           <button
             type="button"
-            onClick={() => router.push("/quote-calc")}
+            onClick={() => router.push("/quotes")}
             className="h-11 px-5 rounded-lg border border-border bg-foreground text-background text-sm normal-case tracking-normal"
           >
-            Back to calculator
+            Back to dashboard
           </button>
         </div>
       </div>
@@ -216,7 +216,7 @@ export function PrintQuote() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => router.push("/quote-calc")}
+              onClick={() => router.push("/quotes")}
               className="h-10 px-3 rounded-lg border border-border text-sm normal-case tracking-normal hover:bg-muted transition-colors"
             >
               ← Back

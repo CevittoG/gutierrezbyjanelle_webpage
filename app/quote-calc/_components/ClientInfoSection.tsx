@@ -5,6 +5,8 @@ import { DraftClientInfo, EVENT_TYPES } from "@/lib/quote-calc-drafts";
 interface Props {
   client: DraftClientInfo;
   onChange: (next: DraftClientInfo) => void;
+  /** Highlight the event-date field as required (set when a save was blocked). */
+  dateError?: boolean;
 }
 
 const fieldClass =
@@ -13,7 +15,7 @@ const fieldClass =
 const labelClass =
   "block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1.5";
 
-export function ClientInfoSection({ client, onChange }: Props) {
+export function ClientInfoSection({ client, onChange, dateError }: Props) {
   function set<K extends keyof DraftClientInfo>(key: K, value: DraftClientInfo[K]) {
     onChange({ ...client, [key]: value });
   }
@@ -36,15 +38,26 @@ export function ClientInfoSection({ client, onChange }: Props) {
 
       <div>
         <label htmlFor="event-date" className={labelClass}>
-          Event date
+          Event date <span className="text-accent-foreground/70">(required)</span>
         </label>
         <input
           id="event-date"
           type="date"
+          required
+          aria-required="true"
+          aria-invalid={dateError || undefined}
+          aria-describedby={dateError ? "event-date-error" : undefined}
           value={client.eventDate}
           onChange={(e) => set("eventDate", e.target.value)}
-          className={fieldClass}
+          className={
+            fieldClass + (dateError ? " border-ring ring-2 ring-ring" : "")
+          }
         />
+        {dateError && (
+          <p id="event-date-error" className="mt-1.5 text-xs text-muted-foreground normal-case tracking-normal">
+            Add an event date to save. It drives your priority list and the dashboard.
+          </p>
+        )}
       </div>
 
       <div>

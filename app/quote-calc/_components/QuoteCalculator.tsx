@@ -25,15 +25,12 @@ import {
   DraftClientInfo,
   DraftConfig,
   EMPTY_CLIENT_INFO,
-  LastSession,
   MiscAddOn,
   SyncStatus,
   createDraft,
   loadDrafts,
-  loadLastSession,
   reconcileDrafts,
   saveDrafts,
-  saveLastSession,
   upsertDraft,
 } from "@/lib/quote-calc-drafts";
 import {
@@ -97,8 +94,11 @@ export function QuoteCalculator() {
 
   // --- Misc UI ---
   const [tooltipPkg, setTooltipPkg] = useState<PkgKey | null>(null);
+  const [dateError, setDateError] = useState(false);
 
   const hydratedRef = useRef(false);
+  // A ?draft=<id> that wasn't in the local cache yet — retried after remote sync.
+  const pendingDraftIdRef = useRef<string | null>(null);
 
   // Build a DraftConfig from current state.
   const config: DraftConfig = useMemo(
@@ -120,7 +120,7 @@ export function QuoteCalculator() {
     [pkg, mode, qty, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, fullColor, customPaper, individualItem, individualDigital],
   );
 
-  // Apply a draft (or a LastSession config) into state.
+  // Apply a DraftConfig into state.
   const applyConfig = useCallback((c: DraftConfig) => {
     setPkg(c.pkg);
     setPkgType(PACKAGES[c.pkg].type);
@@ -137,6 +137,19 @@ export function QuoteCalculator() {
     setIndividualItem(c.individualItem);
     setIndividualDigital(c.individualDigital);
   }, []);
+
+  // Load a full saved draft into state (used by the ?draft=<id> edit deep-link
+  // and by the Open selector). Marks the form clean after applying.
+  const loadDraftIntoState = useCallback(
+    (draft: Draft) => {
+      setClient(draft.client);
+      setAssumptions(draft.assumptionsSnapshot);
+      applyConfig(draft.config);
+      setCurrentDraftId(draft.id);
+      requestAnimationFrame(() => setDraftDirty(false));
+    },
+    [applyConfig],
+  );
 
   // Choose a package: also flip pkgType to match (so the right tab stays selected).
   function selectPackage(key: PkgKey) {
@@ -189,19 +202,24 @@ export function QuoteCalculator() {
     [],
   );
 
-  // Hydrate on mount: drafts + last session + saved assumptions defaults.
-  // Then attempt to refresh from the remote Sheet in the background.
+  // Hydrate on mount: drafts + saved assumptions defaults. A ?draft=<id> query
+  // param (the dashboard "Edit" deep-link) preloads that quote; otherwise the
+  // form stays blank — "New quote" never resurrects a previously-opened quote.
   useEffect(() => {
     const savedAssumptions = loadSavedDefaults();
     setAssumptions(savedAssumptions);
     const localDrafts = loadDrafts();
     setDrafts(localDrafts);
 
-    const last = loadLastSession();
-    if (last) {
-      setClient(last.client);
-      applyConfig(last.config);
-      setCurrentDraftId(last.currentDraftId);
+    const draftParam = new URLSearchParams(window.location.search).get("draft");
+    if (draftParam) {
+      const found = localDrafts.find((d) => d.id === draftParam);
+      if (found) {
+        loadDraftIntoState(found);
+      } else {
+        // Not cached locally yet — load it once the remote sync lands.
+        pendingDraftIdRef.current = draftParam;
+      }
     }
     // Mark hydration finished AFTER state writes settle.
     requestAnimationFrame(() => {
@@ -217,6 +235,11 @@ export function QuoteCalculator() {
         setDrafts(merged);
         saveDrafts(merged);
         setSyncStatus({ kind: "synced", at: new Date().toISOString() });
+        if (pendingDraftIdRef.current) {
+          const found = merged.find((d) => d.id === pendingDraftIdRef.current);
+          if (found) loadDraftIntoState(found);
+          pendingDraftIdRef.current = null;
+        }
       } else {
         setSyncStatus(failureToStatus(result.failure));
       }
@@ -224,7 +247,7 @@ export function QuoteCalculator() {
 
     // Config load runs in parallel with drafts sync.
     void loadRemoteConfig();
-  }, [applyConfig, loadRemoteConfig]);
+  }, [loadDraftIntoState, loadRemoteConfig]);
 
   // Manual refresh from Sheet (triggered by DraftsBar).
   const handleRefreshFromRemote = useCallback(async () => {
@@ -246,15 +269,10 @@ export function QuoteCalculator() {
     setDraftDirty(true);
   }, [config, client]);
 
-  // Debounced autosave of last session.
+  // Clear the "event date required" flag as soon as a date is entered.
   useEffect(() => {
-    if (!hydratedRef.current) return;
-    const handle = window.setTimeout(() => {
-      const session: LastSession = { client, config, currentDraftId };
-      saveLastSession(session);
-    }, 500);
-    return () => window.clearTimeout(handle);
-  }, [client, config, currentDraftId]);
+    if (client.eventDate) setDateError(false);
+  }, [client.eventDate]);
 
   function updateAssumption(key: keyof QuoteState, value: number) {
     setAssumptions((prev) => ({ ...prev, [key]: value }));
@@ -338,6 +356,17 @@ export function QuoteCalculator() {
 
   // --- Draft handlers ---
 
+  // Event date is mandatory — it drives the dashboard priority list. Block the
+  // save, flag the field, and bring it into view.
+  function requireEventDate(): boolean {
+    if (client.eventDate) return true;
+    setDateError(true);
+    const el = document.getElementById("event-date");
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    (el as HTMLInputElement | null)?.focus({ preventScroll: true });
+    return false;
+  }
+
   function handleNewDraft() {
     if (draftDirty || currentDraftId !== null) {
       if (!window.confirm("Start a new quote? Unsaved changes will be lost.")) return;
@@ -359,6 +388,7 @@ export function QuoteCalculator() {
   }
 
   function handleSave() {
+    if (!requireEventDate()) return;
     // Save: if there's a currentDraftId, update it in place; else fall back to Save As.
     if (currentDraftId === null) {
       handleSaveAs();
@@ -386,6 +416,7 @@ export function QuoteCalculator() {
   }
 
   function handleSaveAs() {
+    if (!requireEventDate()) return;
     const defaultName =
       client.name?.trim() ||
       (client.eventType ? `${client.eventType} quote` : "Untitled quote");
@@ -442,23 +473,12 @@ export function QuoteCalculator() {
     drafts.find((d) => d.id === currentDraftId)?.name ?? "Untitled quote";
 
   return (
-    <div className="container py-6 px-4 md:px-8 normal-case tracking-normal pb-32 lg:pb-8">
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
-            Internal tool · not indexed
-          </p>
-          <h1 className="font-squarepeg text-4xl md:text-5xl mb-1">Quote Calculator</h1>
-          <p className="text-sm text-muted-foreground">
-            Draft, save, and share quotes. Assumptions stay flexible — drafts snapshot their own prices.
-          </p>
-        </div>
-        <a
-          href="/quote-calc/explorer"
-          className="shrink-0 mt-1 h-9 px-4 rounded-lg border border-border text-sm normal-case tracking-normal hover:bg-muted transition-colors inline-flex items-center"
-        >
-          Quote Explorer →
-        </a>
+    <div className="mx-auto max-w-6xl py-6 px-4 md:px-6 normal-case tracking-normal pb-32 lg:pb-8">
+      <div className="mb-5">
+        <h1 className="font-squarepeg text-4xl md:text-5xl leading-none mb-1">New quote</h1>
+        <p className="text-sm text-muted-foreground">
+          Draft, save, and share quotes. Assumptions stay flexible; drafts snapshot their own prices.
+        </p>
       </div>
 
       <ConfigBanner
@@ -488,7 +508,7 @@ export function QuoteCalculator() {
         <div className="lg:col-span-3 space-y-5">
           {/* 0. Client info */}
           <Section title="Client">
-            <ClientInfoSection client={client} onChange={setClient} />
+            <ClientInfoSection client={client} onChange={setClient} dateError={dateError} />
           </Section>
 
           {/* 1. Package selector */}
