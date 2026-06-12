@@ -14,7 +14,10 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const QUOTE_AUTH_COOKIE = "quote_auth";
-export const QUOTE_AUTH_PATH = "/quote-calc";
+// Site-wide path: the gated tools now live across /quotes, /quote/new and the
+// /quote-calc/api routes, so the session cookie must be sent to all of them.
+// (Was "/quote-calc", which scoped the cookie too narrowly for the new routes.)
+export const QUOTE_AUTH_PATH = "/";
 export const DEFAULT_TTL_SECONDS = 60 * 60 * 24; // 24h, matches the prior Max-Age
 
 type SessionPayload = { exp: number };
