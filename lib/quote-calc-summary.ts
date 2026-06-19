@@ -5,7 +5,7 @@
 // default; pass a live catalog in if you want the summary to reflect names
 // Janelle has renamed in the Items tab.
 
-import type { Draft } from "./quote-calc-drafts";
+import type { Draft, PackageLine } from "./quote-calc-drafts";
 import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
 
 function labelFor(key: string, catalog: CatalogItem[], fallback?: string): string {
@@ -24,20 +24,23 @@ export function summarizeLineItems(
   catalog: CatalogItem[] = ITEM_CATALOG,
 ): string {
   const lines: string[] = [];
-  const pkgDef = PACKAGES[d.config.pkg];
 
-  // Package items (or the single individual-item override).
-  if (d.config.pkg === "individual") {
-    const cat = catalog.find((i) => i.key === d.config.individualItem);
-    const label = cat?.label || d.config.individualItem;
-    const suffix = d.config.individualDigital ? " (digital)" : "";
-    lines.push(`• ${label}${suffix}`);
-  } else {
-    for (const it of pkgDef.items) {
-      if (typeof it === "string") {
-        lines.push(`• ${labelFor(it, catalog)}`);
-      } else {
-        lines.push(`• ${labelFor(it.key, catalog, it.displayLabel)}`);
+  // One block per package line: a header (name + qty) then its items.
+  for (const line of d.config.packages) {
+    const pkgDef = PACKAGES[line.pkg];
+    lines.push(`${pkgDef?.name ?? line.pkg} — ${line.qty}`);
+    if (line.pkg === "individual") {
+      const cat = catalog.find((i) => i.key === line.individualItem);
+      const label = cat?.label || line.individualItem || "Item";
+      const suffix = line.individualDigital ? " (digital)" : "";
+      lines.push(`  • ${label}${suffix}`);
+    } else {
+      for (const it of pkgDef.items) {
+        if (typeof it === "string") {
+          lines.push(`  • ${labelFor(it, catalog)}`);
+        } else {
+          lines.push(`  • ${labelFor(it.key, catalog, it.displayLabel)}`);
+        }
       }
     }
   }
@@ -71,6 +74,21 @@ export function summarizeLineItems(
   return lines.join("\n");
 }
 
-export function packageDisplayName(pkgKey: Draft["config"]["pkg"]): string {
-  return PACKAGES[pkgKey]?.name ?? pkgKey;
+// Joined, human-readable package names for a quote's lines. Collapses repeats
+// into a count (e.g. "Individual Item ×2 + Sweet Suite").
+export function packagesDisplayName(packages: PackageLine[]): string {
+  if (!packages || packages.length === 0) return "—";
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const p of packages) {
+    const name = PACKAGES[p.pkg]?.name ?? p.pkg;
+    if (!counts.has(name)) order.push(name);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return order
+    .map((name) => {
+      const n = counts.get(name) ?? 1;
+      return n > 1 ? `${name} ×${n}` : name;
+    })
+    .join(" + ");
 }

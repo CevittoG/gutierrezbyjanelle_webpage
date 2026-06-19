@@ -8,6 +8,7 @@
 import type { Draft, DraftConfig } from "./quote-calc-drafts";
 import type { QuoteBreakdown } from "./quote-calc-totals";
 import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
+import { packagesDisplayName } from "./quote-calc-summary";
 
 export type LinkStatus = "active" | "revoked" | "";
 
@@ -78,26 +79,30 @@ function buildIncludedPieces(
   breakdown: QuoteBreakdown,
   catalog: CatalogItem[],
 ): string[] {
-  const pkgDef = PACKAGES[config.pkg];
-  const isDigital = config.pkg === "individual" ? config.individualDigital : pkgDef.isDigital;
-  const qty = config.qty;
-
-  const pieceLabel = (label: string, fixed: number | undefined, catalogQty: number): string => {
-    const count = fixed !== undefined ? `${fixed} pcs` : isDigital ? "design" : `${catalogQty * qty} pcs`;
-    return `${label} — ${count}`;
-  };
-
   const pieces: string[] = [];
-  if (config.pkg === "individual") {
-    const cat = catalog.find((i) => i.key === config.individualItem);
-    if (cat) pieces.push(pieceLabel(cat.label, cat.fixed, cat.qty));
-  } else {
-    for (const it of pkgDef.items) {
-      const k = typeof it === "string" ? it : it.key;
-      const label =
-        (typeof it !== "string" && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
-      const cat = catalog.find((i) => i.key === k);
-      pieces.push(pieceLabel(label, cat?.fixed, cat?.qty ?? 0));
+
+  // Union of pieces across every package line, each sized by its own qty.
+  for (const line of config.packages) {
+    const pkgDef = PACKAGES[line.pkg];
+    const isDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : pkgDef.isDigital;
+    const qty = line.qty;
+
+    const pieceLabel = (label: string, fixed: number | undefined, catalogQty: number): string => {
+      const count = fixed !== undefined ? `${fixed} pcs` : isDigital ? "design" : `${catalogQty * qty} pcs`;
+      return `${label} — ${count}`;
+    };
+
+    if (line.pkg === "individual") {
+      const cat = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"));
+      if (cat) pieces.push(pieceLabel(cat.label, cat.fixed, cat.qty));
+    } else {
+      for (const it of pkgDef.items) {
+        const k = typeof it === "string" ? it : it.key;
+        const label =
+          (typeof it !== "string" && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
+        const cat = catalog.find((i) => i.key === k);
+        pieces.push(pieceLabel(label, cat?.fixed, cat?.qty ?? 0));
+      }
     }
   }
 
@@ -123,7 +128,7 @@ export function buildPublicQuote(
     clientName: draft.client.name || "",
     eventType: draft.client.eventType || "",
     eventDate: formatEventDate(draft.client.eventDate),
-    packageName: PACKAGES[config.pkg]?.name ?? config.pkg,
+    packageName: packagesDisplayName(config.packages),
     includedPieces: buildIncludedPieces(config, breakdown, catalog),
     savings,
     total: breakdown.finalPrice,
