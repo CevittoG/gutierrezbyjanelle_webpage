@@ -8,7 +8,7 @@ import { AppShell } from "@/components/quote-app/AppShell";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 import { isSheetsConfigured, listDrafts, listPortalMeta } from "@/lib/quote-calc-sheets";
 import { folderWebLink } from "@/lib/quote-calc-drive";
-import { PACKAGES } from "@/lib/quote-calc-logic";
+import { packagesDisplayName } from "@/lib/quote-calc-summary";
 import { Dashboard } from "./_components/Dashboard";
 import type { QuoteRow } from "./_components/Dashboard";
 
@@ -48,7 +48,7 @@ export default async function QuotesDashboardPage() {
       eventType: d.client.eventType,
       eventDate: d.client.eventDate,
       name: d.name,
-      packageName: PACKAGES[d.config.pkg]?.name ?? d.config.pkg,
+      packageName: packagesDisplayName(d.config.packages),
       total: Math.round(d.cachedTotal),
       updatedAt: d.updatedAt,
       publicToken: m?.publicToken ?? "",
