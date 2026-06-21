@@ -39,10 +39,21 @@ export interface MiscAddOn {
   unitPrice: number;
 }
 
-export interface DraftConfig {
+// One package added to a quote. A quote holds an array of these so a client can
+// buy several pieces at once (e.g. two Individual Items, or a suite + an
+// Individual Item). Each line carries its own quantity; the `individual*` fields
+// are only meaningful when `pkg === "individual"`.
+export interface PackageLine {
+  id: string;
   pkg: PkgKey;
-  mode: PricingMode;
   qty: number;
+  individualItem?: string;
+  individualDigital?: boolean;
+}
+
+export interface DraftConfig {
+  packages: PackageLine[];
+  mode: PricingMode;
   addOns: Record<string, number>;
   miscAddOns: MiscAddOn[];
   rushFee: boolean;
@@ -55,14 +66,13 @@ export interface DraftConfig {
   familyFriendsPtg: number;
   fullColor: boolean;
   customPaper: boolean;
-  individualItem: string;
-  individualDigital: boolean;
 }
 
 export const DEFAULT_CONFIG: DraftConfig = {
-  pkg: "sweet",
+  packages: [
+    { id: "default", pkg: "sweet", qty: 75, individualItem: "iInvite", individualDigital: false },
+  ],
   mode: "fresh",
-  qty: 75,
   addOns: {},
   miscAddOns: [],
   rushFee: false,
@@ -73,11 +83,9 @@ export const DEFAULT_CONFIG: DraftConfig = {
   familyFriendsPtg: 0,
   fullColor: false,
   customPaper: false,
-  individualItem: "iInvite",
-  individualDigital: false,
 };
 
-export const CURRENT_SCHEMA_VERSION = 2 as const;
+export const CURRENT_SCHEMA_VERSION = 3 as const;
 
 export interface Draft {
   id: string;
@@ -88,7 +96,7 @@ export interface Draft {
   config: DraftConfig;
   assumptionsSnapshot: QuoteState;
   cachedTotal: number;
-  schemaVersion: 1 | 2;
+  schemaVersion: 1 | 2 | 3;
 }
 
 // --- Sync status (for UI badge) ---
@@ -125,12 +133,55 @@ function migrateAddOns(addOns: Record<string, number> | undefined): Record<strin
   return next;
 }
 
-function migrateConfig(c: DraftConfig): DraftConfig {
+// A config as it may appear on disk / on the wire: either the current v3 shape
+// (with `packages`) or a legacy v1/v2 shape (single `pkg`/`qty`/`individual*`).
+type LegacyConfig = Partial<DraftConfig> & {
+  pkg?: PkgKey;
+  qty?: number;
+  individualItem?: string;
+  individualDigital?: boolean;
+  packages?: PackageLine[];
+};
+
+function migrateConfig(c: LegacyConfig): DraftConfig {
+  const {
+    pkg: legacyPkg,
+    qty: legacyQty,
+    individualItem: legacyItem,
+    individualDigital: legacyDigital,
+    packages: rawPackages,
+    ...rest
+  } = c;
+
+  const fallback = DEFAULT_CONFIG.packages[0];
+  let packages: PackageLine[];
+  if (Array.isArray(rawPackages) && rawPackages.length > 0) {
+    packages = rawPackages.map((p) => ({
+      id: typeof p.id === "string" && p.id ? p.id : newId(),
+      pkg: p.pkg ?? fallback.pkg,
+      qty: typeof p.qty === "number" ? p.qty : fallback.qty,
+      individualItem: p.individualItem ?? "iInvite",
+      individualDigital: p.individualDigital ?? false,
+    }));
+  } else {
+    // Legacy single-package draft (v1/v2): wrap it into one line.
+    packages = [
+      {
+        id: newId(),
+        pkg: legacyPkg ?? fallback.pkg,
+        qty: typeof legacyQty === "number" ? legacyQty : fallback.qty,
+        individualItem: legacyItem ?? "iInvite",
+        individualDigital: legacyDigital ?? false,
+      },
+    ];
+  }
+
   return {
     ...DEFAULT_CONFIG,
-    ...c,
-    addOns: migrateAddOns(c.addOns),
-    miscAddOns: Array.isArray(c.miscAddOns) ? c.miscAddOns : [],
+    ...rest,
+    packages,
+    addOns: migrateAddOns(rest.addOns),
+    miscAddOns: Array.isArray(rest.miscAddOns) ? rest.miscAddOns : [],
   };
 }
 
@@ -155,7 +206,7 @@ export function loadDrafts(): Draft[] {
         return (
           d &&
           typeof d === "object" &&
-          (d.schemaVersion === 1 || d.schemaVersion === 2) &&
+          (d.schemaVersion === 1 || d.schemaVersion === 2 || d.schemaVersion === 3) &&
           typeof d.id === "string"
         );
       })
@@ -235,7 +286,7 @@ export function loadLastSession(): LastSession | null {
     if (!parsed.config || !parsed.client) return null;
     return {
       client: { ...EMPTY_CLIENT_INFO, ...parsed.client },
-      config: migrateConfig({ ...DEFAULT_CONFIG, ...parsed.config }),
+      config: migrateConfig(parsed.config),
       currentDraftId: parsed.currentDraftId ?? null,
     };
   } catch {
@@ -271,7 +322,7 @@ export function normalizeIncomingDraft(raw: unknown): Draft | null {
     createdAt: d.createdAt ?? new Date().toISOString(),
     updatedAt: d.updatedAt ?? new Date().toISOString(),
     client: { ...EMPTY_CLIENT_INFO, ...d.client },
-    config: migrateConfig({ ...DEFAULT_CONFIG, ...d.config }),
+    config: migrateConfig(d.config),
     assumptionsSnapshot: withSnapshotDefaults(d.assumptionsSnapshot),
     cachedTotal: typeof d.cachedTotal === "number" ? d.cachedTotal : 0,
     schemaVersion: CURRENT_SCHEMA_VERSION,

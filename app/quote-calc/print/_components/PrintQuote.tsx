@@ -139,7 +139,10 @@ export function PrintQuote() {
   }
 
   const { client, config, assumptions, generatedAt, shortId } = snap;
-  const pkgDef = PACKAGES[config.pkg];
+
+  if (!computed) return null;
+
+  const { packageLines, addOnLines, miscLines, rushAmount, finalPrice } = computed;
 
   interface DisplayItem {
     rowKey: string;
@@ -147,37 +150,45 @@ export function PrintQuote() {
     fixed?: number;
     catalogQty: number;
   }
-  const includedItems: DisplayItem[] =
-    config.pkg === "individual"
-      ? (() => {
-          const cat = catalog.find((i) => i.key === config.individualItem);
-          if (!cat) return [];
-          return [{ rowKey: cat.key, label: cat.label, fixed: cat.fixed, catalogQty: cat.qty }];
-        })()
-      : pkgDef.items.map((it, idx) => {
-          const k = typeof it === "string" ? it : it.key;
-          const label = (typeof it !== "string" && it.displayLabel)
-            || catalog.find((i) => i.key === k)?.label
-            || k;
-          const cat = catalog.find((i) => i.key === k);
-          return {
-            rowKey: `${k}-${idx}`,
-            label,
-            fixed: cat?.fixed,
-            catalogQty: cat?.qty ?? 0,
-          };
-        });
-  const isDigital = config.pkg === "individual" ? config.individualDigital : pkgDef.isDigital;
-  const packageKindCopy = pkgDef.type === "events" ? "Selected event package" : "Selected wedding suite";
-  const deliveryCopy = isDigital
-    ? "Delivered as print-ready PDF files via email."
-    : pkgDef.type === "events"
-    ? `Printed and shipped — quantities sized for ${config.qty} guest${config.qty === 1 ? "" : "s"}.`
-    : `Printed and shipped — quantities sized for ${config.qty} household${config.qty === 1 ? "" : "s"}.`;
 
-  if (!computed) return null;
+  // One view per package line: its definition, included pieces, prices, and copy.
+  const lineViews = config.packages.map((line, idx) => {
+    const def = PACKAGES[line.pkg];
+    const lr = packageLines[idx];
+    const isDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : def.isDigital;
 
-  const { baseResult, addOnLines, miscLines, miscTotal, discountAmount, vendorAmount, rushAmount, finalPrice, basePriceAdjusted } = computed;
+    const includedItems: DisplayItem[] =
+      line.pkg === "individual"
+        ? (() => {
+            const cat = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"));
+            if (!cat) return [];
+            return [{ rowKey: cat.key, label: cat.label, fixed: cat.fixed, catalogQty: cat.qty }];
+          })()
+        : def.items.map((it, i) => {
+            const k = typeof it === "string" ? it : it.key;
+            const label = (typeof it !== "string" && it.displayLabel)
+              || catalog.find((c) => c.key === k)?.label
+              || k;
+            const cat = catalog.find((c) => c.key === k);
+            return {
+              rowKey: `${k}-${i}`,
+              label,
+              fixed: cat?.fixed,
+              catalogQty: cat?.qty ?? 0,
+            };
+          });
+
+    const kindCopy = def.type === "events" ? "Selected event package" : "Selected wedding suite";
+    const deliveryCopy = isDigital
+      ? "Delivered as print-ready PDF files via email."
+      : def.type === "events"
+      ? `Printed and shipped — quantities sized for ${line.qty} guest${line.qty === 1 ? "" : "s"}.`
+      : `Printed and shipped — quantities sized for ${line.qty} household${line.qty === 1 ? "" : "s"}.`;
+
+    return { line, def, lr, isDigital, includedItems, kindCopy, deliveryCopy };
+  });
+
+  const anyPhysical = lineViews.some((v) => !v.isDigital);
 
   return (
     <div className="min-h-screen bg-background">
@@ -263,52 +274,61 @@ export function PrintQuote() {
             </div>
           </section>
 
-          {/* Package summary */}
-          <section className="mx-10 my-2 rounded-xl border border-border bg-muted/30 p-6 normal-case tracking-normal">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{packageKindCopy}</p>
-            <h2 className="font-squarepeg text-3xl leading-tight">{pkgDef.name}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{pkgDef.tagline}</p>
-            <div className="mt-4">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Included pieces</p>
-              <ul className="text-sm space-y-0.5">
-                {includedItems.map((ci) => (
-                  <li key={ci.rowKey} className="flex items-baseline justify-between gap-3">
-                    <span>{ci.label}</span>
-                    <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                      {ci.fixed !== undefined ? `${ci.fixed} pcs` : isDigital ? "design" : `${ci.catalogQty * config.qty} pcs`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-muted-foreground mt-3">
-                {deliveryCopy}
-              </p>
-            </div>
-          </section>
+          {/* Package summary — one block per package line */}
+          {lineViews.map((v) => (
+            <section key={v.line.id} className="mx-10 my-2 rounded-xl border border-border bg-muted/30 p-6 normal-case tracking-normal">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{v.kindCopy}</p>
+              <h2 className="font-squarepeg text-3xl leading-tight">
+                {v.def.name}
+                {v.line.pkg === "individual" && v.includedItems[0] ? ` · ${v.includedItems[0].label}` : ""}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">{v.def.tagline}</p>
+              <div className="mt-4">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Included pieces</p>
+                <ul className="text-sm space-y-0.5">
+                  {v.includedItems.map((ci) => (
+                    <li key={ci.rowKey} className="flex items-baseline justify-between gap-3">
+                      <span>{ci.label}</span>
+                      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                        {ci.fixed !== undefined ? `${ci.fixed} pcs` : v.isDigital ? "design" : `${ci.catalogQty * v.line.qty} pcs`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground mt-3">
+                  {v.deliveryCopy}
+                </p>
+              </div>
+            </section>
+          ))}
 
           {/* Investment table */}
           <section className="px-10 pt-6 pb-2 normal-case tracking-normal">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Investment</p>
             <dl className="space-y-2 text-sm">
-              <PrintRow
-                label={`${pkgDef.name} package`}
-                detail={config.mode === "reuse" ? "Adapted from an existing design" : "Original artwork"}
-                value={fmt$2(basePriceAdjusted + discountAmount + vendorAmount)}
-              />
-              {baseResult.discountPtg > 0 && (
-                <PrintRow
-                  label={`Suite savings (${baseResult.discountPtg}%)`}
-                  value={`-${fmt$2(discountAmount)}`}
-                  dim
-                />
-              )}
-              {baseResult.vendorIncentivePtg > 0 && (
-                <PrintRow
-                  label={`Vendor referral credit (${baseResult.vendorIncentivePtg}%)`}
-                  value={`-${fmt$2(vendorAmount)}`}
-                  dim
-                />
-              )}
+              {lineViews.map((v) => (
+                <div key={v.line.id}>
+                  <PrintRow
+                    label={`${v.def.name}${v.line.pkg === "individual" && v.includedItems[0] ? ` · ${v.includedItems[0].label}` : ""} package`}
+                    detail={config.mode === "reuse" ? "Adapted from an existing design" : "Original artwork"}
+                    value={fmt$2(v.lr.linePrice + v.lr.discountAmount + v.lr.vendorAmount)}
+                  />
+                  {v.lr.result.discountPtg > 0 && (
+                    <PrintRow
+                      label={`Suite savings (${v.lr.result.discountPtg}%)`}
+                      value={`-${fmt$2(v.lr.discountAmount)}`}
+                      dim
+                    />
+                  )}
+                  {v.lr.result.vendorIncentivePtg > 0 && (
+                    <PrintRow
+                      label={`Vendor referral credit (${v.lr.result.vendorIncentivePtg}%)`}
+                      value={`-${fmt$2(v.lr.vendorAmount)}`}
+                      dim
+                    />
+                  )}
+                </div>
+              ))}
 
               {(addOnLines.length > 0 || miscLines.length > 0) && (
                 <>
@@ -369,7 +389,7 @@ export function PrintQuote() {
           {/* Fine print */}
           <section className="px-10 pb-2 normal-case tracking-normal text-xs text-muted-foreground space-y-1.5 leading-relaxed">
             <p>· Quote valid through <strong className="text-foreground">{quoteExpiry(generatedAt)}</strong>.</p>
-            {!isDigital && (
+            {anyPhysical && (
               <p>· Shipping is added based on carrier quote at the time of production.</p>
             )}
             <p>· One round of revisions is included. Additional rounds are billed at our standard design rate.</p>

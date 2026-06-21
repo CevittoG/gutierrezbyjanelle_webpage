@@ -17,6 +17,7 @@ import {
   getDiscountPtg,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
+import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
 import { mergeRemoteConfig } from "@/lib/quote-calc-config";
 import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
 import {
@@ -26,9 +27,11 @@ import {
   DraftConfig,
   EMPTY_CLIENT_INFO,
   MiscAddOn,
+  PackageLine,
   SyncStatus,
   createDraft,
   loadDrafts,
+  newId,
   reconcileDrafts,
   saveDrafts,
   upsertDraft,
@@ -48,8 +51,13 @@ import { DraftsBar } from "./DraftsBar";
 import { MiscAddOnSection } from "./MiscAddOnSection";
 import { MobileBreakdownSheet } from "./MobileBreakdownSheet";
 
+// "individual" (Individual Item) is offered under both tabs — it's an
+// item-agnostic à-la-carte line that suits weddings and events alike.
 const WEDDING_PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
-const EVENT_PKG_KEYS: PkgKey[] = ["event-basics", "event-fun", "event-works"];
+const EVENT_PKG_KEYS: PkgKey[] = ["individual", "event-basics", "event-fun", "event-works"];
+
+// Default per-line quantity when a package is added to the quote.
+const DEFAULT_LINE_QTY = 75;
 
 function failureToStatus(f: RemoteFailure): SyncStatus {
   if (f.kind === "network") return { kind: "offline", reason: "network" };
@@ -59,10 +67,12 @@ function failureToStatus(f: RemoteFailure): SyncStatus {
 
 export function QuoteCalculator() {
   // --- Config state (mirrors DraftConfig) ---
-  const [pkg, setPkg] = useState<PkgKey>(DEFAULT_CONFIG.pkg);
-  const [pkgType, setPkgType] = useState<PackageType>(PACKAGES[DEFAULT_CONFIG.pkg].type);
+  const [packages, setPackages] = useState<PackageLine[]>(() =>
+    DEFAULT_CONFIG.packages.map((p) => ({ ...p })),
+  );
+  // The Wedding/Events tab is just a filter over the package picker now.
+  const [pkgType, setPkgType] = useState<PackageType>("wedding");
   const [mode, setMode] = useState<PricingMode>(DEFAULT_CONFIG.mode);
-  const [qty, setQty] = useState(DEFAULT_CONFIG.qty);
   const [addOns, setAddOns] = useState<Record<string, number>>({ ...DEFAULT_CONFIG.addOns });
   const [miscAddOns, setMiscAddOns] = useState<MiscAddOn[]>([...DEFAULT_CONFIG.miscAddOns]);
   const [rushFee, setRushFee] = useState(DEFAULT_CONFIG.rushFee);
@@ -73,8 +83,9 @@ export function QuoteCalculator() {
   const [familyFriendsPtg, setFamilyFriendsPtg] = useState(DEFAULT_CONFIG.familyFriendsPtg);
   const [fullColor, setFullColor] = useState(DEFAULT_CONFIG.fullColor);
   const [customPaper, setCustomPaper] = useState(DEFAULT_CONFIG.customPaper);
-  const [individualItem, setIndividualItem] = useState(DEFAULT_CONFIG.individualItem);
-  const [individualDigital, setIndividualDigital] = useState(DEFAULT_CONFIG.individualDigital);
+
+  // Reference quantity for the add-on "Suggest" buttons — the first line's qty.
+  const primaryQty = packages[0]?.qty ?? DEFAULT_LINE_QTY;
 
   // --- Client info ---
   const [client, setClient] = useState<DraftClientInfo>(EMPTY_CLIENT_INFO);
@@ -104,9 +115,8 @@ export function QuoteCalculator() {
   // Build a DraftConfig from current state.
   const config: DraftConfig = useMemo(
     () => ({
-      pkg,
+      packages,
       mode,
-      qty,
       addOns,
       miscAddOns,
       rushFee,
@@ -117,18 +127,15 @@ export function QuoteCalculator() {
       familyFriendsPtg,
       fullColor,
       customPaper,
-      individualItem,
-      individualDigital,
     }),
-    [pkg, mode, qty, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, packageDiscountPtg, familyFriendsPtg, fullColor, customPaper, individualItem, individualDigital],
+    [packages, mode, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, packageDiscountPtg, familyFriendsPtg, fullColor, customPaper],
   );
 
   // Apply a DraftConfig into state.
   const applyConfig = useCallback((c: DraftConfig) => {
-    setPkg(c.pkg);
-    setPkgType(PACKAGES[c.pkg].type);
+    setPackages(c.packages.map((p) => ({ ...p })));
+    setPkgType(c.packages[0] ? PACKAGES[c.packages[0].pkg].type : "wedding");
     setMode(c.mode);
-    setQty(c.qty);
     setAddOns({ ...c.addOns });
     setMiscAddOns([...(c.miscAddOns ?? [])]);
     setRushFee(c.rushFee);
@@ -139,8 +146,6 @@ export function QuoteCalculator() {
     setFamilyFriendsPtg(c.familyFriendsPtg);
     setFullColor(c.fullColor);
     setCustomPaper(c.customPaper);
-    setIndividualItem(c.individualItem);
-    setIndividualDigital(c.individualDigital);
   }, []);
 
   // Load a full saved draft into state (used by the ?draft=<id> edit deep-link
@@ -156,24 +161,22 @@ export function QuoteCalculator() {
     [applyConfig],
   );
 
-  // Choose a package: also flip pkgType to match (so the right tab stays selected).
-  function selectPackage(key: PkgKey) {
-    setPkg(key);
-    setPkgType(PACKAGES[key].type);
+  // Add a package as a new line on the quote.
+  function addPackageLine(key: PkgKey) {
+    setPackages((prev) => [
+      ...prev,
+      { id: newId(), pkg: key, qty: DEFAULT_LINE_QTY, individualItem: "iInvite", individualDigital: false },
+    ]);
   }
 
-  // Default fallback per type when the user just toggles tabs.
-  const DEFAULT_PER_TYPE: Record<PackageType, PkgKey> = {
-    wedding: "sweet",
-    events: "event-fun",
-  };
-  function switchPkgType(next: PackageType) {
-    if (next === pkgType) return;
-    setPkgType(next);
-    // Only switch the chosen package if the current one is from the other type.
-    if (PACKAGES[pkg].type !== next) {
-      setPkg(DEFAULT_PER_TYPE[next]);
-    }
+  // Patch one line (qty / individual item / digital flag) by id.
+  function updateLine(id: string, patch: Partial<PackageLine>) {
+    setPackages((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+
+  // Remove a line — but always keep at least one package on the quote.
+  function removeLine(id: string) {
+    setPackages((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
   }
 
   // Pull the latest Settings + Items from the Sheet. Falls back to bundled
@@ -296,25 +299,11 @@ export function QuoteCalculator() {
     });
   }
 
-  const overrideItems = pkg === "individual" ? [individualItem] : undefined;
-  const overrideDigital = pkg === "individual" ? individualDigital : undefined;
-
-  const baseResult = useMemo(
-    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog),
-    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog],
-  );
-
-  const selectedAddOns = useMemo(
-    () =>
-      Object.entries(addOns)
-        .filter(([, q]) => q > 0)
-        .map(([k, q]) => ({
-          key: k,
-          qty: q,
-          label: catalog.find((i) => i.key === k)?.label ?? k,
-          result: calcAddOnRaw(k, q, mode, assumptions, fullColor, customPaper),
-        })),
-    [addOns, mode, assumptions, fullColor, customPaper, catalog],
+  // Single source of truth for the price math — shared by the breakdown panel,
+  // the mobile bar, and the saved draft total (same engine as print + portal).
+  const breakdown = useMemo(
+    () => computeQuoteBreakdown(config, assumptions, catalog),
+    [config, assumptions, catalog],
   );
 
   const addOnPreviews = useMemo(
@@ -325,43 +314,23 @@ export function QuoteCalculator() {
     [addOns, mode, assumptions, fullColor, customPaper],
   );
 
-  // Compute the final total + net margin once at the parent so the mobile bar
-  // and the breakdown panel agree. Mirrors the formula inside BreakdownPanel.
+  // Final total + net margin for the mobile bar, derived from the breakdown.
   const totals = useMemo(() => {
-    const dlFactor = assumptions.digitalLicensePtg / 100;
-    const digitalBonus = digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
-    const adjustedVariable = baseResult.totalVariable + digitalBonus;
-    const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
-    const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
-    const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
-    const combinedDiscountPtg =
-      baseResult.discountPtg +
-      baseResult.vendorIncentivePtg +
-      baseResult.packageDiscountPtg +
-      baseResult.familyFriendsPtg;
-    const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
-    const addOnsTotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
-    const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
-    const addOnsLabor = selectedAddOns.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
-    const miscTotal = miscAddOns.reduce(
-      (s, m) => s + Math.max(0, m.qty) * Math.max(0, m.unitPrice),
-      0,
-    );
-    const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
-    const rushAmount = rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-    const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
-    // Misc add-ons are treated as pure margin (no internal cost) in v1.
+    const finalPrice = breakdown.finalPrice;
     const yourCosts =
-      baseResult.totalDirectCosts +
-      addOnsMaterials +
-      baseResult.totalLaborCost +
-      addOnsLabor +
-      digitalBonus;
+      breakdown.packageLines.reduce(
+        (s, l) => s + l.result.totalDirectCosts + l.result.totalLaborCost + l.digitalBonus,
+        0,
+      ) +
+      breakdown.addOnLines.reduce(
+        (s, a) => s + a.result.materialsCost + a.result.designLabor + a.result.productionLabor,
+        0,
+      );
     const netProfit = finalPrice - yourCosts;
     const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
     const marginDiff = netMargin - assumptions.targetProfitPtg;
-    return { finalPrice, netMargin, marginDiff, miscTotal };
-  }, [assumptions, baseResult, digitalLicense, rushFee, selectedAddOns, miscAddOns]);
+    return { finalPrice, netMargin, marginDiff, miscTotal: breakdown.miscTotal };
+  }, [breakdown, assumptions.targetProfitPtg]);
 
   // --- Draft handlers ---
 
@@ -478,7 +447,7 @@ export function QuoteCalculator() {
                 return (
                   <button
                     key={t}
-                    onClick={() => switchPkgType(t)}
+                    onClick={() => setPkgType(t)}
                     className={cn(
                       "h-11 px-5 text-sm font-medium transition-colors",
                       isActive ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"
@@ -491,21 +460,23 @@ export function QuoteCalculator() {
               })}
             </div>
 
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Tap a package to add it to the quote. Add as many as you like — each becomes its own line with its own quantity.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
-                const isSelected = pkg === key;
-                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog);
+                const previewResult = calcPackage(key, DEFAULT_LINE_QTY, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog);
                 const discount = getDiscountPtg(key, assumptions);
                 return (
                   <div key={key} className="relative group">
                     <button
-                      onClick={() => selectPackage(key)}
+                      onClick={() => addPackageLine(key)}
                       onMouseEnter={() => setTooltipPkg(key)}
                       onMouseLeave={() => setTooltipPkg(null)}
                       className={cn(
                         "w-full text-left p-4 rounded-xl border-2 transition-all duration-150",
-                        isSelected ? def.selectedColorClass : def.colorClass + " hover:brightness-95"
+                        def.colorClass + " hover:brightness-95"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1">
@@ -516,17 +487,16 @@ export function QuoteCalculator() {
                               -{discount}%
                             </span>
                           )}
-                          {isSelected && (
-                            <span className="text-xs rounded-full bg-foreground text-background px-2 py-0.5 font-medium">
-                              Selected
-                            </span>
-                          )}
+                          <span className="text-xs rounded-full bg-foreground text-background px-2 py-0.5 font-medium">
+                            + Add
+                          </span>
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">{def.tagline}</p>
                       <p className="text-xs text-muted-foreground/70 leading-relaxed">{def.description}</p>
                       <p className="text-sm font-mono font-semibold mt-3 tabular-nums">
                         {fmt$(Math.round(previewResult.finalPrice))}
+                        <span className="text-xs font-normal text-muted-foreground"> · at {DEFAULT_LINE_QTY}</span>
                       </p>
                     </button>
 
@@ -558,114 +528,146 @@ export function QuoteCalculator() {
             </div>
           </Section>
 
-          {/* 2. Mode + Quantity + Individual options */}
-          <Section title="Configuration">
-            <div className="space-y-4">
-              {/* Individual item selector */}
-              {pkg === "individual" && (
-                <div className="space-y-3 pb-3 border-b border-border">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                      Select item
-                    </label>
-                    <select
-                      value={individualItem}
-                      onChange={(e) => setIndividualItem(e.target.value)}
-                      className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      {catalog.map((item) => (
-                        <option key={item.key} value={item.key}>{item.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                      Sale type
-                    </label>
-                    <div className="inline-flex rounded-lg border border-border overflow-hidden">
-                      {([false, true] as const).map((isDigital) => (
+          {/* 2. Selected package lines */}
+          <Section title="Packages in this quote">
+            <div className="space-y-3">
+              {packages.map((line) => {
+                const def = PACKAGES[line.pkg];
+                const lineResult = breakdown.packageLines.find((l) => l.id === line.id);
+                const isIndividual = line.pkg === "individual";
+                const lineDigital = line.individualDigital ?? false;
+                return (
+                  <div key={line.id} className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-squarepeg text-xl leading-tight">{def.name}</p>
+                        <p className="text-xs text-muted-foreground">{def.tagline}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {lineResult && (
+                          <span className="text-sm font-mono font-semibold tabular-nums">
+                            {fmt$(Math.round(lineResult.linePrice))}
+                          </span>
+                        )}
                         <button
-                          key={String(isDigital)}
-                          onClick={() => setIndividualDigital(isDigital)}
-                          className={cn(
-                            "h-11 px-5 text-sm font-medium transition-colors",
-                            individualDigital === isDigital
-                              ? "bg-foreground text-background"
-                              : "bg-card text-foreground hover:bg-muted"
-                          )}
+                          onClick={() => removeLine(line.id)}
+                          disabled={packages.length <= 1}
+                          aria-label={`Remove ${def.name}`}
+                          className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
                         >
-                          {isDigital ? "Digital" : "Physical"}
+                          ×
                         </button>
-                      ))}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                      {individualDigital
-                        ? "Digital sale — design labor only, no printing or materials."
-                        : "Physical sale — includes production labor and materials."}
-                    </p>
+
+                    {/* Individual item: choose the piece + sale type */}
+                    {isIndividual && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                            Select item
+                          </label>
+                          <select
+                            value={line.individualItem ?? "iInvite"}
+                            onChange={(e) => updateLine(line.id, { individualItem: e.target.value })}
+                            className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            {catalog.map((item) => (
+                              <option key={item.key} value={item.key}>{item.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                            Sale type
+                          </label>
+                          <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                            {([false, true] as const).map((isDigital) => (
+                              <button
+                                key={String(isDigital)}
+                                onClick={() => updateLine(line.id, { individualDigital: isDigital })}
+                                className={cn(
+                                  "h-11 px-5 text-sm font-medium transition-colors",
+                                  lineDigital === isDigital
+                                    ? "bg-foreground text-background"
+                                    : "bg-card text-foreground hover:bg-muted"
+                                )}
+                              >
+                                {isDigital ? "Digital" : "Physical"}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                            {lineDigital
+                              ? "Digital sale — design labor only, no printing or materials."
+                              : "Physical sale — includes production labor and materials."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Per-line quantity */}
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                        Quantity — households / guests
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={line.qty}
+                          min={1}
+                          max={500}
+                          step={5}
+                          onChange={(e) =>
+                            updateLine(line.id, { qty: Math.max(1, parseInt(e.target.value) || 1) })
+                          }
+                          className="h-11 w-32 rounded-lg border border-border bg-background px-3 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                        <span className="text-sm text-muted-foreground">qty</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })}
+            </div>
+          </Section>
 
-              {/* Mode toggle */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                  Pricing mode
-                </label>
-                <div className="inline-flex rounded-lg border border-border overflow-hidden">
-                  {(["fresh", "reuse"] as PricingMode[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setMode(m)}
-                      className={cn(
-                        "h-11 px-5 text-sm font-medium transition-colors",
-                        mode === m
-                          ? "bg-foreground text-background"
-                          : "bg-card text-foreground hover:bg-muted"
-                      )}
-                    >
-                      {m === "fresh" ? "Fresh design" : "Reuse existing"}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                  {mode === "fresh"
-                    ? "Full design labor — new original artwork from scratch."
-                    : `Reduced design labor (×${assumptions.reuseFactor}) — adapting an existing design.`}
-                </p>
+          {/* 3. Pricing mode (applies to every package line) */}
+          <Section title="Configuration">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                Pricing mode
+              </label>
+              <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                {(["fresh", "reuse"] as PricingMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={cn(
+                      "h-11 px-5 text-sm font-medium transition-colors",
+                      mode === m
+                        ? "bg-foreground text-background"
+                        : "bg-card text-foreground hover:bg-muted"
+                    )}
+                  >
+                    {m === "fresh" ? "Fresh design" : "Reuse existing"}
+                  </button>
+                ))}
               </div>
-
-              {/* Quantity */}
-              <div>
-                <label
-                  htmlFor="qty"
-                  className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2"
-                >
-                  Quantity — households / guests invited
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="qty"
-                    type="number"
-                    inputMode="numeric"
-                    value={qty}
-                    min={1}
-                    max={500}
-                    step={5}
-                    onChange={(e) => setQty(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="h-11 w-32 rounded-lg border border-border bg-background px-3 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <span className="text-sm text-muted-foreground">households</span>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                {mode === "fresh"
+                  ? "Full design labor — new original artwork from scratch."
+                  : `Reduced design labor (×${assumptions.reuseFactor}) — adapting an existing design.`}
+              </p>
             </div>
           </Section>
 
           {/* 3. Add-ons */}
           <Section title="Add-ons">
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Sold a la carte on top of any package. Enter an explicit piece count for each — use Suggest to pre-fill from {qty} households.
+              Sold a la carte on top of any package. Enter an explicit piece count for each — use Suggest to pre-fill from {primaryQty} households.
             </p>
             <div className="space-y-2">
               {ADD_ON_KEYS.map((key) => {
@@ -677,7 +679,7 @@ export function QuoteCalculator() {
                     key={key}
                     item={item}
                     qty={currentQty}
-                    packageQty={qty}
+                    packageQty={primaryQty}
                     preview={addOnPreviews[key]}
                     onChange={(next) => setAddOnQty(key, next)}
                     catalog={catalog}
@@ -851,17 +853,11 @@ export function QuoteCalculator() {
         {/* Right: price breakdown — hidden on mobile */}
         <div className="lg:col-span-2 hidden lg:block">
           <BreakdownPanel
-            pkg={pkg}
+            breakdown={breakdown}
             mode={mode}
-            qty={qty}
             assumptions={assumptions}
-            baseResult={baseResult}
-            selectedAddOns={selectedAddOns}
-            miscAddOns={miscAddOns}
-            rushFee={rushFee}
             extraRevisions={extraRevisions}
             digitalLicense={digitalLicense}
-            vendorIncentive={vendorIncentive}
             fullColor={fullColor}
             customPaper={customPaper}
             catalog={catalog}
@@ -887,17 +883,11 @@ export function QuoteCalculator() {
         marginDiff={totals.marginDiff}
       >
         <BreakdownPanel
-          pkg={pkg}
+          breakdown={breakdown}
           mode={mode}
-          qty={qty}
           assumptions={assumptions}
-          baseResult={baseResult}
-          selectedAddOns={selectedAddOns}
-          miscAddOns={miscAddOns}
-          rushFee={rushFee}
           extraRevisions={extraRevisions}
           digitalLicense={digitalLicense}
-          vendorIncentive={vendorIncentive}
           fullColor={fullColor}
           customPaper={customPaper}
           catalog={catalog}

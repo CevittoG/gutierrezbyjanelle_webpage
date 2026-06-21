@@ -5,12 +5,13 @@
 // verbatim (plus a few intermediate values exposed for the portal's category
 // rollup). No IO, no React — importable on the server and the client.
 
-import type { DraftConfig } from "./quote-calc-drafts";
+import type { DraftConfig, PackageLine } from "./quote-calc-drafts";
 import {
   AddOnResult,
   CatalogItem,
   ITEM_CATALOG,
   PackageResult,
+  PkgKey,
   QuoteState,
   calcAddOnRaw,
   calcPackage,
@@ -23,6 +24,27 @@ export interface AddOnLine {
   result: AddOnResult;
 }
 
+// One priced package line: the raw `calcPackage` result plus the per-line
+// admin/profit/discount buildup. Line prices are summed into the quote total.
+export interface PackageLineResult {
+  id: string;
+  pkg: PkgKey;
+  qty: number;
+  individualItem?: string;
+  individualDigital?: boolean;
+  result: PackageResult;
+  digitalBonus: number;
+  adjustedVariable: number;
+  adjustedAdmin: number;
+  adjustedProfit: number;
+  adjustedBeforeDiscount: number;
+  discountAmount: number;
+  vendorAmount: number;
+  packageDiscountAmount: number;
+  familyFriendsAmount: number;
+  linePrice: number;
+}
+
 export interface MiscLine {
   id: string;
   label: string;
@@ -32,11 +54,14 @@ export interface MiscLine {
 }
 
 export interface QuoteBreakdown {
+  packageLines: PackageLineResult[];
+  // Back-compat alias = packageLines[0].result (the first/primary line).
   baseResult: PackageResult;
   addOnLines: AddOnLine[];
   miscLines: MiscLine[];
 
-  // Intermediate buildup (exposed for the portal category rollup).
+  // Intermediate buildup, summed across all package lines (exposed for the
+  // portal category rollup).
   digitalBonus: number;
   adjustedVariable: number;
   adjustedAdmin: number;
@@ -55,23 +80,25 @@ export interface QuoteBreakdown {
   finalPrice: number;
 }
 
-// Compute every figure the print quote and the public portal display, from a
-// quote's config + the assumptions snapshot it was priced under. `catalog`
-// supplies item labels/qty rules; defaults to the bundled catalog.
-export function computeQuoteBreakdown(
+// Price one package line: calcPackage (variable cost, with its own discount key)
+// then the digital-license / admin / profit buildup. `extraRevisions` is passed
+// only to the first line by the caller so the quote is billed revisions once.
+function computePackageLine(
+  line: PackageLine,
   config: DraftConfig,
   assumptions: QuoteState,
-  catalog: CatalogItem[] = ITEM_CATALOG,
-): QuoteBreakdown {
-  const overrideItems = config.pkg === "individual" ? [config.individualItem] : undefined;
-  const overrideDigital = config.pkg === "individual" ? config.individualDigital : undefined;
+  catalog: CatalogItem[],
+  extraRevisions: number,
+): PackageLineResult {
+  const overrideItems = line.pkg === "individual" ? [line.individualItem ?? "iInvite"] : undefined;
+  const overrideDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : undefined;
 
-  const baseResult = calcPackage(
-    config.pkg,
-    config.qty,
+  const result = calcPackage(
+    line.pkg,
+    line.qty,
     config.mode,
     assumptions,
-    config.extraRevisions,
+    extraRevisions,
     overrideItems,
     overrideDigital,
     config.fullColor,
@@ -81,6 +108,81 @@ export function computeQuoteBreakdown(
     config.familyFriendsPtg,
     catalog,
   );
+
+  const dlFactor = assumptions.digitalLicensePtg / 100;
+  const digitalBonus = config.digitalLicense ? result.totalDesignLabor * dlFactor : 0;
+  const adjustedVariable = result.totalVariable + digitalBonus;
+  const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
+  const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
+  const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
+  const discountAmount = adjustedBeforeDiscount * (result.discountPtg / 100);
+  const vendorAmount = adjustedBeforeDiscount * (result.vendorIncentivePtg / 100);
+  const packageDiscountAmount = adjustedBeforeDiscount * (result.packageDiscountPtg / 100);
+  const familyFriendsAmount = adjustedBeforeDiscount * (result.familyFriendsPtg / 100);
+  const combinedDiscountPtg =
+    result.discountPtg +
+    result.vendorIncentivePtg +
+    result.packageDiscountPtg +
+    result.familyFriendsPtg;
+  const linePrice = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
+
+  return {
+    id: line.id,
+    pkg: line.pkg,
+    qty: line.qty,
+    individualItem: line.individualItem,
+    individualDigital: line.individualDigital,
+    result,
+    digitalBonus,
+    adjustedVariable,
+    adjustedAdmin,
+    adjustedProfit,
+    adjustedBeforeDiscount,
+    discountAmount,
+    vendorAmount,
+    packageDiscountAmount,
+    familyFriendsAmount,
+    linePrice,
+  };
+}
+
+// Compute every figure the print quote and the public portal display, from a
+// quote's config + the assumptions snapshot it was priced under. `catalog`
+// supplies item labels/qty rules; defaults to the bundled catalog.
+export function computeQuoteBreakdown(
+  config: DraftConfig,
+  assumptions: QuoteState,
+  catalog: CatalogItem[] = ITEM_CATALOG,
+): QuoteBreakdown {
+  // Price each line independently (each with its own package discount), billing
+  // extra revisions once — on the first line only — so a single-package quote
+  // prices identically to before.
+  const packageLines: PackageLineResult[] = config.packages.map((line, i) =>
+    computePackageLine(line, config, assumptions, catalog, i === 0 ? config.extraRevisions : 0),
+  );
+
+  const sumLines = (sel: (l: PackageLineResult) => number): number =>
+    packageLines.reduce((s, l) => s + sel(l), 0);
+
+  // Defensive fallback for the degenerate "no packages" state — the UI keeps at
+  // least one line, so this only guards against malformed data.
+  const baseResult =
+    packageLines[0]?.result ??
+    calcPackage(
+      config.packages[0]?.pkg ?? "sweet",
+      0,
+      config.mode,
+      assumptions,
+      0,
+      undefined,
+      undefined,
+      config.fullColor,
+      config.customPaper,
+      config.vendorIncentive,
+      config.packageDiscountPtg,
+      config.familyFriendsPtg,
+      catalog,
+    );
 
   const addOnLines: AddOnLine[] = Object.entries(config.addOns)
     .filter(([, q]) => q > 0)
@@ -104,23 +206,17 @@ export function computeQuoteBreakdown(
       total: m.qty * m.unitPrice,
     }));
 
-  const dlFactor = assumptions.digitalLicensePtg / 100;
-  const digitalBonus = config.digitalLicense ? baseResult.totalDesignLabor * dlFactor : 0;
-  const adjustedVariable = baseResult.totalVariable + digitalBonus;
-  const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
-  const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
-  const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
+  const digitalBonus = sumLines((l) => l.digitalBonus);
+  const adjustedVariable = sumLines((l) => l.adjustedVariable);
+  const adjustedAdmin = sumLines((l) => l.adjustedAdmin);
+  const adjustedProfit = sumLines((l) => l.adjustedProfit);
+  const adjustedBeforeDiscount = sumLines((l) => l.adjustedBeforeDiscount);
 
-  const discountAmount = adjustedBeforeDiscount * (baseResult.discountPtg / 100);
-  const vendorAmount = adjustedBeforeDiscount * (baseResult.vendorIncentivePtg / 100);
-  const packageDiscountAmount = adjustedBeforeDiscount * (baseResult.packageDiscountPtg / 100);
-  const familyFriendsAmount = adjustedBeforeDiscount * (baseResult.familyFriendsPtg / 100);
-  const combinedDiscountPtg =
-    baseResult.discountPtg +
-    baseResult.vendorIncentivePtg +
-    baseResult.packageDiscountPtg +
-    baseResult.familyFriendsPtg;
-  const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
+  const discountAmount = sumLines((l) => l.discountAmount);
+  const vendorAmount = sumLines((l) => l.vendorAmount);
+  const packageDiscountAmount = sumLines((l) => l.packageDiscountAmount);
+  const familyFriendsAmount = sumLines((l) => l.familyFriendsAmount);
+  const basePriceAdjusted = sumLines((l) => l.linePrice);
 
   const addOnsTotal = addOnLines.reduce((s, a) => s + a.result.price, 0);
   const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
@@ -129,6 +225,7 @@ export function computeQuoteBreakdown(
   const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
 
   return {
+    packageLines,
     baseResult,
     addOnLines,
     miscLines,
