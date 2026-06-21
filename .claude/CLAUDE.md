@@ -228,7 +228,7 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 **Material multipliers:** `fullColorFactor` and `customPaperFactor` apply to sheet cost when toggled.
 
-**Combined discount** = package discount + vendor incentive (stacked, both shown separately).
+**Combined discount** = package discount + vendor incentive + optional per-quote Package and Family-&-Friends discounts (all stacked additively on the base package price, each shown separately). The latter two are typed integer percentages entered as Extras, stored on the draft (not in `Settings`).
 
 **Shipping** is excluded — added manually per carrier quote.
 
@@ -270,7 +270,7 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`). Per-item fields follow the pattern `i{ItemKey}_{suffix}` where suffix is `_dt` (design time, minutes), `_pt` (production time/unit, minutes), `_sc` (sheet cost, $), `_y` (yield per sheet). Time values are stored as minutes internally, displayed as `Xh Ym` with dual number spinners.
 
-`DraftConfig` holds the full quote state per draft including `miscAddOns: MiscAddOn[]` for one-off client items. `Draft.schemaVersion` is currently `2`; v1 drafts are auto-migrated on load (iDrinkTop qty moved to iWedgeTop).
+`DraftConfig` holds the full quote state per draft including `miscAddOns: MiscAddOn[]` for one-off client items and the per-quote `packageDiscountPtg` / `familyFriendsPtg` typed discounts. `DraftClientInfo` carries two notes: `notes` (private/hidden) and `clientNotes` (client-facing). `Draft.schemaVersion` is currently `2`; v1 drafts are auto-migrated on load (iDrinkTop qty moved to iWedgeTop). New fields need no version bump — `migrateConfig`/`migrateDraft` backfill them by spreading `DEFAULT_CONFIG` / `EMPTY_CLIENT_INFO`.
 
 **Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` — the app writes its header row automatically (now A1:R1 with the Phase 3 portal columns) but does not create the tab itself.
 
@@ -294,7 +294,7 @@ The Sheet is the source of truth — its values overlay locally-saved `assumptio
 The `Quotes` tab is now human-readable — Janelle sees client / event / package / line items / total / status, not a JSON blob. The full `Draft` payload was moved to a separate hidden `_data` tab keyed by Quote ID. Reads join the two tabs; writes update both.
 
 **`Quotes` tab columns** (header row in A1:M1, written automatically on first upsert):
-A=Quote ID · B=Status (`active` / `archived`) · C=Client · D=Event type · E=Event date · F=Quote name · G=Package (display name) · H=Quantity · I=Line items (multiline) · J=Total · K=Notes · L=Created · M=Updated.
+A=Quote ID · B=Status (`active` / `archived`) · C=Client · D=Event type · E=Event date · F=Quote name · G=Package (display name) · H=Quantity · I=Line items (multiline) · J=Total · K=Hidden notes · L=Created · M=Updated. The client-facing note has **no readable column** — it lives only in the `_data` Draft JSON (renders on `/q/[token]`).
 
 **`_data` tab** (hidden, two columns): A=Quote ID · B=full Draft JSON. The app creates this tab automatically on first write if it's missing.
 
@@ -310,7 +310,7 @@ Each quote can map to one Drive folder (proofs + the printed-quote PDF) and one 
 
 **Drive (read + create).** The SA JWT gained `drive.file` (create the per-quote subfolder) and `drive.readonly` (read the proofs Janelle uploads, which she owns). On quote save, `POST /api/drafts` best-effort calls `ensureQuoteFolder` — if `GOOGLE_DRIVE_PARENT_FOLDER_ID` is set and the row has no folder yet, it creates `"<client> — <quote name>"` under that parent and registers the id in column N. Idempotent; a Drive failure never fails the save. The app **never uploads file content** (folder creation is metadata-only — Render RAM safe). Set up: share the `GBJ Quotes` root with the SA as **Editor**; optionally set `GBJ_QUOTES_OWNER_EMAIL` to grant Janelle Editor on each created subfolder.
 
-**Public route `/q/[token]`** (outside `/quote-calc`, no admin cookie, `force-dynamic`, noindex). Resolves the token → reads the `_data` Draft **server-side** → recomputes via `computeQuoteBreakdown` → projects to a `PublicQuote` (`buildPublicQuote`). The client-safe shape is deliberately minimal: **included pieces, savings amount, and total only** — never the cost buildup (design/production/admin/margin) or the `Draft` JSON. Proofs stream through `GET /q/[token]/file/[fileId]`, which re-verifies the token and confirms folder membership before streaming (the SA can read the whole tree, so membership is the cross-quote guard). Revocation/expiry is by editing column P/Q in the Sheet; propagates within the ~30s cache TTL.
+**Public route `/q/[token]`** (outside `/quote-calc`, no admin cookie, `force-dynamic`, noindex). Resolves the token → reads the `_data` Draft **server-side** → recomputes via `computeQuoteBreakdown` → projects to a `PublicQuote` (`buildPublicQuote`). The client-safe shape is deliberately minimal: **included pieces, savings amount, total, and the optional client-facing note** — never the cost buildup (design/production/admin/margin), the hidden note, or the `Draft` JSON. Proofs stream through `GET /q/[token]/file/[fileId]`, which re-verifies the token and confirms folder membership before streaming (the SA can read the whole tree, so membership is the cross-quote guard). Revocation/expiry is by editing column P/Q in the Sheet; propagates within the ~30s cache TTL.
 
 **Studio dashboard** (`/quotes`, server-gated; absorbs the former explorer): the list joins `listDrafts()` + `listPortalMeta()` and derives an overview (pipeline / open / shared ledger, nearest "up next" event) plus a searchable, filterable, date-sortable quote list. **Profile Overview** (`/quotes/[id]`) shows the client-facing summary, the proofs gallery (via a cookie-gated admin file proxy so it works before any public link exists), an "Open folder" link, and link controls (generate/regenerate/revoke + copy). The app-shell nav links between the dashboard and the calculator.
 
