@@ -34,8 +34,9 @@ const NUM_COLS = 13; // A..M (draft readable columns)
 // "Quotes" schema (header row in A1:R1):
 //   A  Quote ID    | B  Status      | C  Client       | D  Event type
 //   E  Event date  | F  Quote name  | G  Package      | H  Quantity
-//   I  Line items  | J  Total       | K  Notes        | L  Created
+//   I  Line items  | J  Total       | K  Hidden notes | L  Created
 //   M  Updated
+//   (the client-facing note lives only in the _data Draft JSON, not a column)
 //   --- Phase 3 portal metadata (server-managed; Janelle-editable) ---
 //   N  Drive folder | O  Public token | P  Link status | Q  Expires
 //   R  Approved (reserved)
@@ -62,7 +63,7 @@ const NEW_HEADER_ROW: Row = [
   "Quantity",
   "Line items",
   "Total",
-  "Notes",
+  "Hidden notes",
   "Created",
   "Updated",
   // Phase 3 portal metadata (N–R).

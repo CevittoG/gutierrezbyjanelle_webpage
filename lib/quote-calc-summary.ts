@@ -61,6 +61,8 @@ export function summarizeLineItems(
   if (d.config.rushFee) lines.push("⚡ Rush fee applied");
   if (d.config.digitalLicense) lines.push("✓ Digital license");
   if (d.config.vendorIncentive) lines.push("✓ Vendor incentive");
+  if (d.config.packageDiscountPtg > 0) lines.push(`✓ Package discount ${d.config.packageDiscountPtg}%`);
+  if (d.config.familyFriendsPtg > 0) lines.push(`✓ Family & friends discount ${d.config.familyFriendsPtg}%`);
   if (d.config.fullColor) lines.push("✓ Full color");
   if (d.config.customPaper) lines.push("✓ Custom paper");
   if (d.config.mode === "reuse") lines.push("↺ Reuse pricing");

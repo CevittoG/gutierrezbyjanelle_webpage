@@ -44,6 +44,8 @@ export interface QuoteBreakdown {
   adjustedBeforeDiscount: number;
   discountAmount: number;
   vendorAmount: number;
+  packageDiscountAmount: number;
+  familyFriendsAmount: number;
 
   basePriceAdjusted: number;
   addOnsTotal: number;
@@ -75,6 +77,8 @@ export function computeQuoteBreakdown(
     config.fullColor,
     config.customPaper,
     config.vendorIncentive,
+    config.packageDiscountPtg,
+    config.familyFriendsPtg,
     catalog,
   );
 
@@ -109,7 +113,13 @@ export function computeQuoteBreakdown(
 
   const discountAmount = adjustedBeforeDiscount * (baseResult.discountPtg / 100);
   const vendorAmount = adjustedBeforeDiscount * (baseResult.vendorIncentivePtg / 100);
-  const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
+  const packageDiscountAmount = adjustedBeforeDiscount * (baseResult.packageDiscountPtg / 100);
+  const familyFriendsAmount = adjustedBeforeDiscount * (baseResult.familyFriendsPtg / 100);
+  const combinedDiscountPtg =
+    baseResult.discountPtg +
+    baseResult.vendorIncentivePtg +
+    baseResult.packageDiscountPtg +
+    baseResult.familyFriendsPtg;
   const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
 
   const addOnsTotal = addOnLines.reduce((s, a) => s + a.result.price, 0);
@@ -129,6 +139,8 @@ export function computeQuoteBreakdown(
     adjustedBeforeDiscount,
     discountAmount,
     vendorAmount,
+    packageDiscountAmount,
+    familyFriendsAmount,
     basePriceAdjusted,
     addOnsTotal,
     miscTotal,

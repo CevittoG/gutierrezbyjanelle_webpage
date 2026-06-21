@@ -9,7 +9,10 @@ export interface DraftClientInfo {
   name: string;
   eventDate: string;
   eventType: string;
+  /** Private working notes — never shown to the client. */
   notes: string;
+  /** Client-facing message shown on the public /q/[token] quote page. */
+  clientNotes: string;
 }
 
 export const EMPTY_CLIENT_INFO: DraftClientInfo = {
@@ -17,6 +20,7 @@ export const EMPTY_CLIENT_INFO: DraftClientInfo = {
   eventDate: "",
   eventType: "Wedding",
   notes: "",
+  clientNotes: "",
 };
 
 export const EVENT_TYPES = [
@@ -45,6 +49,10 @@ export interface DraftConfig {
   extraRevisions: number;
   digitalLicense: boolean;
   vendorIncentive: boolean;
+  /** Optional extra discount (0–100) applied like vendor incentive, e.g. bulk pricing. */
+  packageDiscountPtg: number;
+  /** Optional extra discount (0–100) for friends & family, stacks with the others. */
+  familyFriendsPtg: number;
   fullColor: boolean;
   customPaper: boolean;
   individualItem: string;
@@ -61,6 +69,8 @@ export const DEFAULT_CONFIG: DraftConfig = {
   extraRevisions: 0,
   digitalLicense: false,
   vendorIncentive: false,
+  packageDiscountPtg: 0,
+  familyFriendsPtg: 0,
   fullColor: false,
   customPaper: false,
   individualItem: "iInvite",
@@ -127,6 +137,7 @@ function migrateConfig(c: DraftConfig): DraftConfig {
 export function migrateDraft(d: Draft): Draft {
   return {
     ...d,
+    client: { ...EMPTY_CLIENT_INFO, ...d.client },
     config: migrateConfig(d.config),
     schemaVersion: CURRENT_SCHEMA_VERSION,
   };

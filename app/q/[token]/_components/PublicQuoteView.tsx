@@ -122,6 +122,18 @@ export function PublicQuoteView({ quote }: { quote: PublicQuote }) {
           </div>
         </motion.section>
 
+        {/* A note from Janelle */}
+        {quote.clientNote.trim() && (
+          <motion.section variants={item} className="mt-14" aria-labelledby="note-heading">
+            <p id="note-heading" className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              A note from Janelle
+            </p>
+            <div className="mt-3 rounded-2xl border border-accent/60 bg-accent/10 px-6 py-5">
+              <p className="text-[15px] leading-relaxed whitespace-pre-line">{quote.clientNote}</p>
+            </div>
+          </motion.section>
+        )}
+
         {/* Janelle's note + next step */}
         <motion.section variants={item} className="mt-16 text-center border-t border-border pt-12">
           <p className="font-squarepeg text-4xl leading-tight">Talk soon, Janelle</p>

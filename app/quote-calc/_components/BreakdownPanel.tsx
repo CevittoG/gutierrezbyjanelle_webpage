@@ -129,7 +129,18 @@ export function BreakdownPanel({
 
   const discountAmount = adjustedBeforeDiscount * (baseResult.discountPtg / 100);
   const vendorAmount = adjustedBeforeDiscount * (baseResult.vendorIncentivePtg / 100);
-  const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
+  const packageDiscountAmount = adjustedBeforeDiscount * (baseResult.packageDiscountPtg / 100);
+  const familyFriendsAmount = adjustedBeforeDiscount * (baseResult.familyFriendsPtg / 100);
+  const combinedDiscountPtg =
+    baseResult.discountPtg +
+    baseResult.vendorIncentivePtg +
+    baseResult.packageDiscountPtg +
+    baseResult.familyFriendsPtg;
+  const activeDiscountCount =
+    (baseResult.discountPtg > 0 ? 1 : 0) +
+    (baseResult.vendorIncentivePtg > 0 ? 1 : 0) +
+    (baseResult.packageDiscountPtg > 0 ? 1 : 0) +
+    (baseResult.familyFriendsPtg > 0 ? 1 : 0);
   const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
 
   // For display: full design labor (no reuse) + digital bonus
@@ -207,6 +218,8 @@ export function BreakdownPanel({
       rushFee ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
       digitalLicense ? "Digital file license included" : null,
       vendorIncentive ? `Vendor referral discount: ${assumptions.vendorIncentivePtg}%` : null,
+      baseResult.packageDiscountPtg > 0 ? `Package discount: ${baseResult.packageDiscountPtg}%` : null,
+      baseResult.familyFriendsPtg > 0 ? `Family & friends discount: ${baseResult.familyFriendsPtg}%` : null,
       fullColor ? "Full color designs" : null,
       customPaper ? "Custom paper" : null,
       String.fromCharCode(9472).repeat(37),
@@ -230,7 +243,7 @@ export function BreakdownPanel({
       className={cn(
         embedded
           ? ""
-          : "rounded-xl border border-border bg-card p-5 sticky top-4"
+          : "rounded-xl border border-border bg-card p-5 sticky top-20"
       )}
     >
       {/* Big total */}
@@ -373,7 +386,25 @@ export function BreakdownPanel({
           />
         )}
 
-        {combinedDiscountPtg > 0 && baseResult.vendorIncentivePtg > 0 && (
+        {baseResult.packageDiscountPtg > 0 && (
+          <Row
+            indent
+            label={`Package discount (-${fmtPct(baseResult.packageDiscountPtg)})`}
+            value={`-${fmt$2(packageDiscountAmount)}`}
+            dim
+          />
+        )}
+
+        {baseResult.familyFriendsPtg > 0 && (
+          <Row
+            indent
+            label={`Family & friends discount (-${fmtPct(baseResult.familyFriendsPtg)})`}
+            value={`-${fmt$2(familyFriendsAmount)}`}
+            dim
+          />
+        )}
+
+        {activeDiscountCount > 1 && (
           <Row
             indent
             label={`Combined discount`}

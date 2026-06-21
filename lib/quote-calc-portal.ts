@@ -59,6 +59,7 @@ export interface PublicQuote {
   savings: number; // total discount amount (>= 0); 0 when no discount applies
   total: number; // after savings, before shipping — same as the printed PDF
   proofs: { images: PublicQuoteFile[]; pdfs: PublicQuoteFile[] };
+  clientNote: string; // Janelle's client-facing message; "" when none set
 }
 
 function formatEventDate(iso: string): string {
@@ -117,7 +118,11 @@ export function buildPublicQuote(
   catalog: CatalogItem[] = ITEM_CATALOG,
 ): PublicQuote {
   const { config } = draft;
-  const savings = breakdown.discountAmount + breakdown.vendorAmount;
+  const savings =
+    breakdown.discountAmount +
+    breakdown.vendorAmount +
+    breakdown.packageDiscountAmount +
+    breakdown.familyFriendsAmount;
 
   return {
     clientName: draft.client.name || "",
@@ -131,5 +136,6 @@ export function buildPublicQuote(
       images: files.filter((f) => f.kind === "image"),
       pdfs: files.filter((f) => f.kind === "pdf"),
     },
+    clientNote: draft.client.clientNotes || "",
   };
 }

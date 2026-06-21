@@ -34,7 +34,6 @@ import {
   upsertDraft,
 } from "@/lib/quote-calc-drafts";
 import {
-  archiveRemoteDraft,
   fetchRemoteDrafts,
   pushRemoteDraft,
   RemoteFailure,
@@ -70,6 +69,8 @@ export function QuoteCalculator() {
   const [extraRevisions, setExtraRevisions] = useState(DEFAULT_CONFIG.extraRevisions);
   const [digitalLicense, setDigitalLicense] = useState(DEFAULT_CONFIG.digitalLicense);
   const [vendorIncentive, setVendorIncentive] = useState(DEFAULT_CONFIG.vendorIncentive);
+  const [packageDiscountPtg, setPackageDiscountPtg] = useState(DEFAULT_CONFIG.packageDiscountPtg);
+  const [familyFriendsPtg, setFamilyFriendsPtg] = useState(DEFAULT_CONFIG.familyFriendsPtg);
   const [fullColor, setFullColor] = useState(DEFAULT_CONFIG.fullColor);
   const [customPaper, setCustomPaper] = useState(DEFAULT_CONFIG.customPaper);
   const [individualItem, setIndividualItem] = useState(DEFAULT_CONFIG.individualItem);
@@ -112,12 +113,14 @@ export function QuoteCalculator() {
       extraRevisions,
       digitalLicense,
       vendorIncentive,
+      packageDiscountPtg,
+      familyFriendsPtg,
       fullColor,
       customPaper,
       individualItem,
       individualDigital,
     }),
-    [pkg, mode, qty, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, fullColor, customPaper, individualItem, individualDigital],
+    [pkg, mode, qty, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, packageDiscountPtg, familyFriendsPtg, fullColor, customPaper, individualItem, individualDigital],
   );
 
   // Apply a DraftConfig into state.
@@ -132,6 +135,8 @@ export function QuoteCalculator() {
     setExtraRevisions(c.extraRevisions);
     setDigitalLicense(c.digitalLicense);
     setVendorIncentive(c.vendorIncentive);
+    setPackageDiscountPtg(c.packageDiscountPtg);
+    setFamilyFriendsPtg(c.familyFriendsPtg);
     setFullColor(c.fullColor);
     setCustomPaper(c.customPaper);
     setIndividualItem(c.individualItem);
@@ -295,8 +300,8 @@ export function QuoteCalculator() {
   const overrideDigital = pkg === "individual" ? individualDigital : undefined;
 
   const baseResult = useMemo(
-    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive, catalog),
-    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive, catalog],
+    () => calcPackage(pkg, qty, mode, assumptions, extraRevisions, overrideItems, overrideDigital, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog),
+    [pkg, qty, mode, assumptions, extraRevisions, overrideItems?.[0], overrideDigital, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog],
   );
 
   const selectedAddOns = useMemo(
@@ -329,7 +334,11 @@ export function QuoteCalculator() {
     const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
     const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
     const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
-    const combinedDiscountPtg = baseResult.discountPtg + baseResult.vendorIncentivePtg;
+    const combinedDiscountPtg =
+      baseResult.discountPtg +
+      baseResult.vendorIncentivePtg +
+      baseResult.packageDiscountPtg +
+      baseResult.familyFriendsPtg;
     const basePriceAdjusted = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
     const addOnsTotal = selectedAddOns.reduce((s, a) => s + a.result.price, 0);
     const addOnsMaterials = selectedAddOns.reduce((s, a) => s + a.result.materialsCost, 0);
@@ -365,16 +374,6 @@ export function QuoteCalculator() {
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
     (el as HTMLInputElement | null)?.focus({ preventScroll: true });
     return false;
-  }
-
-  function handleNewDraft() {
-    if (draftDirty || currentDraftId !== null) {
-      if (!window.confirm("Start a new quote? Unsaved changes will be lost.")) return;
-    }
-    applyConfig(DEFAULT_CONFIG);
-    setClient(EMPTY_CLIENT_INFO);
-    setCurrentDraftId(null);
-    requestAnimationFrame(() => setDraftDirty(false));
   }
 
   async function syncDraftToRemote(d: Draft) {
@@ -431,44 +430,6 @@ export function QuoteCalculator() {
     void syncDraftToRemote(fresh);
   }
 
-  async function handleDraftsChange(next: Draft[]) {
-    // Called from DraftsBar after a delete or rename.
-    const prev = drafts;
-    setDrafts(next);
-    // If a draft was deleted, archive it remotely too.
-    const removed = prev.filter((p) => !next.some((n) => n.id === p.id));
-    for (const r of removed) {
-      setSyncStatus({ kind: "syncing" });
-      const result = await archiveRemoteDraft(r.id);
-      if (result.ok) {
-        setSyncStatus({ kind: "synced", at: new Date().toISOString() });
-      } else {
-        setSyncStatus(failureToStatus(result.failure));
-      }
-    }
-    // If a draft was renamed (kept id, different name), push the rename remotely too.
-    const renamed = next.filter((n) => {
-      const before = prev.find((p) => p.id === n.id);
-      return before && before.name !== n.name;
-    });
-    for (const r of renamed) {
-      void syncDraftToRemote(r);
-    }
-  }
-
-  function handleLoadDraft(id: string) {
-    const draft = drafts.find((d) => d.id === id);
-    if (!draft) return;
-    if (draftDirty) {
-      if (!window.confirm("Discard unsaved changes and load this draft?")) return;
-    }
-    setClient(draft.client);
-    setAssumptions(draft.assumptionsSnapshot);
-    applyConfig(draft.config);
-    setCurrentDraftId(draft.id);
-    requestAnimationFrame(() => setDraftDirty(false));
-  }
-
   const currentName =
     drafts.find((d) => d.id === currentDraftId)?.name ?? "Untitled quote";
 
@@ -489,16 +450,12 @@ export function QuoteCalculator() {
 
       <div className="mb-5">
         <DraftsBar
-          drafts={drafts}
           currentDraftId={currentDraftId}
           currentName={currentName}
           dirty={draftDirty}
           syncStatus={syncStatus}
-          onLoadDraft={handleLoadDraft}
-          onNew={handleNewDraft}
           onSave={handleSave}
           onSaveAs={handleSaveAs}
-          onDraftsChange={handleDraftsChange}
           onRefreshRemote={handleRefreshFromRemote}
         />
       </div>
@@ -538,7 +495,7 @@ export function QuoteCalculator() {
               {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
                 const isSelected = pkg === key;
-                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, catalog);
+                const previewResult = calcPackage(key, qty, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog);
                 const discount = getDiscountPtg(key, assumptions);
                 return (
                   <div key={key} className="relative group">
@@ -830,6 +787,22 @@ export function QuoteCalculator() {
                 </div>
               </label>
 
+              {/* Package discount — typed % */}
+              <DiscountInputRow
+                label="Package discount"
+                description="Optional extra discount, e.g. bulk pricing. Stacks with the package and other discounts."
+                value={packageDiscountPtg}
+                onChange={setPackageDiscountPtg}
+              />
+
+              {/* Family & friends discount — typed % */}
+              <DiscountInputRow
+                label="Family & friends discount"
+                description="Optional extra discount for friends and family. Stacks with the package and other discounts."
+                value={familyFriendsPtg}
+                onChange={setFamilyFriendsPtg}
+              />
+
               {/* Full color designs */}
               <label
                 className={cn(
@@ -940,6 +913,55 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+// An optional, typed percentage discount in the Extras section. Active (and
+// styled like a checked extra) whenever the value is above 0.
+function DiscountInputRow({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  const active = value > 0;
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-lg border p-3 transition-colors min-h-[44px]",
+        active ? "border-foreground/40 bg-muted" : "border-border bg-card"
+      )}
+    >
+      <div className="flex-1">
+        <span className="text-sm font-medium">
+          {label}
+          {active ? ` (-${value}%)` : ""}
+        </span>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={100}
+          step={1}
+          value={value}
+          onChange={(e) => {
+            const n = Math.round(Number(e.target.value));
+            onChange(Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0);
+          }}
+          aria-label={label}
+          className="h-11 w-16 rounded-lg border border-border bg-background px-2 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <span className="text-sm text-muted-foreground">%</span>
+      </div>
     </div>
   );
 }

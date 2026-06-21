@@ -79,15 +79,29 @@ export function ClientInfoSection({ client, onChange, dateError }: Props) {
       </div>
 
       <div className="sm:col-span-2">
+        <label htmlFor="hidden-notes" className={labelClass}>
+          Hidden notes
+        </label>
+        <textarea
+          id="hidden-notes"
+          rows={2}
+          value={client.notes}
+          placeholder="Private — for your eyes only. Never shown to the client."
+          onChange={(e) => set("notes", e.target.value)}
+          className={fieldClass + " resize-y"}
+        />
+      </div>
+
+      <div className="sm:col-span-2">
         <label htmlFor="client-notes" className={labelClass}>
-          Notes
+          Notes to the client
         </label>
         <textarea
           id="client-notes"
           rows={2}
-          value={client.notes}
-          placeholder="Private notes — not shown on the printed quote unless you choose to share them"
-          onChange={(e) => set("notes", e.target.value)}
+          value={client.clientNotes}
+          placeholder="Shown on the client's quote page — e.g. a warm message or a delivery note."
+          onChange={(e) => set("clientNotes", e.target.value)}
           className={fieldClass + " resize-y"}
         />
       </div>

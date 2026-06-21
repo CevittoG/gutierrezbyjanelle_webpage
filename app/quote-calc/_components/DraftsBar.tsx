@@ -1,21 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Draft, SyncStatus, deleteDraft, renameDraft } from "@/lib/quote-calc-drafts";
-import { fmt$ } from "@/lib/quote-calc-logic";
+import { SyncStatus } from "@/lib/quote-calc-drafts";
 import { cn } from "@/utils";
 
 interface Props {
-  drafts: Draft[];
   currentDraftId: string | null;
   currentName: string;
   dirty: boolean;
   syncStatus: SyncStatus;
-  onLoadDraft: (id: string) => void;
-  onNew: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onDraftsChange: (drafts: Draft[]) => void;
   onRefreshRemote: () => void;
 }
 
@@ -40,42 +34,14 @@ function syncLabel(s: SyncStatus): { label: string; tone: "neutral" | "good" | "
 }
 
 export function DraftsBar({
-  drafts,
   currentDraftId,
   currentName,
   dirty,
   syncStatus,
-  onLoadDraft,
-  onNew,
   onSave,
   onSaveAs,
-  onDraftsChange,
   onRefreshRemote,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-
-  function handleRename(id: string, oldName: string) {
-    const next = window.prompt("Rename quote", oldName);
-    if (next === null) return;
-    const trimmed = next.trim();
-    if (!trimmed || trimmed === oldName) return;
-    onDraftsChange(renameDraft(id, trimmed));
-  }
-
-  function handleDelete(id: string, name: string) {
-    if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return;
-    onDraftsChange(deleteDraft(id));
-  }
-
   const canPrint = currentDraftId !== null;
   const printHref = canPrint ? `/quote-calc/print?draft=${currentDraftId}` : "#";
   const sync = syncLabel(syncStatus);
@@ -117,13 +83,6 @@ export function DraftsBar({
         </button>
         <button
           type="button"
-          onClick={onNew}
-          className="h-10 px-3 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-        >
-          New
-        </button>
-        <button
-          type="button"
           onClick={onSave}
           disabled={!dirty && currentDraftId !== null}
           className="h-10 px-3 rounded-lg border border-border bg-foreground text-background text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
@@ -137,78 +96,6 @@ export function DraftsBar({
         >
           Save as…
         </button>
-
-        <div ref={ref} className="relative">
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="h-10 px-3 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
-            aria-haspopup="menu"
-            aria-expanded={open}
-          >
-            Open ▾ <span className="text-muted-foreground">({drafts.length})</span>
-          </button>
-          {open && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1 w-80 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-card shadow-lg z-30 overflow-hidden"
-            >
-              {drafts.length === 0 ? (
-                <p className="text-xs text-muted-foreground p-4 text-center">
-                  No saved drafts yet. Use "Save as…" to keep this quote.
-                </p>
-              ) : (
-                <ul className="max-h-[60vh] overflow-y-auto divide-y divide-border">
-                  {drafts.map((d) => {
-                    const isCurrent = d.id === currentDraftId;
-                    return (
-                      <li
-                        key={d.id}
-                        className={cn(
-                          "flex items-center gap-2 px-3 py-2 hover:bg-muted/40",
-                          isCurrent && "bg-muted/40"
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onLoadDraft(d.id);
-                            setOpen(false);
-                          }}
-                          className="flex-1 min-w-0 text-left"
-                        >
-                          <p className="text-sm font-medium truncate">{d.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {d.client.name || "—"} · {d.client.eventDate || "no date"} ·{" "}
-                            <span className="font-mono tabular-nums">{fmt$(Math.round(d.cachedTotal))}</span>
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRename(d.id, d.name)}
-                          aria-label="Rename"
-                          className="h-9 w-9 rounded-md text-xs text-muted-foreground hover:bg-muted flex items-center justify-center"
-                          title="Rename"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(d.id, d.name)}
-                          aria-label="Delete"
-                          className="h-9 w-9 rounded-md text-xs text-muted-foreground hover:bg-red-100 hover:text-red-700 flex items-center justify-center"
-                          title="Delete"
-                        >
-                          🗑
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
 
         <a
           href={printHref}

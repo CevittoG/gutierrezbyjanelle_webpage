@@ -262,6 +262,12 @@ export function getDiscountPtg(pkgKey: PkgKey, s: QuoteState): number {
   return stateVal(s, PACKAGES[pkgKey].discountKey);
 }
 
+// Clamp a typed discount percentage into the valid [0, 100] range.
+function clampPtg(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, n));
+}
+
 // --- Result types ---
 
 export interface ItemBreakdown {
@@ -299,6 +305,10 @@ export interface PackageResult {
   discountAmount: number;
   vendorIncentivePtg: number;
   vendorIncentiveAmount: number;
+  packageDiscountPtg: number;
+  packageDiscountAmount: number;
+  familyFriendsPtg: number;
+  familyFriendsAmount: number;
 
   totalDirectCosts: number;
   totalLaborCost: number;
@@ -342,6 +352,8 @@ export function calcPackage(
   fullColor?: boolean,
   customPaper?: boolean,
   vendorIncentive?: boolean,
+  packageDiscountPtg: number = 0,
+  familyFriendsPtg: number = 0,
   catalog: CatalogItem[] = ITEM_CATALOG,
 ): PackageResult {
   const pkg = PACKAGES[pkgKey];
@@ -416,9 +428,13 @@ export function calcPackage(
 
   const discountPtg = getDiscountPtg(pkgKey, s);
   const vendorIncentivePtg = vendorIncentive ? s.vendorIncentivePtg : 0;
-  const combinedDiscountPtg = discountPtg + vendorIncentivePtg;
+  const pkgDiscountPtg = clampPtg(packageDiscountPtg);
+  const ffDiscountPtg = clampPtg(familyFriendsPtg);
+  const combinedDiscountPtg = discountPtg + vendorIncentivePtg + pkgDiscountPtg + ffDiscountPtg;
   const discountAmount = priceBeforeDiscount * (discountPtg / 100);
   const vendorIncentiveAmount = priceBeforeDiscount * (vendorIncentivePtg / 100);
+  const packageDiscountAmount = priceBeforeDiscount * (pkgDiscountPtg / 100);
+  const familyFriendsAmount = priceBeforeDiscount * (ffDiscountPtg / 100);
   const finalPrice = priceBeforeDiscount * (1 - combinedDiscountPtg / 100);
 
   const totalDirectCosts = totalMaterials + packaging;
@@ -432,6 +448,8 @@ export function calcPackage(
     totalVariable, totalFullVariable, adminAmount, profitAmount,
     priceBeforeDiscount, discountPtg, discountAmount,
     vendorIncentivePtg, vendorIncentiveAmount,
+    packageDiscountPtg: pkgDiscountPtg, packageDiscountAmount,
+    familyFriendsPtg: ffDiscountPtg, familyFriendsAmount,
     totalDirectCosts, totalLaborCost, netProfit, effectiveMargin,
     itemBreakdown, isDigital,
   };

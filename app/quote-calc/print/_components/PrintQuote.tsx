@@ -386,9 +386,9 @@ export function PrintQuote() {
                 {siteConfig.url.replace(/^https?:\/\//, "")}
               </a>
             </p>
-            {client.notes && (
-              <p className="text-xs text-muted-foreground mt-3 italic max-w-md mx-auto">
-                {client.notes}
+            {client.clientNotes && (
+              <p className="text-xs text-muted-foreground mt-3 italic max-w-md mx-auto whitespace-pre-line">
+                {client.clientNotes}
               </p>
             )}
           </footer>
