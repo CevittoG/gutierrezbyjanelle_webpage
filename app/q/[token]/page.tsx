@@ -16,8 +16,10 @@ import { mergeRemoteConfig } from "@/lib/quote-calc-config";
 import { ITEM_CATALOG } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
 import {
+  buildPublicProgress,
   buildPublicQuote,
   isLinkActive,
+  projectTypeOf,
   type PublicQuoteFile,
 } from "@/lib/quote-calc-portal";
 import { driveFileKind, listFolderFiles } from "@/lib/quote-calc-drive";
@@ -77,6 +79,8 @@ export default async function PublicQuotePage({
     }
   }
 
-  const quote = buildPublicQuote(draft, breakdown, files, catalog);
-  return <PublicQuoteView quote={quote} />;
+  const type = projectTypeOf(draft.config);
+  const quote = buildPublicQuote(draft, breakdown, files, catalog, meta.depositPaid);
+  const progress = buildPublicProgress(meta, type);
+  return <PublicQuoteView quote={quote} progress={progress} token={token} />;
 }
