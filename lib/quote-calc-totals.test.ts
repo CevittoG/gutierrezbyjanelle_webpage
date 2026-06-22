@@ -121,8 +121,10 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   const sig = disc.lines[0];
   const expectedPtg = S.discountSignature + S.vendorIncentivePtg + 10; // bundle + vendor + family
   check("line discount % is additive (no compounding)", approx(sig.discountPtg, Math.min(100, expectedPtg)));
-  check("line discount = laborList × combined %", approx(sig.discountAmount, sig.laborList * (sig.discountPtg / 100)));
-  check("discount never exceeds labor value", disc.lines.every((l) => l.discountAmount <= l.laborList + 1e-9));
+  check("line discount = raw labor × combined %", approx(sig.discountAmount, sig.laborBase * (sig.discountPtg / 100)));
+  check("discount never exceeds raw labor cost", disc.lines.every((l) => l.discountAmount <= l.laborBase + 1e-9));
+  // The base is raw labor — admin/profit on labor is NOT given away.
+  check("discount base excludes markup on labor", disc.lines.every((l) => l.laborBase < l.list));
   // The item line (no bundle) is discounted only by the relationship %s.
   const menu = disc.lines[1];
   check("item line carries no bundle discount", menu.bundleDiscountPtg === 0);
@@ -160,9 +162,9 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   const l = b.lines[0];
   check("sweet bundle discount = discountSweet%", approx(l.bundleDiscountPtg, S.discountSweet));
   check("sweet net < list when discounted", l.net < l.list);
-  check("bundle discount = laborList × discountSweet%", approx(l.bundleDiscountAmount, l.laborList * (S.discountSweet / 100)));
+  check("bundle discount = raw labor × discountSweet%", approx(l.bundleDiscountAmount, l.laborBase * (S.discountSweet / 100)));
   check("net = list − bundle discount (no other discount)", approx(l.net, l.list - l.bundleDiscountAmount));
-  // The discount comes off labor, so it's strictly smaller than a list-based one.
+  // The discount comes off raw labor, so it's strictly smaller than a list-based one.
   check("labor-only discount < list-based discount", l.bundleDiscountAmount < l.list * (S.discountSweet / 100));
 }
 

@@ -11,10 +11,11 @@
 //   • All discounts are ADDITIVE — a package's bundle discount and the
 //     relationship discounts (vendor / family & friends / custom) sum into one
 //     percentage per line. Nothing compounds.
-//   • That percentage bites the LABOR portion of the line only (design +
-//     production, carried through markup). Materials, admin overhead, project
-//     services, and misc are never discounted — a discount only ever gives away
-//     your own time, so it can't quietly eat real cost.
+//   • That percentage bites the raw LABOR cost of the line only (design +
+//     production time at cost — NOT marked up). Materials, admin overhead,
+//     target profit, project services, and misc are never discounted — a
+//     discount only ever lowers your effective hourly rate, so it can't touch
+//     real cost or the margin earned on anything but your own time.
 //
 // No IO, no React — importable on the server and the client.
 
@@ -32,7 +33,6 @@ import {
   calcQuoteServices,
   clampPtg,
   getDiscountPtg,
-  markupLabor,
   markupVariable,
 } from "./quote-calc-logic";
 
@@ -45,8 +45,8 @@ export interface DiscountComponent {
 }
 
 // One priced quote line — a bundle or a single item. `list` is the marked-up
-// price; `laborList` is labor's share of it (the only part a discount touches);
-// `net` is `list` minus the additive line discount.
+// price; `laborBase` is the line's raw labor cost (the only part a discount
+// touches); `net` is `list` minus the additive line discount.
 export interface LineResult {
   id: string;
   kind: LineKind;
@@ -60,14 +60,14 @@ export interface LineResult {
   admin: number;
   profit: number;
   list: number;
-  /** Marked-up labor (design + production) — the discountable base for this line. */
-  laborList: number;
+  /** Raw labor cost (design + production, at cost) — the discountable base. */
+  laborBase: number;
   /** Bundle discount (packages only) — the package's own intrinsic discount. */
   bundleDiscountPtg: number;
   bundleDiscountAmount: number;
   /** Every discount on this line (bundle + relationship), itemized; nonzero only. */
   discountComponents: DiscountComponent[];
-  /** Effective combined discount %, clamped to [0,100], applied to `laborList`. */
+  /** Effective combined discount %, clamped to [0,100], applied to `laborBase`. */
   discountPtg: number;
   discountAmount: number;
   net: number;
@@ -87,7 +87,7 @@ export interface QuoteBreakdown {
   // Line-item rollups.
   itemsList: number; // Σ line.list (before any discount)
   itemsNet: number; // Σ line.net (after each line's additive discount)
-  totalLaborList: number; // Σ line.laborList (the total discountable base)
+  totalLaborBase: number; // Σ line.laborBase (the total discountable base)
 
   // Discounts (all additive, labor-only).
   discountTotal: number; // itemsList − itemsNet (= Σ line.discountAmount)
@@ -147,7 +147,10 @@ function priceLine(
   }
 
   const { admin, profit, list } = markupVariable(cost.totalVariable, assumptions);
-  const laborList = markupLabor(cost.totalDesignLabor + cost.totalProductionLabor, assumptions);
+  // Discount base = raw labor cost (your time at cost). NOT marked up, so a
+  // discount lowers only your effective hourly rate — admin, profit, and
+  // materials are all left whole.
+  const laborBase = cost.totalDesignLabor + cost.totalProductionLabor;
 
   // Additive discount: bundle (this line's own) + the shared relationship %s.
   // Clamp the *sum* so the combined discount never exceeds the labor value; if
@@ -159,8 +162,8 @@ function priceLine(
   const scale = rawPtg > 0 ? discountPtg / rawPtg : 0;
   const discountComponents: DiscountComponent[] = components
     .filter((d) => d.ptg > 0)
-    .map((d) => ({ label: d.label, ptg: d.ptg, amount: laborList * (d.ptg / 100) * scale }));
-  const discountAmount = laborList * (discountPtg / 100);
+    .map((d) => ({ label: d.label, ptg: d.ptg, amount: laborBase * (d.ptg / 100) * scale }));
+  const discountAmount = laborBase * (discountPtg / 100);
   const bundleDiscountAmount = discountComponents.find((d) => d.label === "Bundle")?.amount ?? 0;
 
   return {
@@ -175,7 +178,7 @@ function priceLine(
     admin,
     profit,
     list,
-    laborList,
+    laborBase,
     bundleDiscountPtg,
     bundleDiscountAmount,
     discountComponents,
@@ -207,7 +210,7 @@ export function computeQuoteBreakdown(
 
   const itemsList = sum((l) => l.list);
   const itemsNet = sum((l) => l.net);
-  const totalLaborList = sum((l) => l.laborList);
+  const totalLaborBase = sum((l) => l.laborBase);
   const discountTotal = itemsList - itemsNet;
   const bundleDiscountTotal = sum((l) => l.bundleDiscountAmount);
   const totalDesignLabor = sum((l) => l.cost.totalDesignLabor);
@@ -259,7 +262,7 @@ export function computeQuoteBreakdown(
     lines,
     itemsList,
     itemsNet,
-    totalLaborList,
+    totalLaborBase,
     discountTotal,
     bundleDiscountTotal,
     relationshipDiscountLines,

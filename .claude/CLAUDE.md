@@ -222,11 +222,11 @@ invariant the redesign enforces.
 # Per LINE (package bundle or single item)
 variable   = Σ(design_labor + production_labor + materials)   # NO revision, NO packaging
 list       = variable × (1 + admin%) × (1 + target_profit%)
-labor_list = (design_labor + production_labor) × (1 + admin%) × (1 + target_profit%)   # labor's share of list
+labor_base = design_labor + production_labor                  # RAW labor cost (NOT marked up)
 
-# All discounts are ADDITIVE and bite LABOR ONLY (never materials/admin/services).
+# All discounts are ADDITIVE and bite RAW LABOR ONLY (never materials/admin/profit/services).
 line_disc% = clamp( bundle_discount% + vendorIncentivePtg + familyFriendsPtg + customDiscountPtg )   # bundle = packages only, 0 for items
-net        = list − labor_list × line_disc%                   # discount comes off labor_list, not list
+net        = list − labor_base × line_disc%                   # discount lowers your effective hourly rate only
 
 # Once per QUOTE (computed a single time, then marked up — never discounted)
 revision   = extraRevisions × revisionMin/60 × hourly
@@ -253,9 +253,10 @@ drives the catalog qty rules. The same catalog item prices identically wherever 
 **Discounts** (one consistent rule): a package's intrinsic **bundle discount** (`discountSweet`,
 etc., packages only) and the three **relationship discounts** (vendor incentive, family & friends,
 custom) all **add together** into one per-line percentage (`clampPtg`, no compounding). That
-percentage bites the line's **marked-up labor only** (`labor_list` = design + production carried
-through markup) — materials, admin overhead, project services, and misc are **never** discounted, so
-a discount can only ever give away your own time and can't quietly cut into real cost. Each line's
+percentage bites the line's **raw labor cost only** (`labor_base` = design + production at cost, NOT
+marked up) — materials, admin overhead, target profit, project services, and misc are **never**
+discounted, so a discount only lowers your effective hourly rate and can't touch real cost or the
+margin earned on anything but your own time. Each line's
 discount is itemized in `LineResult.discountComponents`; the relationship %s are also aggregated
 across lines into `relationshipDiscountLines` for the client-facing surfaces (bundle stays per line).
 Family & friends and custom are typed integers stored on the draft; vendor incentive's % lives in
@@ -271,7 +272,7 @@ itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public pr
 
 | File | Role |
 |------|------|
-| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items — bundled fallback), `PACKAGES` (6 bundle tiers: 3 wedding + 3 events). Pure **cost** functions only (no markup/discount lives here anymore): `calcPackageCost()` (bundle), `calcItemCost()` (single item, raw qty), both → `LineCost`; `calcQuoteServices()` → once-per-quote `QuoteServices`; `markupVariable()` (admin+profit on full variable), `markupLabor()` (admin+profit on labor only — the discountable base), `clampPtg()`, `getDiscountPtg()`, `getItemQty()`. All take an optional `catalog`. `PkgItem` supports per-item multiplier/displayLabel |
+| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items — bundled fallback), `PACKAGES` (6 bundle tiers: 3 wedding + 3 events). Pure **cost** functions only (no markup/discount lives here anymore): `calcPackageCost()` (bundle), `calcItemCost()` (single item, raw qty), both → `LineCost`; `calcQuoteServices()` → once-per-quote `QuoteServices`; `markupVariable()` (admin+profit on variable), `clampPtg()`, `getDiscountPtg()`, `getItemQty()`. All take an optional `catalog`. `PkgItem` supports per-item multiplier/displayLabel |
 | `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
 | `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
 | `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `lines: QuoteLine[]` (unified — each line `kind: "package" \| "item"`, schema **v4**), `miscAddOns: MiscAddOn[]`, `customDiscountPtg`/`familyFriendsPtg`, `SyncStatus`, `reconcileDrafts()`. `migrateConfig` collapses every legacy shape into `lines`: v1/v2 single `pkg`/`qty`, v3 `packages[]` + `addOns` record + the `individual` pseudo-package → item lines (individual qty preserved via `getItemQty`), and `packageDiscountPtg`→`customDiscountPtg`; iDrinkTop→iWedgeTop still applied |
@@ -291,7 +292,7 @@ itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public pr
 | `app/quote-calc/_components/PasswordGate.tsx` | Branded password gate; the front door for every gated page (`/quotes`, `/quote/new`, `/quotes/[id]`) |
 | `components/quote-app/AppShell.tsx` | Slim sticky app chrome (Dashboard / New quote nav + sign-out) for the gated tools; replaces the marketing header/footer (which self-hide on `^/(quotes|quote|quote-calc|q)` via `usePathname`) |
 | `components/quote-app/LinkControls.tsx` | Public-link controls (generate/regenerate/copy/revoke); shared by the dashboard and Profile Overview (moved here from the old explorer) |
-| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the **single source of truth for the money math**. Prices each line (`LineResult`) applying one **additive, labor-only** discount per line (bundle + relationship, via `markupLabor`), adds the once-per-quote `services` (never discounted), then rush + misc. Returns `itemsList/itemsNet`, `totalLaborList`, `discountTotal`, `bundleDiscountTotal`, `relationshipDiscountLines`, `services`, `savings`, `subtotalList`, `finalPrice`. Shared by the calculator, print view, and public portal. Invariants covered by `lib/quote-calc-totals.test.ts` (compile with `tsc` + run on Node — no test runner wired up) |
+| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the **single source of truth for the money math**. Prices each line (`LineResult`) applying one **additive, raw-labor-only** discount per line (bundle + relationship, biting `laborBase` = design + production at cost), adds the once-per-quote `services` (never discounted), then rush + misc. Returns `itemsList/itemsNet`, `totalLaborBase`, `discountTotal`, `bundleDiscountTotal`, `relationshipDiscountLines`, `services`, `savings`, `subtotalList`, `finalPrice`. Shared by the calculator, print view, and public portal. Invariants covered by `lib/quote-calc-totals.test.ts` (compile with `tsc` + run on Node — no test runner wired up) |
 | `lib/quote-calc-portal.ts` | **Pure** Phase 3 types + helpers: `PortalMeta`, `LinkStatus`, `isLinkActive`/`isLinkExpired`, `PublicQuote` shape, and `buildPublicQuote()` — the projector that strips everything secret down to the client-safe shape |
 | `lib/quote-calc-drive.ts` | **Server-only** Drive v3 REST (no `googleapis`): `createQuoteSubfolder`, `ensureQuoteFolder` (auto-create on save), `listFolderFiles` (60s cache), `streamFile` (alt=media, streamed), `folderWebLink`. Uses the shared SA token from `quote-calc-sheets` |
 | `app/q/[token]/page.tsx` · `_components/PublicQuoteView.tsx` | **Public** "Client Quote Profile" (no admin cookie, `force-dynamic`, noindex). Token → `PublicQuote` + `PublicProgress`; work-first sell layout: stage tracker, proofs, proof-approval action, suite, itemized investment + deposit/balance, contact CTA |
@@ -394,7 +395,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Phase 3: client portal + Drive proofs — auto-created per-quote Drive subfolder (read+create scopes), public tokenized read-only `/q/[token]` route, streaming file proxy with folder-membership check, and an admin Quote Explorer with link generate/revoke controls. Portal metadata in `Quotes` columns N–R
 - Phase 4: lifecycle stages + client approval + itemized client pricing — 9-stage pipeline (physical/digital wording) Janelle drives from Profile Overview (`Quotes` cols S/T), an amount-based deposit (fixed expected `depositAmount` + recorded **deposit paid** in col U, balance = total − paid), editable hidden notes (col K + `_data`), two-step client proof approval that auto-advances `approval → balance`, and a horizontal scrollable step tracker + itemized investment on `/q/[token]`
 - Phase 5: pricing-engine redesign for consistency — unified `lines` data model (schema v4: packages + items in one array; add-ons and the `individual` pseudo-package retired), revision/packaging/digital-license moved from per-line to **once-per-quote project services**, packaging charged once per order, and the same catalog item now prices identically wherever it's added. Engine split into pure cost functions (`calcPackageCost`/`calcItemCost`/`calcQuoteServices`) with all money math centralized in `computeQuoteBreakdown`. Invariants locked by `lib/quote-calc-totals.test.ts`
-- Phase 6: discount-logic redesign for consistency & margin safety — **all discounts are additive** (bundle + vendor + family & friends + custom sum into one per-line %, no compounding) and bite the **marked-up labor portion only** (`markupLabor`), so materials, admin overhead, and project services are never discounted; the orphaned `discountIndividual` setting removed; resulting net margin surfaced (no hard floor). One discount rule across calculator, print, and portal
+- Phase 6: discount-logic redesign for consistency & margin safety — **all discounts are additive** (bundle + vendor + family & friends + custom sum into one per-line %, no compounding) and bite the **raw labor cost only** (`laborBase` = design + production at cost, not marked up), so materials, admin overhead, target profit, and project services are never discounted — a discount only lowers your effective hourly rate; the orphaned `discountIndividual` setting removed; resulting net margin surfaced (no hard floor). One discount rule across calculator, print, and portal
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons

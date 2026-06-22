@@ -16,7 +16,6 @@ import {
   getDiscountPtg,
   getItemQty,
   loadSavedDefaults,
-  markupLabor,
   markupVariable,
 } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
@@ -300,15 +299,15 @@ export function QuoteCalculator() {
   );
 
   // Rough per-package preview price (list minus the bundle discount, which comes
-  // off labor only) for the picker cards — the real number is the line's `net`
-  // once it's on the quote.
+  // off raw labor only) for the picker cards — the real number is the line's
+  // `net` once it's on the quote.
   const pkgPreview = useCallback(
     (key: PkgKey): number => {
       const cost = calcPackageCost(key, DEFAULT_LINE_QTY, mode, assumptions, fullColor, customPaper, catalog);
       const { list } = markupVariable(cost.totalVariable, assumptions);
-      const laborList = markupLabor(cost.totalDesignLabor + cost.totalProductionLabor, assumptions);
+      const laborBase = cost.totalDesignLabor + cost.totalProductionLabor;
       const disc = clampPtg(getDiscountPtg(key, assumptions));
-      return list - laborList * (disc / 100);
+      return list - laborBase * (disc / 100);
     },
     [mode, assumptions, fullColor, customPaper, catalog],
   );

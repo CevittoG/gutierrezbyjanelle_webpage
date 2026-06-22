@@ -462,15 +462,6 @@ export function markupVariable(
   return { admin, profit, list: variable + admin + profit };
 }
 
-// The marked-up selling value of a line's *labor only* (design + production).
-// This is the discountable base: a discount only ever gives away your time, so
-// materials, admin overhead, and project services stay whole. Markup is linear,
-// so `markupLabor(labor) + markupLabor(materials) === markupVariable(variable)` —
-// i.e. this is exactly labor's share of the line's `list` price.
-export function markupLabor(labor: number, s: QuoteState): number {
-  return markupVariable(labor, s).list;
-}
-
 // Quote-level project services, computed once for the whole quote: extra
 // revision rounds, a single packaging charge (when any piece is physical), and
 // the optional digital-file license (a % of total design labor). The sum is

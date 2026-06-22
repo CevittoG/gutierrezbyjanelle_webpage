@@ -167,7 +167,7 @@ function LineBlock({
       {/* ─── DISCOUNTS (additive, labor-only) ─── */}
       {line.discountComponents.length > 0 && (
         <>
-          <SectionLabel>Discounts · on labor {fmt$2(line.laborList)}</SectionLabel>
+          <SectionLabel>Discounts · on labor {fmt$2(line.laborBase)}</SectionLabel>
           {line.discountComponents.map((d) => (
             <Row
               key={d.label}
