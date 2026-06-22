@@ -18,15 +18,16 @@ import type {
   RemoteItem,
   RemoteSetting,
 } from "./quote-calc-config";
-import type { LinkStatus, PortalMeta } from "./quote-calc-portal";
+import type { LinkStatus, PortalMeta, ProjectStage } from "./quote-calc-portal";
+import { nextStage } from "./quote-calc-portal";
 import { packagesDisplayName, summarizeLineItems } from "./quote-calc-summary";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
-// Draft data (A–M) is written by the draft pipeline. Portal metadata (N–R) is
+// Draft data (A–M) is written by the draft pipeline. Portal metadata (N–U) is
 // written only by the portal accessors below, so a quote save never clobbers a
-// public token. The header spans the full A–R width.
-const HEADER_RANGE = `${SHEET_TAB}!A1:R1`;
+// public token / lifecycle state. The header spans the full A–U width.
+const HEADER_RANGE = `${SHEET_TAB}!A1:U1`;
 const NUM_COLS = 13; // A..M (draft readable columns)
 
 // --- Phase 2: human-readable Quotes tab + separate _data payload tab ---
@@ -39,7 +40,8 @@ const NUM_COLS = 13; // A..M (draft readable columns)
 //   (the client-facing note lives only in the _data Draft JSON, not a column)
 //   --- Phase 3 portal metadata (server-managed; Janelle-editable) ---
 //   N  Drive folder | O  Public token | P  Link status | Q  Expires
-//   R  Approved (reserved)
+//   --- Phase 4 lifecycle (server-managed; Janelle-editable) ---
+//   R  Approved at  | S  Stage        | T  Approved by | U  Deposit paid ($)
 //
 // New "_data" tab (header row in A1:B1): A Quote ID | B Payload (JSON)
 //
@@ -66,12 +68,16 @@ const NEW_HEADER_ROW: Row = [
   "Hidden notes",
   "Created",
   "Updated",
-  // Phase 3 portal metadata (N–R).
+  // Phase 3 portal metadata (N–Q).
   "Drive folder",
   "Public token",
   "Link status",
   "Expires",
-  "Approved",
+  // Phase 4 lifecycle (R–U).
+  "Approved at",
+  "Stage",
+  "Approved by",
+  "Deposit paid",
 ];
 
 const DATA_TAB = "_data";
@@ -105,16 +111,19 @@ const LEGACY_COL = {
   payload: 12,
 } as const;
 
-// Phase 3 portal metadata columns (0-indexed; N–R).
+// Phase 3 portal metadata + Phase 4 lifecycle columns (0-indexed; N–U).
 const PORTAL_COL = {
   driveFolderId: 13, // N
   publicToken: 14, // O
   linkStatus: 15, // P
   expiresAt: 16, // Q
   approvedAt: 17, // R
+  stage: 18, // S
+  approvedBy: 19, // T
+  depositPaid: 20, // U
 } as const;
 
-// 0-indexed column → A1 letter. Valid for the A–R range we use (0–17).
+// 0-indexed column → A1 letter. Valid for the A–U range we use (0–20).
 function colLetter(index: number): string {
   return String.fromCharCode("A".charCodeAt(0) + index);
 }
@@ -407,7 +416,7 @@ async function migrateLegacyQuotesTab(
 
   // Wipe existing data rows (incl. any stale portal columns) so column
   // meanings don't get mixed.
-  await clearRange(docId, `${SHEET_TAB}!A2:R`);
+  await clearRange(docId, `${SHEET_TAB}!A2:U`);
 
   // Write new header.
   await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
@@ -586,6 +595,9 @@ function rowToPortalMeta(row: Row): PortalMeta | null {
     linkStatus,
     expiresAt: String(row[PORTAL_COL.expiresAt] ?? "").trim(),
     approvedAt: String(row[PORTAL_COL.approvedAt] ?? "").trim(),
+    stage: String(row[PORTAL_COL.stage] ?? "").trim(),
+    approvedBy: String(row[PORTAL_COL.approvedBy] ?? "").trim(),
+    depositPaid: parseNumber(row[PORTAL_COL.depositPaid]) ?? 0,
   };
 }
 
@@ -600,7 +612,7 @@ async function loadPortalMeta(force = false): Promise<Map<string, PortalMeta>> {
   if (inflightPortal) return inflightPortal;
 
   inflightPortal = (async () => {
-    const rows = await readRange(cfg.docId, `${SHEET_TAB}!A${FIRST_DATA_ROW}:R`);
+    const rows = await readRange(cfg.docId, `${SHEET_TAB}!A${FIRST_DATA_ROW}:U`);
     const metaById = new Map<string, PortalMeta>();
     for (const row of rows) {
       const meta = rowToPortalMeta(row);
@@ -690,6 +702,52 @@ export async function activatePublicLink(
 
 export async function revokePublicLink(id: string): Promise<boolean> {
   return writePortalCells(id, PORTAL_COL.linkStatus, ["revoked"]);
+}
+
+// --- Phase 4: lifecycle stage + client approval (columns R–T) ---
+
+// Set the project stage (column S). Caller validates `stage` against STAGE_ORDER.
+export async function setProjectStage(id: string, stage: ProjectStage): Promise<boolean> {
+  return writePortalCells(id, PORTAL_COL.stage, [stage]);
+}
+
+// Record the client's proof approval and auto-advance the stage. Writes the
+// contiguous R–T run in one call: R=approved-at timestamp, S=next stage,
+// T=approver name. `fromStage` is the stage at approval time (expected "approval").
+export async function recordApproval(
+  id: string,
+  name: string,
+  fromStage: ProjectStage,
+): Promise<boolean> {
+  const approvedAt = new Date().toISOString();
+  const advanced = nextStage(fromStage);
+  return writePortalCells(id, PORTAL_COL.approvedAt, [approvedAt, advanced, name]);
+}
+
+// Record how much of the deposit the client has paid (column U). Display-only:
+// the client portal shows it and derives the remaining balance from it.
+export async function setDepositPaid(id: string, amount: number): Promise<boolean> {
+  const safe = Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0;
+  return writePortalCells(id, PORTAL_COL.depositPaid, [safe]);
+}
+
+// Update a quote's private hidden notes (admin-only). Writes both the readable
+// column K and the `_data` Draft JSON so the calculator and the sheet agree.
+// Does not touch any other draft field or the row's status.
+export async function updateHiddenNotes(id: string, notes: string): Promise<boolean> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const draft = await getDraftById(id);
+  if (!draft) return false;
+  const updated: Draft = {
+    ...draft,
+    client: { ...draft.client, notes },
+    updatedAt: new Date().toISOString(),
+  };
+  await upsertDataPayload(cfg.docId, id, draftToPayloadRow(updated));
+  // Readable mirror in column K (locates the row by id; cache invalidation is a
+  // harmless no-op for a non-portal column).
+  return writePortalCells(id, NEW_COL.notes, [notes]);
 }
 
 // --- Config (Items + Settings) reader ---
