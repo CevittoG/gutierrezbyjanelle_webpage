@@ -17,7 +17,6 @@ export interface QuoteState {
   reuseFactor: number;
   revisionMin: number;
 
-  discountIndividual: number;
   discountDiy: number;
   discountSweet: number;
   discountSignature: number;
@@ -59,7 +58,7 @@ export const DEFAULTS: QuoteState = {
   hourly: 25, adminPtg: 10, targetProfitPtg: 15, errorMarginPtg: 5,
   packagingCost: 2.5, reuseFactor: 0.25, revisionMin: 30,
 
-  discountIndividual: 0, discountDiy: 10, discountSweet: 12, discountSignature: 15,
+  discountDiy: 10, discountSweet: 12, discountSignature: 15,
   discountEventBasics: 0, discountEventFun: 0, discountEventWorks: 0,
 
   vendorIncentivePtg: 10, fullColorFactor: 1.5, customPaperFactor: 1.3, rushFeePtg: 30, digitalLicensePtg: 30,
@@ -461,6 +460,15 @@ export function markupVariable(
   const admin = variable * (s.adminPtg / 100);
   const profit = (variable + admin) * (s.targetProfitPtg / 100);
   return { admin, profit, list: variable + admin + profit };
+}
+
+// The marked-up selling value of a line's *labor only* (design + production).
+// This is the discountable base: a discount only ever gives away your time, so
+// materials, admin overhead, and project services stay whole. Markup is linear,
+// so `markupLabor(labor) + markupLabor(materials) === markupVariable(variable)` —
+// i.e. this is exactly labor's share of the line's `list` price.
+export function markupLabor(labor: number, s: QuoteState): number {
+  return markupVariable(labor, s).list;
 }
 
 // Quote-level project services, computed once for the whole quote: extra

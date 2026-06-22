@@ -77,7 +77,6 @@ const SETTINGS_WHITELIST = new Set<keyof QuoteState>([
   "packagingCost",
   "reuseFactor",
   "revisionMin",
-  "discountIndividual",
   "discountDiy",
   "discountSweet",
   "discountSignature",

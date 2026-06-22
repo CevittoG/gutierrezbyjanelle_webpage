@@ -101,9 +101,32 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
     S,
   );
   check("subtotalList − savings + rush == finalPrice", approx(b.subtotalList - b.savings + b.rushAmount, b.finalPrice));
-  check("savings == bundle + quote discount", approx(b.savings, b.bundleDiscountTotal + b.quoteDiscountAmount));
-  check("preDiscount == itemsNet + servicesList", approx(b.preDiscount, b.itemsNet + b.services.servicesList));
-  check("itemized quote discount lines sum to total (≤100%)", approx(b.quoteDiscountLines.reduce((s, d) => s + d.amount, 0), b.quoteDiscountAmount));
+  check("savings == discountTotal", approx(b.savings, b.discountTotal));
+  check("discountTotal == itemsList − itemsNet", approx(b.discountTotal, b.itemsList - b.itemsNet));
+  check("savings == bundle + relationship totals", approx(b.savings, b.bundleDiscountTotal + b.relationshipDiscountLines.reduce((s, d) => s + d.amount, 0)));
+  check("rush is on items + services (not misc, not pre-discount)", approx(b.rushAmount, (b.itemsNet + b.services.servicesList) * (S.rushFeePtg / 100)));
+}
+
+// 5b. Discounts bite LABOR only, additively — never materials, admin, or services.
+{
+  const base = cfg({ lines: [pkg("signature", 90), item("iMenu", 120)], extraRevisions: 2, digitalLicense: true });
+  const plain = computeQuoteBreakdown(base, S);
+  const disc = computeQuoteBreakdown({ ...base, vendorIncentive: true, familyFriendsPtg: 10 }, S);
+
+  // Project services are identical with and without the relationship discount.
+  check("services untouched by discounts", approx(plain.services.servicesList, disc.services.servicesList));
+  // Each line's list price (materials + admin + profit + labor) is untouched; only net moves.
+  check("line list prices untouched by discounts", disc.lines.every((l, i) => approx(l.list, plain.lines[i].list)));
+  // A line's discount equals its marked-up labor × the additive, clamped %.
+  const sig = disc.lines[0];
+  const expectedPtg = S.discountSignature + S.vendorIncentivePtg + 10; // bundle + vendor + family
+  check("line discount % is additive (no compounding)", approx(sig.discountPtg, Math.min(100, expectedPtg)));
+  check("line discount = laborList × combined %", approx(sig.discountAmount, sig.laborList * (sig.discountPtg / 100)));
+  check("discount never exceeds labor value", disc.lines.every((l) => l.discountAmount <= l.laborList + 1e-9));
+  // The item line (no bundle) is discounted only by the relationship %s.
+  const menu = disc.lines[1];
+  check("item line carries no bundle discount", menu.bundleDiscountPtg === 0);
+  check("item line discount % = vendor + family", approx(menu.discountPtg, S.vendorIncentivePtg + 10));
 }
 
 // 6. Public projector closes the same way (client-safe shape never drifts).
@@ -131,11 +154,16 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   check("public total == engine finalPrice", approx(q.total, breakdown.finalPrice));
 }
 
-// 7. Bundle discount applies to package lines (and only to them).
+// 7. Bundle discount applies to package lines (and only to them), off labor.
 {
   const b = computeQuoteBreakdown(cfg({ lines: [pkg("sweet", 75)] }), S);
-  check("sweet bundle discount = discountSweet%", approx(b.lines[0].bundleDiscountPtg, S.discountSweet));
-  check("sweet net < list when discounted", b.lines[0].net < b.lines[0].list);
+  const l = b.lines[0];
+  check("sweet bundle discount = discountSweet%", approx(l.bundleDiscountPtg, S.discountSweet));
+  check("sweet net < list when discounted", l.net < l.list);
+  check("bundle discount = laborList × discountSweet%", approx(l.bundleDiscountAmount, l.laborList * (S.discountSweet / 100)));
+  check("net = list − bundle discount (no other discount)", approx(l.net, l.list - l.bundleDiscountAmount));
+  // The discount comes off labor, so it's strictly smaller than a list-based one.
+  check("labor-only discount < list-based discount", l.bundleDiscountAmount < l.list * (S.discountSweet / 100));
 }
 
 // 8. A legacy v3 draft migrates cleanly into the unified line model.

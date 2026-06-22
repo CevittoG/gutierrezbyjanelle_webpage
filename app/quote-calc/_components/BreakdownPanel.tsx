@@ -73,9 +73,9 @@ function Divider({ strong }: { strong?: boolean }) {
   return <hr className={cn("my-2", strong ? "border-foreground/40 border" : "border-border")} />;
 }
 
-// Per-line cost buildup: variable cost → markups → bundle discount → line total.
-// Revisions, packaging, the digital license, and the quote-wide discounts are NOT
-// here — they're quote-level and shown once, below all the lines.
+// Per-line cost buildup: variable cost → markups → the line's additive discount
+// (bundle + relationship, biting labor only) → line total. Revisions, packaging,
+// and the digital license are quote-level and shown once, below all the lines.
 function LineBlock({
   line,
   assumptions,
@@ -164,16 +164,27 @@ function LineBlock({
       <Row indent label={`Admin overhead (${fmtPct(assumptions.adminPtg)})`} value={`+${fmt$2(line.admin)}`} dim />
       <Row indent label={`Target profit (${fmtPct(assumptions.targetProfitPtg)})`} value={`+${fmt$2(line.profit)}`} dim />
 
-      {/* ─── BUNDLE DISCOUNT (packages only) ─── */}
-      {line.bundleDiscountPtg > 0 && (
+      {/* ─── DISCOUNTS (additive, labor-only) ─── */}
+      {line.discountComponents.length > 0 && (
         <>
-          <SectionLabel>Bundle discount</SectionLabel>
-          <Row
-            indent
-            label={`${line.label} discount (-${fmtPct(line.bundleDiscountPtg)})`}
-            value={`-${fmt$2(line.bundleDiscountAmount)}`}
-            dim
-          />
+          <SectionLabel>Discounts · on labor {fmt$2(line.laborList)}</SectionLabel>
+          {line.discountComponents.map((d) => (
+            <Row
+              key={d.label}
+              indent
+              label={`${d.label === "Bundle" ? `${line.label} bundle` : d.label} (-${fmtPct(d.ptg)})`}
+              value={`-${fmt$2(d.amount)}`}
+              dim
+            />
+          ))}
+          {line.discountComponents.length > 1 && (
+            <Row
+              indent
+              label={`Combined (-${fmtPct(line.discountPtg)})`}
+              value={`-${fmt$2(line.discountAmount)}`}
+              dim
+            />
+          )}
         </>
       )}
 
@@ -228,7 +239,12 @@ export function BreakdownPanel({
     const miscNames = breakdown.miscLines
       .map((m) => `${m.label || "Custom item"} (${m.qty} × $${m.unitPrice.toFixed(2)})`)
       .join(", ");
-    const discountNames = breakdown.quoteDiscountLines.map((d) => `${d.label} ${d.ptg}%`).join(", ");
+    const discountNames = [
+      breakdown.bundleDiscountTotal > 0 ? "Bundle savings" : null,
+      ...breakdown.relationshipDiscountLines.map((d) => `${d.label} ${d.ptg}%`),
+    ]
+      .filter(Boolean)
+      .join(", ");
 
     const sep = String.fromCharCode(9472).repeat(37);
     const summaryLines = [
@@ -328,23 +344,10 @@ export function BreakdownPanel({
           </>
         )}
 
-        {/* ─── DISCOUNTS (quote-wide, grouped) ─── */}
-        {breakdown.quoteDiscountLines.length > 0 && (
-          <>
-            <SectionLabel>Discounts</SectionLabel>
-            {breakdown.quoteDiscountLines.map((d) => (
-              <Row
-                key={d.label}
-                indent
-                label={`${d.label} (-${fmtPct(d.ptg)})`}
-                value={`-${fmt$2(d.amount)}`}
-                dim
-              />
-            ))}
-            {breakdown.quoteDiscountLines.length > 1 && (
-              <Row label="Total savings" value={`-${fmt$2(breakdown.quoteDiscountAmount)}`} dim />
-            )}
-          </>
+        {/* Discounts are shown per line above (bundle + relationship, on labor).
+            Surface the quote-wide savings once more, here, for a quick read. */}
+        {breakdown.discountTotal > 0 && (
+          <Row label="Total discounts" value={`-${fmt$2(breakdown.discountTotal)}`} dim />
         )}
 
         {/* Rush */}
@@ -352,7 +355,7 @@ export function BreakdownPanel({
           <Row
             indent
             label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
-            math={`${fmt$2(breakdown.discountedSubtotal)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
+            math={`${fmt$2(breakdown.itemsNet + breakdown.services.servicesList)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
             value={`+${fmt$2(breakdown.rushAmount)}`}
             dim
           />

@@ -4,9 +4,17 @@
 //
 // This is the single source of truth for the quote money math. The engine
 // (quote-calc-logic) only computes per-line *variable cost*; everything else —
-// markup, the per-package bundle discount, the once-per-quote project services
-// (revisions, packaging, digital license), the grouped quote-wide discount,
-// rush, and misc — is layered on here, in one place, in one order.
+// markup, discounts, the once-per-quote project services (revisions, packaging,
+// digital license), rush, and misc — is layered on here, in one place.
+//
+// Discount model (the consistency contract):
+//   • All discounts are ADDITIVE — a package's bundle discount and the
+//     relationship discounts (vendor / family & friends / custom) sum into one
+//     percentage per line. Nothing compounds.
+//   • That percentage bites the LABOR portion of the line only (design +
+//     production, carried through markup). Materials, admin overhead, project
+//     services, and misc are never discounted — a discount only ever gives away
+//     your own time, so it can't quietly eat real cost.
 //
 // No IO, no React — importable on the server and the client.
 
@@ -24,11 +32,21 @@ import {
   calcQuoteServices,
   clampPtg,
   getDiscountPtg,
+  markupLabor,
   markupVariable,
 } from "./quote-calc-logic";
 
+// One component of a discount, itemized for display (the bundle discount, or one
+// of the relationship discounts). `amount` is in dollars off this scope's labor.
+export interface DiscountComponent {
+  label: string;
+  ptg: number;
+  amount: number;
+}
+
 // One priced quote line — a bundle or a single item. `list` is the marked-up
-// price; `net` is after the per-package bundle discount (0 for item lines).
+// price; `laborList` is labor's share of it (the only part a discount touches);
+// `net` is `list` minus the additive line discount.
 export interface LineResult {
   id: string;
   kind: LineKind;
@@ -42,8 +60,16 @@ export interface LineResult {
   admin: number;
   profit: number;
   list: number;
+  /** Marked-up labor (design + production) — the discountable base for this line. */
+  laborList: number;
+  /** Bundle discount (packages only) — the package's own intrinsic discount. */
   bundleDiscountPtg: number;
   bundleDiscountAmount: number;
+  /** Every discount on this line (bundle + relationship), itemized; nonzero only. */
+  discountComponents: DiscountComponent[];
+  /** Effective combined discount %, clamped to [0,100], applied to `laborList`. */
+  discountPtg: number;
+  discountAmount: number;
   net: number;
 }
 
@@ -55,33 +81,24 @@ export interface MiscLine {
   total: number;
 }
 
-// One component of the grouped quote-wide discount, itemized for the breakdown
-// display. Amounts are each component's share of `preDiscount`.
-export interface QuoteDiscountLine {
-  label: string;
-  ptg: number;
-  amount: number;
-}
-
 export interface QuoteBreakdown {
   lines: LineResult[];
 
   // Line-item rollups.
   itemsList: number; // Σ line.list (before any discount)
-  itemsNet: number; // Σ line.net (after per-package bundle discounts)
-  bundleDiscountTotal: number; // itemsList − itemsNet
+  itemsNet: number; // Σ line.net (after each line's additive discount)
+  totalLaborList: number; // Σ line.laborList (the total discountable base)
 
-  // Quote-level project services (computed once).
+  // Discounts (all additive, labor-only).
+  discountTotal: number; // itemsList − itemsNet (= Σ line.discountAmount)
+  bundleDiscountTotal: number; // Σ line.bundleDiscountAmount
+  /** Relationship discounts (vendor / family / custom) aggregated across lines. */
+  relationshipDiscountLines: DiscountComponent[];
+
+  // Quote-level project services (computed once, never discounted).
   services: QuoteServices;
   anyPhysical: boolean;
   totalDesignLabor: number; // Σ across lines — drives the digital license
-
-  // Grouped quote-wide discount stage.
-  preDiscount: number; // itemsNet + services.servicesList
-  quoteDiscountPtg: number;
-  quoteDiscountAmount: number;
-  quoteDiscountLines: QuoteDiscountLine[]; // itemized components (vendor / family / custom)
-  discountedSubtotal: number; // preDiscount − quoteDiscountAmount
 
   // Surcharges + free-form items.
   rushAmount: number;
@@ -89,18 +106,21 @@ export interface QuoteBreakdown {
   miscTotal: number;
 
   // Totals.
-  savings: number; // bundleDiscountTotal + quoteDiscountAmount
+  savings: number; // = discountTotal
   finalPrice: number;
   /** List-price subtotal (itemsList + servicesList + miscTotal); for the client projector. */
   subtotalList: number;
 }
 
 // Price one quote line: variable cost (bundle or item) → admin/profit markup →
-// the per-package bundle discount. Item lines carry no bundle discount.
+// one additive, labor-only discount. The discount % is the package's bundle
+// discount (0 for items) plus the three relationship discounts, summed and
+// clamped, applied to the line's marked-up labor (never its materials).
 function priceLine(
   line: QuoteLine,
   config: DraftConfig,
   assumptions: QuoteState,
+  relationship: { label: string; ptg: number }[],
   catalog: CatalogItem[],
 ): LineResult {
   let cost: LineCost;
@@ -127,7 +147,21 @@ function priceLine(
   }
 
   const { admin, profit, list } = markupVariable(cost.totalVariable, assumptions);
-  const bundleDiscountAmount = list * (bundleDiscountPtg / 100);
+  const laborList = markupLabor(cost.totalDesignLabor + cost.totalProductionLabor, assumptions);
+
+  // Additive discount: bundle (this line's own) + the shared relationship %s.
+  // Clamp the *sum* so the combined discount never exceeds the labor value; if
+  // it would, scale each component down proportionally so they still itemize to
+  // the (capped) total.
+  const components = [{ label: "Bundle", ptg: bundleDiscountPtg }, ...relationship];
+  const rawPtg = components.reduce((s, d) => s + d.ptg, 0);
+  const discountPtg = clampPtg(rawPtg);
+  const scale = rawPtg > 0 ? discountPtg / rawPtg : 0;
+  const discountComponents: DiscountComponent[] = components
+    .filter((d) => d.ptg > 0)
+    .map((d) => ({ label: d.label, ptg: d.ptg, amount: laborList * (d.ptg / 100) * scale }));
+  const discountAmount = laborList * (discountPtg / 100);
+  const bundleDiscountAmount = discountComponents.find((d) => d.label === "Bundle")?.amount ?? 0;
 
   return {
     id: line.id,
@@ -141,9 +175,13 @@ function priceLine(
     admin,
     profit,
     list,
+    laborList,
     bundleDiscountPtg,
     bundleDiscountAmount,
-    net: list - bundleDiscountAmount,
+    discountComponents,
+    discountPtg,
+    discountAmount,
+    net: list - discountAmount,
   };
 }
 
@@ -155,16 +193,41 @@ export function computeQuoteBreakdown(
   assumptions: QuoteState,
   catalog: CatalogItem[] = ITEM_CATALOG,
 ): QuoteBreakdown {
-  const lines: LineResult[] = config.lines.map((line) => priceLine(line, config, assumptions, catalog));
+  // The shared relationship discounts — same % on every line, biting labor only.
+  const relationship: { label: string; ptg: number }[] = [
+    { label: "Vendor incentive", ptg: config.vendorIncentive ? clampPtg(assumptions.vendorIncentivePtg) : 0 },
+    { label: "Family & friends", ptg: clampPtg(config.familyFriendsPtg) },
+    { label: "Custom discount", ptg: clampPtg(config.customDiscountPtg) },
+  ].filter((d) => d.ptg > 0);
+
+  const lines: LineResult[] = config.lines.map((line) =>
+    priceLine(line, config, assumptions, relationship, catalog),
+  );
   const sum = (sel: (l: LineResult) => number): number => lines.reduce((s, l) => s + sel(l), 0);
 
   const itemsList = sum((l) => l.list);
   const itemsNet = sum((l) => l.net);
-  const bundleDiscountTotal = itemsList - itemsNet;
+  const totalLaborList = sum((l) => l.laborList);
+  const discountTotal = itemsList - itemsNet;
+  const bundleDiscountTotal = sum((l) => l.bundleDiscountAmount);
   const totalDesignLabor = sum((l) => l.cost.totalDesignLabor);
   const anyPhysical = lines.some((l) => !l.cost.isDigital);
 
-  // Project services — once per quote, marked up like any other cost.
+  // Relationship discounts aggregated across lines (for the client-facing
+  // quote-level rows; the bundle discount stays itemized per line).
+  const relAgg = new Map<string, DiscountComponent>();
+  for (const l of lines) {
+    for (const d of l.discountComponents) {
+      if (d.label === "Bundle") continue;
+      const cur = relAgg.get(d.label) ?? { label: d.label, ptg: d.ptg, amount: 0 };
+      cur.amount += d.amount;
+      relAgg.set(d.label, cur);
+    }
+  }
+  const relationshipDiscountLines = [...relAgg.values()];
+
+  // Project services — once per quote, marked up like any other cost. Never
+  // discounted: revisions, packaging, and the digital license are cost recovery.
   const services = calcQuoteServices(assumptions, {
     extraRevisions: Math.max(0, config.extraRevisions || 0),
     anyPhysical,
@@ -172,25 +235,9 @@ export function computeQuoteBreakdown(
     totalDesignLabor,
   });
 
-  // Grouped quote-wide discount: vendor incentive + family & friends + custom,
-  // stacked additively, applied once to the marked-up subtotal (items + services).
-  const preDiscount = itemsNet + services.servicesList;
-  const vendorPtg = config.vendorIncentive ? clampPtg(assumptions.vendorIncentivePtg) : 0;
-  const familyFriendsPtg = clampPtg(config.familyFriendsPtg);
-  const customPtg = clampPtg(config.customDiscountPtg);
-  const quoteDiscountLines: QuoteDiscountLine[] = [
-    { label: "Vendor incentive", ptg: vendorPtg },
-    { label: "Family & friends", ptg: familyFriendsPtg },
-    { label: "Custom discount", ptg: customPtg },
-  ]
-    .filter((d) => d.ptg > 0)
-    .map((d) => ({ ...d, amount: preDiscount * (d.ptg / 100) }));
-  const quoteDiscountPtg = clampPtg(vendorPtg + familyFriendsPtg + customPtg);
-  const quoteDiscountAmount = preDiscount * (quoteDiscountPtg / 100);
-  const discountedSubtotal = preDiscount - quoteDiscountAmount;
-
   // Rush is a surcharge on the discounted order value (excludes fixed-price misc).
-  const rushAmount = config.rushFee ? discountedSubtotal * (assumptions.rushFeePtg / 100) : 0;
+  const orderSubtotal = itemsNet + services.servicesList;
+  const rushAmount = config.rushFee ? orderSubtotal * (assumptions.rushFeePtg / 100) : 0;
 
   // Misc add-ons are entered at final selling price — no markup, no discount.
   const miscLines: MiscLine[] = (config.miscAddOns ?? [])
@@ -204,23 +251,21 @@ export function computeQuoteBreakdown(
     }));
   const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
 
-  const finalPrice = discountedSubtotal + rushAmount + miscTotal;
-  const savings = bundleDiscountTotal + quoteDiscountAmount;
+  const finalPrice = orderSubtotal + rushAmount + miscTotal;
+  const savings = discountTotal;
   const subtotalList = itemsList + services.servicesList + miscTotal;
 
   return {
     lines,
     itemsList,
     itemsNet,
+    totalLaborList,
+    discountTotal,
     bundleDiscountTotal,
+    relationshipDiscountLines,
     services,
     anyPhysical,
     totalDesignLabor,
-    preDiscount,
-    quoteDiscountPtg,
-    quoteDiscountAmount,
-    quoteDiscountLines,
-    discountedSubtotal,
     rushAmount,
     miscLines,
     miscTotal,
