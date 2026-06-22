@@ -298,14 +298,16 @@ export function QuoteCalculator() {
     [config, assumptions, catalog],
   );
 
-  // Rough per-package preview price (list after the bundle discount) for the
-  // picker cards — the real number is the line's `net` once it's on the quote.
+  // Rough per-package preview price (list minus the bundle discount, which comes
+  // off raw labor only) for the picker cards — the real number is the line's
+  // `net` once it's on the quote.
   const pkgPreview = useCallback(
     (key: PkgKey): number => {
       const cost = calcPackageCost(key, DEFAULT_LINE_QTY, mode, assumptions, fullColor, customPaper, catalog);
       const { list } = markupVariable(cost.totalVariable, assumptions);
+      const laborBase = cost.totalDesignLabor + cost.totalProductionLabor;
       const disc = clampPtg(getDiscountPtg(key, assumptions));
-      return list * (1 - disc / 100);
+      return list - laborBase * (disc / 100);
     },
     [mode, assumptions, fullColor, customPaper, catalog],
   );
@@ -507,7 +509,7 @@ export function QuoteCalculator() {
                         <hr className="border-border" />
                         <p className="text-muted-foreground/80 font-mono">
                           Cost × {(1 + assumptions.adminPtg / 100).toFixed(2)} admin × {(1 + assumptions.targetProfitPtg / 100).toFixed(2)} profit
-                          {discount > 0 ? ` × ${(1 - discount / 100).toFixed(2)} (${discount}% savings)` : ""}
+                          {discount > 0 ? ` − ${discount}% off labor` : ""}
                         </p>
                         {def.isDigital && (
                           <p className="text-muted-foreground/60 italic">Digital — design labor only</p>
@@ -720,7 +722,7 @@ export function QuoteCalculator() {
             </div>
           </Section>
 
-          {/* 7. Discounts (grouped — all stack additively, applied in one stage) */}
+          {/* 7. Discounts (all additive, labor-only — see the note below) */}
           <Section title="Discounts">
             <div className="space-y-3">
               <CheckRow
@@ -742,7 +744,9 @@ export function QuoteCalculator() {
                 onChange={setCustomDiscountPtg}
               />
               <p className="text-xs text-muted-foreground leading-relaxed">
-                These stack additively and come off the whole quote (items + project services) in one step. Each package keeps its own built-in bundle discount on top.
+                All discounts add together (they don&apos;t compound) and come off your labor only —
+                design and production time. Materials, admin, and project services are never discounted,
+                so a discount can&apos;t cut into real cost. Each package&apos;s own bundle discount adds into the same total.
               </p>
             </div>
           </Section>

@@ -141,7 +141,7 @@ export function PrintQuote() {
 
   if (!computed) return null;
 
-  const { lines: priced, miscLines, rushAmount, finalPrice, services, quoteDiscountLines } = computed;
+  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines } = computed;
 
   interface DisplayItem {
     rowKey: string;
@@ -365,7 +365,7 @@ export function PrintQuote() {
                 />
               )}
 
-              {quoteDiscountLines.map((d) => (
+              {relationshipDiscountLines.map((d) => (
                 <PrintRow
                   key={d.label}
                   label={`${d.label} (${d.ptg}%)`}

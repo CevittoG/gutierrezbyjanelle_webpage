@@ -213,7 +213,7 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad, catal
 
               <SectionHeader>Extras</SectionHeader>
               <div className="space-y-4">
-                <NumInput label="Vendor incentive" description="Referral discount stacked on top of package discount" stateKey="vendorIncentivePtg" value={assumptions.vendorIncentivePtg} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
+                <NumInput label="Vendor incentive" description="Referral discount — adds to other discounts, off labor only" stateKey="vendorIncentivePtg" value={assumptions.vendorIncentivePtg} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Full color factor" description="Sheet cost multiplier for heavy ink coverage" stateKey="fullColorFactor" value={assumptions.fullColorFactor} min={1} max={3} step={0.1} suffix="x" onUpdate={onUpdate} />
                 <NumInput label="Custom paper factor" description="Sheet cost multiplier for premium / specialty paper" stateKey="customPaperFactor" value={assumptions.customPaperFactor} min={1} max={3} step={0.1} suffix="x" onUpdate={onUpdate} />
                 <NumInput label="Digital file license" description="Design labor premium when client receives source files" stateKey="digitalLicensePtg" value={assumptions.digitalLicensePtg} min={0} max={100} step={5} suffix="%" onUpdate={onUpdate} />
