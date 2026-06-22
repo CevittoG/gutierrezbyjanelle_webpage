@@ -211,24 +211,53 @@ The Dockerfile has four named stages: `base → deps → development → builder
 
 Password-gated internal pricing tool at `/quote-calc`. Not in the sitemap or public nav.
 
-### Pricing Formula (cost-plus model)
+### Pricing Formula (cost-plus model, three-tier — Phase 5 redesign)
+
+A quote is a list of **lines** (each a bundle *or* a single item) priced through one
+markup core, plus **once-per-quote project services**, minus **one grouped discount
+stage**. Per-line costs and per-quote costs are kept strictly separate — that is the
+invariant the redesign enforces.
 
 ```
-variable_cost = design_labor + production_labor + materials + revision_labor + packaging
-price_before_discount = variable_cost × (1 + admin%) × (1 + target_profit%)
-final_price = price_before_discount × (1 - combined_discount%)
+# Per LINE (package bundle or single item)
+variable   = Σ(design_labor + production_labor + materials)   # NO revision, NO packaging
+list       = variable × (1 + admin%) × (1 + target_profit%)
+net        = list × (1 − bundle_discount%)                    # bundle discount: packages only, 0 for items
+
+# Once per QUOTE (computed a single time, then marked up)
+revision   = extraRevisions × revisionMin/60 × hourly
+packaging  = anyPhysicalLine ? packagingCost : 0              # one shipment per order
+license    = digitalLicense ? (Σ design_labor) × digitalLicensePtg% : 0
+services_list = (revision + packaging + license) × (1 + admin%) × (1 + target_profit%)
+
+# One grouped DISCOUNT stage
+preDiscount       = Σ net + services_list
+quoteDiscount%    = vendorIncentivePtg + familyFriendsPtg + customDiscountPtg   # additive, clamped ≤100
+discountedSubtotal = preDiscount × (1 − quoteDiscount%)
+
+# Surcharge + free-form items
+rush       = rushFee ? discountedSubtotal × rushFeePtg% : 0
+misc       = Σ(qty × unitPrice)                               # fixed selling price, never discounted
+final      = discountedSubtotal + rush + misc
 ```
 
-**Per-item cost breakdown:**
-- **Design labor** — `(design_time_min / 60) × hourly × (isReuse ? reuseFactor : 1)`
-- **Production labor** — `(prod_time_min / 60) × hourly × qty` (physical only)
-- **Materials** — `(sheet_cost × materialMultiplier / yield) × (1 + errorMargin%) × qty` (physical only)
-- **Revision labor** — `(extraRevisions × revisionMin / 60) × hourly`
-- **Packaging** — flat cost per physical order
+**Per-item cost** (inside a line's `variable`): design labor `(design_min/60 × hourly ×
+(isReuse?reuseFactor:1))` once per piece; production `(prod_min/60 × hourly × qty)` and
+materials `(sheet_cost × materialMultiplier / yield) × (1+errorMargin%) × qty`, both
+physical-only and qty-scaled. `fullColorFactor`/`customPaperFactor` multiply sheet cost.
 
-**Material multipliers:** `fullColorFactor` and `customPaperFactor` apply to sheet cost when toggled.
+**Item-line qty is a raw piece count**; package-line qty is a household/guest count that
+drives the catalog qty rules. The same catalog item prices identically wherever it is added
+(there is no longer a separate "add-on" pricing path).
 
-**Combined discount** = package discount + vendor incentive + optional per-quote Package and Family-&-Friends discounts (all stacked additively on the base package price, each shown separately). The latter two are typed integer percentages entered as Extras, stored on the draft (not in `Settings`).
+**Discounts**: a package's intrinsic **bundle discount** (`discountSweet`, etc.) stays on its
+own line; the three **quote-wide discounts** (vendor incentive, family & friends, custom)
+group into the single discount stage. All stack additively. Family & friends and custom are
+typed integers stored on the draft (not in `Settings`); vendor incentive's % lives in `Settings`.
+
+**Closure invariant** (asserted in `lib/quote-calc-totals.test.ts`):
+`subtotalList − savings + rush == finalPrice`, where `savings = bundleDiscountTotal +
+quoteDiscountAmount`. The public projector reproduces it exactly.
 
 **Shipping** is excluded — added manually per carrier quote.
 
@@ -236,10 +265,10 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 | File | Role |
 |------|------|
-| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items — bundled fallback), `PACKAGES` (7 tiers: 4 wedding + 3 events), `calcPackage()`/`calcAddOn()`/`getItemQty()` accept an optional `catalog` arg so the engine treats catalog as data, `calcAddOnRaw()`, `PkgItem` type with per-item multiplier/displayLabel support |
+| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (17 items — bundled fallback), `PACKAGES` (6 bundle tiers: 3 wedding + 3 events). Pure **cost** functions only (no markup/discount lives here anymore): `calcPackageCost()` (bundle), `calcItemCost()` (single item, raw qty), both → `LineCost`; `calcQuoteServices()` → once-per-quote `QuoteServices`; `markupVariable()` (admin+profit), `clampPtg()`, `getDiscountPtg()`, `getItemQty()`. All take an optional `catalog`. `PkgItem` supports per-item multiplier/displayLabel |
 | `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
 | `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
-| `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `packages: PackageLine[]` (multi-line, schema v3), `miscAddOns: MiscAddOn[]`, `SyncStatus` type, `reconcileDrafts()`; v1/v2 drafts auto-migrated (iDrinkTop→iWedgeTop; single `pkg`/`qty` wrapped into one `PackageLine`) |
+| `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `lines: QuoteLine[]` (unified — each line `kind: "package" \| "item"`, schema **v4**), `miscAddOns: MiscAddOn[]`, `customDiscountPtg`/`familyFriendsPtg`, `SyncStatus`, `reconcileDrafts()`. `migrateConfig` collapses every legacy shape into `lines`: v1/v2 single `pkg`/`qty`, v3 `packages[]` + `addOns` record + the `individual` pseudo-package → item lines (individual qty preserved via `getItemQty`), and `packageDiscountPtg`→`customDiscountPtg`; iDrinkTop→iWedgeTop still applied |
 | `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST. Schema-aware Quotes reads (legacy JSON-in-col-M or new readable + `_data` payload tab), auto-migrates legacy rows on first write, soft-archive by id. Also exposes `listConfig()` with a 60s cache for the Settings + Items tabs |
 | `lib/quote-calc-summary.ts` | Pure formatter — turns a `Draft` into the multiline "Line items" string that lands in column I of the new Quotes tab |
 | `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`) around the `/quote-calc/api/drafts` routes |
@@ -248,15 +277,15 @@ final_price = price_before_discount × (1 - combined_discount%)
 | `app/quote-calc/api/drafts/[id]/route.ts` | `DELETE` soft-archive by id |
 | `app/quote-calc/api/config/route.ts` | `GET` merged Settings + Items payload from the Sheet; `?refresh=1` bypasses the cache |
 | `app/api/quote-auth/route.ts` | `POST` issues a signed session cookie on password match; `DELETE` clears it. Requires `QUOTE_CALC_PASSWORD` and `QUOTE_CALC_SESSION_SECRET` |
-| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI: Wedding/Events tab toggle, package grid, add-on qty steppers, misc add-on section, extras, Sheet sync on mount/save; pulls live `catalog` + `assumptions` from `/api/config` on mount |
+| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI on a single `lines: QuoteLine[]` state: "Add a package" grid + "Add an individual item" picker both append lines to one "On this quote" list; controls regrouped into **Project services** (rush, revisions, digital license), **Discounts** (vendor, family & friends, custom), and **Materials** (full color, custom paper). Misc add-ons kept. Sheet sync on mount/save; pulls live `catalog` + `assumptions` from `/api/config` |
 | `app/quote-calc/_components/MiscAddOnSection.tsx` | One-off line items (name, qty, unit selling price) for special client requests outside the catalog |
-| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown; accepts a `catalog` prop, renders misc add-on lines and PkgItem displayLabel overrides |
+| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown driven entirely by `QuoteBreakdown`: per-line cost→markup→bundle-discount blocks, then a quote-level **Project services** block, a grouped **Discounts** block, rush, custom add-ons, total, and the "Your costs"/margin rollup. Props: `{ breakdown, mode, assumptions, catalog?, embedded? }` |
 | `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table (driven by the passed-in `catalog`) |
 | `app/quote-calc/_components/ConfigBanner.tsx` | Inline warning banner shown above the calculator when the Sheet config fails to load or contains invalid/unknown rows. Names the offending tab/row; has a Retry button that calls `/api/config?refresh=1` |
 | `app/quote-calc/_components/PasswordGate.tsx` | Branded password gate; the front door for every gated page (`/quotes`, `/quote/new`, `/quotes/[id]`) |
 | `components/quote-app/AppShell.tsx` | Slim sticky app chrome (Dashboard / New quote nav + sign-out) for the gated tools; replaces the marketing header/footer (which self-hide on `^/(quotes|quote|quote-calc|q)` via `usePathname`) |
 | `components/quote-app/LinkControls.tsx` | Public-link controls (generate/regenerate/copy/revoke); shared by the dashboard and Profile Overview (moved here from the old explorer) |
-| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the price math extracted from `PrintQuote`. Shared by the print view and the public portal so both render identical numbers |
+| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the **single source of truth for the money math**. Prices each line (`LineResult`), adds the once-per-quote `services`, applies the one grouped discount stage (`quoteDiscountLines`), then rush + misc. Returns `itemsList/itemsNet`, `bundleDiscountTotal`, `services`, `savings`, `subtotalList`, `finalPrice`. Shared by the calculator, print view, and public portal. Invariants covered by `lib/quote-calc-totals.test.ts` (compile with `tsc` + run on Node — no test runner wired up) |
 | `lib/quote-calc-portal.ts` | **Pure** Phase 3 types + helpers: `PortalMeta`, `LinkStatus`, `isLinkActive`/`isLinkExpired`, `PublicQuote` shape, and `buildPublicQuote()` — the projector that strips everything secret down to the client-safe shape |
 | `lib/quote-calc-drive.ts` | **Server-only** Drive v3 REST (no `googleapis`): `createQuoteSubfolder`, `ensureQuoteFolder` (auto-create on save), `listFolderFiles` (60s cache), `streamFile` (alt=media, streamed), `folderWebLink`. Uses the shared SA token from `quote-calc-sheets` |
 | `app/q/[token]/page.tsx` · `_components/PublicQuoteView.tsx` | **Public** "Client Quote Profile" (no admin cookie, `force-dynamic`, noindex). Token → `PublicQuote` + `PublicProgress`; work-first sell layout: stage tracker, proofs, proof-approval action, suite, itemized investment + deposit/balance, contact CTA |
@@ -276,7 +305,7 @@ final_price = price_before_discount × (1 - combined_discount%)
 
 All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`). Per-item fields follow the pattern `i{ItemKey}_{suffix}` where suffix is `_dt` (design time, minutes), `_pt` (production time/unit, minutes), `_sc` (sheet cost, $), `_y` (yield per sheet). Time values are stored as minutes internally, displayed as `Xh Ym` with dual number spinners.
 
-`DraftConfig` holds the full quote state per draft including `packages: PackageLine[]` (one entry per package line — the core multi-line model), `miscAddOns: MiscAddOn[]` for one-off client items, and the per-quote `packageDiscountPtg` / `familyFriendsPtg` typed discounts. `DraftClientInfo` carries two notes: `notes` (private/hidden) and `clientNotes` (client-facing). `Draft.schemaVersion` is currently `3`; v1/v2 drafts are auto-migrated on load (v1: iDrinkTop qty moved to iWedgeTop; v2: single `pkg`/`qty` wrapped into one `PackageLine`). New fields need no version bump — `migrateConfig`/`migrateDraft` backfill them by spreading `DEFAULT_CONFIG` / `EMPTY_CLIENT_INFO`.
+`DraftConfig` holds the full quote state per draft as a single `lines: QuoteLine[]` array (each line `kind: "package"` with a `pkg`, or `kind: "item"` with an `itemKey`; both carry `qty` and a `digital` flag), plus `miscAddOns: MiscAddOn[]` for free-form selling-price items, the quote-level service toggles (`rushFee`, `extraRevisions`, `digitalLicense`), and the quote-wide discounts (`vendorIncentive`, `familyFriendsPtg`, `customDiscountPtg`). `DraftClientInfo` carries two notes: `notes` (private/hidden) and `clientNotes` (client-facing). `Draft.schemaVersion` is currently `4`; v1/v2/v3 drafts are auto-migrated on load into the unified `lines` model (see the drafts.ts row above). New fields need no version bump — `migrateConfig`/`migrateDraft` backfill them by spreading `DEFAULT_CONFIG` / `EMPTY_CLIENT_INFO`.
 
 **Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` — the app writes its header row automatically (now A1:U1 with the Phase 3 portal + Phase 4 lifecycle columns) but does not create the tab itself.
 
@@ -358,6 +387,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Phase 2: `Quotes` tab restructured to human-readable columns (client, event, package, line items, total) with the full Draft JSON moved to a hidden `_data` tab; legacy rows auto-migrate on first write
 - Phase 3: client portal + Drive proofs — auto-created per-quote Drive subfolder (read+create scopes), public tokenized read-only `/q/[token]` route, streaming file proxy with folder-membership check, and an admin Quote Explorer with link generate/revoke controls. Portal metadata in `Quotes` columns N–R
 - Phase 4: lifecycle stages + client approval + itemized client pricing — 9-stage pipeline (physical/digital wording) Janelle drives from Profile Overview (`Quotes` cols S/T), an amount-based deposit (fixed expected `depositAmount` + recorded **deposit paid** in col U, balance = total − paid), editable hidden notes (col K + `_data`), two-step client proof approval that auto-advances `approval → balance`, and a horizontal scrollable step tracker + itemized investment on `/q/[token]`
+- Phase 5: pricing-engine redesign for consistency — unified `lines` data model (schema v4: packages + items in one array; add-ons and the `individual` pseudo-package retired), revision/packaging/digital-license moved from per-line to **once-per-quote project services**, packaging charged once per order, all quote-wide discounts grouped into one stage, and the same catalog item now prices identically wherever it's added. Engine split into pure cost functions (`calcPackageCost`/`calcItemCost`/`calcQuoteServices`) with all money math centralized in `computeQuoteBreakdown`. Invariants locked by `lib/quote-calc-totals.test.ts`
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
