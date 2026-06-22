@@ -199,7 +199,6 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad, catal
             <div>
               <SectionHeader>Wedding Discounts</SectionHeader>
               <div className="space-y-4">
-                <NumInput label="Individual Item" description="No bundle discount for single items" stateKey="discountIndividual" value={assumptions.discountIndividual} min={0} max={0} step={1} suffix="%" disabled onUpdate={onUpdate} />
                 <NumInput label="DIY Digital" description="Digital-only bundle discount" stateKey="discountDiy" value={assumptions.discountDiy} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Sweet Suite" description="Core invite suite discount" stateKey="discountSweet" value={assumptions.discountSweet} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Signature Suite" description="Full experience discount" stateKey="discountSignature" value={assumptions.discountSignature} min={0} max={50} step={1} suffix="%" onUpdate={onUpdate} />

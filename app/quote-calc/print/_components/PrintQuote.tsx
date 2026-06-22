@@ -8,7 +8,6 @@ import {
   PACKAGES,
   fmt$,
   fmt$2,
-  fmtTime,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
@@ -142,50 +141,68 @@ export function PrintQuote() {
 
   if (!computed) return null;
 
-  const { packageLines, addOnLines, miscLines, rushAmount, finalPrice } = computed;
+  const { lines: priced, miscLines, rushAmount, finalPrice, services, quoteDiscountLines } = computed;
 
   interface DisplayItem {
     rowKey: string;
     label: string;
-    fixed?: number;
-    catalogQty: number;
+    countLabel: string;
   }
 
-  // One view per package line: its definition, included pieces, prices, and copy.
-  const lineViews = config.packages.map((line, idx) => {
-    const def = PACKAGES[line.pkg];
-    const lr = packageLines[idx];
-    const isDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : def.isDigital;
+  // One view per quote line (bundle or single item): its included pieces, price,
+  // and copy.
+  const lineViews = config.lines.map((line, idx) => {
+    const lr = priced[idx];
 
-    const includedItems: DisplayItem[] =
-      line.pkg === "individual"
-        ? (() => {
-            const cat = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"));
-            if (!cat) return [];
-            return [{ rowKey: cat.key, label: cat.label, fixed: cat.fixed, catalogQty: cat.qty }];
-          })()
-        : def.items.map((it, i) => {
-            const k = typeof it === "string" ? it : it.key;
-            const label = (typeof it !== "string" && it.displayLabel)
-              || catalog.find((c) => c.key === k)?.label
-              || k;
-            const cat = catalog.find((c) => c.key === k);
-            return {
-              rowKey: `${k}-${i}`,
-              label,
-              fixed: cat?.fixed,
-              catalogQty: cat?.qty ?? 0,
-            };
-          });
+    if (line.kind === "item") {
+      const cat = catalog.find((i) => i.key === line.itemKey);
+      const isDigital = line.digital ?? false;
+      const includedItems: DisplayItem[] = cat
+        ? [{ rowKey: cat.key, label: cat.label, countLabel: isDigital ? "design" : `${line.qty} pcs` }]
+        : [];
+      return {
+        line,
+        title: cat?.label ?? line.itemKey ?? "Item",
+        tagline: "Individual item",
+        lr,
+        isDigital,
+        includedItems,
+        kindCopy: "Selected item",
+        deliveryCopy: isDigital
+          ? "Delivered as print-ready PDF files via email."
+          : `Printed and shipped — ${line.qty} piece${line.qty === 1 ? "" : "s"}.`,
+        isItem: true,
+      };
+    }
 
-    const kindCopy = def.type === "events" ? "Selected event package" : "Selected wedding suite";
+    const def = line.pkg ? PACKAGES[line.pkg] : undefined;
+    const isDigital = def?.isDigital ?? false;
+    const includedItems: DisplayItem[] = (def?.items ?? []).map((it, i) => {
+      const k = typeof it === "string" ? it : it.key;
+      const label = (typeof it !== "string" && it.displayLabel) || catalog.find((c) => c.key === k)?.label || k;
+      const cat = catalog.find((c) => c.key === k);
+      const countLabel =
+        cat?.fixed !== undefined ? `${cat.fixed} pcs` : isDigital ? "design" : `${(cat?.qty ?? 0) * line.qty} pcs`;
+      return { rowKey: `${k}-${i}`, label, countLabel };
+    });
+    const kindCopy = def?.type === "events" ? "Selected event package" : "Selected wedding suite";
     const deliveryCopy = isDigital
       ? "Delivered as print-ready PDF files via email."
-      : def.type === "events"
+      : def?.type === "events"
       ? `Printed and shipped — quantities sized for ${line.qty} guest${line.qty === 1 ? "" : "s"}.`
       : `Printed and shipped — quantities sized for ${line.qty} household${line.qty === 1 ? "" : "s"}.`;
 
-    return { line, def, lr, isDigital, includedItems, kindCopy, deliveryCopy };
+    return {
+      line,
+      title: def?.name ?? line.pkg ?? "Package",
+      tagline: def?.tagline ?? "",
+      lr,
+      isDigital,
+      includedItems,
+      kindCopy,
+      deliveryCopy,
+      isItem: false,
+    };
   });
 
   const anyPhysical = lineViews.some((v) => !v.isDigital);
@@ -274,15 +291,12 @@ export function PrintQuote() {
             </div>
           </section>
 
-          {/* Package summary — one block per package line */}
+          {/* Summary — one block per quote line */}
           {lineViews.map((v) => (
             <section key={v.line.id} className="mx-10 my-2 rounded-xl border border-border bg-muted/30 p-6 normal-case tracking-normal">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{v.kindCopy}</p>
-              <h2 className="font-squarepeg text-3xl leading-tight">
-                {v.def.name}
-                {v.line.pkg === "individual" && v.includedItems[0] ? ` · ${v.includedItems[0].label}` : ""}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">{v.def.tagline}</p>
+              <h2 className="font-squarepeg text-3xl leading-tight">{v.title}</h2>
+              {v.tagline && <p className="text-sm text-muted-foreground mt-1">{v.tagline}</p>}
               <div className="mt-4">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Included pieces</p>
                 <ul className="text-sm space-y-0.5">
@@ -290,7 +304,7 @@ export function PrintQuote() {
                     <li key={ci.rowKey} className="flex items-baseline justify-between gap-3">
                       <span>{ci.label}</span>
                       <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                        {ci.fixed !== undefined ? `${ci.fixed} pcs` : v.isDigital ? "design" : `${ci.catalogQty * v.line.qty} pcs`}
+                        {ci.countLabel}
                       </span>
                     </li>
                   ))}
@@ -309,38 +323,23 @@ export function PrintQuote() {
               {lineViews.map((v) => (
                 <div key={v.line.id}>
                   <PrintRow
-                    label={`${v.def.name}${v.line.pkg === "individual" && v.includedItems[0] ? ` · ${v.includedItems[0].label}` : ""} package`}
+                    label={v.isItem ? v.title : `${v.title} package`}
                     detail={config.mode === "reuse" ? "Adapted from an existing design" : "Original artwork"}
-                    value={fmt$2(v.lr.linePrice + v.lr.discountAmount + v.lr.vendorAmount)}
+                    value={fmt$2(v.lr.list)}
                   />
-                  {v.lr.result.discountPtg > 0 && (
+                  {v.lr.bundleDiscountPtg > 0 && (
                     <PrintRow
-                      label={`Suite savings (${v.lr.result.discountPtg}%)`}
-                      value={`-${fmt$2(v.lr.discountAmount)}`}
-                      dim
-                    />
-                  )}
-                  {v.lr.result.vendorIncentivePtg > 0 && (
-                    <PrintRow
-                      label={`Vendor referral credit (${v.lr.result.vendorIncentivePtg}%)`}
-                      value={`-${fmt$2(v.lr.vendorAmount)}`}
+                      label={`Suite savings (${v.lr.bundleDiscountPtg}%)`}
+                      value={`-${fmt$2(v.lr.bundleDiscountAmount)}`}
                       dim
                     />
                   )}
                 </div>
               ))}
 
-              {(addOnLines.length > 0 || miscLines.length > 0) && (
+              {miscLines.length > 0 && (
                 <>
-                  <PrintDivider label="Add-ons" />
-                  {addOnLines.map((a) => (
-                    <PrintRow
-                      key={a.key}
-                      label={a.label}
-                      detail={`${a.qty} ${a.qty === 1 ? "piece" : "pieces"}`}
-                      value={fmt$2(a.result.price)}
-                    />
-                  ))}
+                  <PrintDivider label="Custom add-ons" />
                   {miscLines.map((m) => (
                     <PrintRow
                       key={m.id}
@@ -352,23 +351,28 @@ export function PrintQuote() {
                 </>
               )}
 
-              {config.extraRevisions > 0 && (
+              {services.servicesList > 0 && (
                 <PrintRow
-                  label={`${config.extraRevisions} extra revision round${config.extraRevisions > 1 ? "s" : ""}`}
-                  detail={`${fmtTime(assumptions.revisionMin)} of design time per round`}
-                  value="included"
-                  dim
+                  label="Project services"
+                  detail={[
+                    services.revisionCost > 0 ? "extra revisions" : null,
+                    services.licenseVar > 0 ? "digital file license" : null,
+                    services.packaging > 0 ? "materials & handling" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  value={`+${fmt$2(services.servicesList)}`}
                 />
               )}
 
-              {config.digitalLicense && (
+              {quoteDiscountLines.map((d) => (
                 <PrintRow
-                  label="Digital file license"
-                  detail="Print-ready source files for unlimited reprints"
-                  value="included"
+                  key={d.label}
+                  label={`${d.label} (${d.ptg}%)`}
+                  value={`-${fmt$2(d.amount)}`}
                   dim
                 />
-              )}
+              ))}
 
               {config.rushFee && (
                 <PrintRow

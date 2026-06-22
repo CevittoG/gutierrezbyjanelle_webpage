@@ -5,24 +5,19 @@ import {
   CatalogItem,
   PricingMode,
   QuoteState,
-  PACKAGES,
   ITEM_CATALOG,
   fmt$,
   fmt$2,
   fmtPct,
   fmtTime,
 } from "@/lib/quote-calc-logic";
-import type { PackageLineResult, QuoteBreakdown } from "@/lib/quote-calc-totals";
+import type { LineResult, QuoteBreakdown } from "@/lib/quote-calc-totals";
 import { cn } from "@/utils";
 
 interface Props {
   breakdown: QuoteBreakdown;
   mode: PricingMode;
   assumptions: QuoteState;
-  extraRevisions: number;
-  digitalLicense: boolean;
-  fullColor: boolean;
-  customPaper: boolean;
   /** Catalog at the time the breakdown is rendered. Falls back to bundled defaults. */
   catalog?: CatalogItem[];
   /** When true, render without the sticky/card chrome (used inside the mobile sheet). */
@@ -78,88 +73,59 @@ function Divider({ strong }: { strong?: boolean }) {
   return <hr className={cn("my-2", strong ? "border-foreground/40 border" : "border-border")} />;
 }
 
-// The package name as shown on a line, with the chosen item appended for
-// Individual Item lines so two such lines read distinctly.
-function lineTitle(line: PackageLineResult, catalog: CatalogItem[]): string {
-  const name = PACKAGES[line.pkg]?.name ?? line.pkg;
-  if (line.pkg === "individual") {
-    const item = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"))?.label;
-    return item ? `${name} · ${item}` : name;
-  }
-  return name;
-}
-
-// Per-line cost buildup: variable costs → markups → adjustments → line total.
-function PackageLineBlock({
+// Per-line cost buildup: variable cost → markups → bundle discount → line total.
+// Revisions, packaging, the digital license, and the quote-wide discounts are NOT
+// here — they're quote-level and shown once, below all the lines.
+function LineBlock({
   line,
   assumptions,
   mode,
-  digitalLicense,
-  extraRevisions,
-  sheetNote,
   showHeader,
-  catalog,
 }: {
-  line: PackageLineResult;
+  line: LineResult;
   assumptions: QuoteState;
   mode: PricingMode;
-  digitalLicense: boolean;
-  extraRevisions: number;
-  sheetNote: string;
   showHeader: boolean;
-  catalog: CatalogItem[];
 }) {
-  const r = line.result;
+  const c = line.cost;
   const isReuse = mode === "reuse";
-  const dlFactor = assumptions.digitalLicensePtg / 100;
-
-  const displayFullDesign = r.totalFullDesignLabor + (digitalLicense ? r.totalFullDesignLabor * dlFactor : 0);
-  const displayFullVariable = r.totalFullVariable + (digitalLicense ? r.totalFullDesignLabor * dlFactor : 0);
-  const reuseDisplaySavings = isReuse ? r.reuseDiscount + (digitalLicense ? r.reuseDiscount * dlFactor : 0) : 0;
-  const combinedDiscountPtg =
-    r.discountPtg + r.vendorIncentivePtg + r.packageDiscountPtg + r.familyFriendsPtg;
-  const activeDiscountCount =
-    (r.discountPtg > 0 ? 1 : 0) +
-    (r.vendorIncentivePtg > 0 ? 1 : 0) +
-    (r.packageDiscountPtg > 0 ? 1 : 0) +
-    (r.familyFriendsPtg > 0 ? 1 : 0);
+  const reuseHint = isReuse ? ` × ${assumptions.reuseFactor} reuse` : "";
 
   return (
     <div className={cn(showHeader && "rounded-lg border border-border bg-muted/20 p-3 mt-3")}>
       {showHeader && (
         <div className="flex items-baseline justify-between gap-2 mb-1">
-          <span className="font-squarepeg text-lg leading-tight">{lineTitle(line, catalog)}</span>
-          <span className="text-xs text-muted-foreground font-mono tabular-nums">{line.qty} qty</span>
+          <span className="font-squarepeg text-lg leading-tight">{line.label}</span>
+          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            {line.qty} {line.digital ? "design" : "qty"}
+          </span>
         </div>
       )}
 
-      {/* ─── VARIABLE COSTS (show full design, no reuse applied) ─── */}
+      {/* ─── VARIABLE COSTS ─── */}
       <SectionLabel>Variable Costs</SectionLabel>
 
-      {displayFullDesign > 0 && (
+      {c.totalDesignLabor > 0 && (
         <>
           <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Design labor</p>
-          {r.itemBreakdown.filter((b) => b.fullDesignLabor > 0).map((b, i) => (
+          {c.itemBreakdown.filter((b) => b.designLabor > 0).map((b, i) => (
             <Row
               key={i}
               indent
               label={b.label}
-              math={`${fmtTime(b.designMin)} x $${assumptions.hourly}/hr`}
-              value={fmt$2(b.fullDesignLabor)}
+              math={`${fmtTime(b.designMin)} x $${assumptions.hourly}/hr${reuseHint}`}
+              value={fmt$2(b.designLabor)}
               dim
             />
           ))}
-          {digitalLicense && (
-            <Row indent label={`Digital file license x${(1 + dlFactor).toFixed(1)}`} math={`${fmt$2(r.totalFullDesignLabor)} × ${assumptions.digitalLicensePtg}%`} value={`+${fmt$2(r.totalFullDesignLabor * dlFactor)}`} dim />
-          )}
-          <Row label="Design subtotal" value={fmt$2(displayFullDesign)} dim />
+          <Row label="Design subtotal" value={fmt$2(c.totalDesignLabor)} dim />
         </>
       )}
 
-      {!r.isDigital && r.totalProductionLabor > 0 && (
+      {!c.isDigital && c.totalProductionLabor > 0 && (
         <>
           <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Production labor</p>
-          {r.itemBreakdown.filter((b) => b.productionLabor > 0).map((b, i) => (
+          {c.itemBreakdown.filter((b) => b.productionLabor > 0).map((b, i) => (
             <Row
               key={i}
               indent
@@ -169,16 +135,14 @@ function PackageLineBlock({
               dim
             />
           ))}
-          <Row label="Production subtotal" value={fmt$2(r.totalProductionLabor)} dim />
+          <Row label="Production subtotal" value={fmt$2(c.totalProductionLabor)} dim />
         </>
       )}
 
-      {!r.isDigital && r.totalMaterials > 0 && (
+      {!c.isDigital && c.totalMaterials > 0 && (
         <>
-          <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">
-            Materials{sheetNote}
-          </p>
-          {r.itemBreakdown.filter((b) => b.materialsCost > 0).map((b, i) => (
+          <p className="text-xs text-muted-foreground/60 mt-2 mb-0.5 pl-3 uppercase tracking-wider">Materials</p>
+          {c.itemBreakdown.filter((b) => b.materialsCost > 0).map((b, i) => (
             <Row
               key={i}
               indent
@@ -188,89 +152,33 @@ function PackageLineBlock({
               dim
             />
           ))}
-          <Row label="Materials subtotal" value={fmt$2(r.totalMaterials)} dim />
+          <Row label="Materials subtotal" value={fmt$2(c.totalMaterials)} dim />
         </>
       )}
 
-      {r.packaging > 0 && (
-        <Row indent label="Packaging" value={fmt$2(r.packaging)} dim />
-      )}
-
-      {r.revisionLabor > 0 && (
-        <Row
-          indent
-          label={`Revision rounds x${extraRevisions}`}
-          math={`${extraRevisions} x ${fmtTime(assumptions.revisionMin)} x $${assumptions.hourly}/hr`}
-          value={fmt$2(r.revisionLabor)}
-          dim
-        />
-      )}
-
       <Divider />
-      <Row label="Variable cost total" value={fmt$2(displayFullVariable)} dim />
+      <Row label="Variable cost total" value={fmt$2(c.totalVariable)} dim />
 
       {/* ─── MARKUPS ─── */}
       <SectionLabel>Markups</SectionLabel>
-      <Row indent label={`Admin overhead (${fmtPct(assumptions.adminPtg)})`} value={`+${fmt$2(line.adjustedAdmin)}`} dim />
-      <Row indent label={`Target profit (${fmtPct(assumptions.targetProfitPtg)})`} value={`+${fmt$2(line.adjustedProfit)}`} dim />
+      <Row indent label={`Admin overhead (${fmtPct(assumptions.adminPtg)})`} value={`+${fmt$2(line.admin)}`} dim />
+      <Row indent label={`Target profit (${fmtPct(assumptions.targetProfitPtg)})`} value={`+${fmt$2(line.profit)}`} dim />
 
-      {/* ─── ADJUSTMENTS ─── */}
-      {(reuseDisplaySavings > 0 || activeDiscountCount > 0) && (
-        <SectionLabel>Adjustments</SectionLabel>
-      )}
-
-      {isReuse && reuseDisplaySavings > 0 && (
-        <Row
-          indent
-          label={`Reuse design (x${assumptions.reuseFactor})`}
-          math={`${fmt$2(displayFullDesign)} × ${(1 - assumptions.reuseFactor).toFixed(2)}`}
-          value={`-${fmt$2(reuseDisplaySavings)}`}
-          dim
-        />
-      )}
-
-      {r.discountPtg > 0 && (
-        <Row
-          indent
-          label={`${PACKAGES[line.pkg]?.name ?? line.pkg} discount (-${fmtPct(r.discountPtg)})`}
-          value={`-${fmt$2(line.discountAmount)}`}
-          dim
-        />
-      )}
-
-      {r.vendorIncentivePtg > 0 && (
-        <Row
-          indent
-          label={`Vendor incentive (-${fmtPct(r.vendorIncentivePtg)})`}
-          value={`-${fmt$2(line.vendorAmount)}`}
-          dim
-        />
-      )}
-
-      {r.packageDiscountPtg > 0 && (
-        <Row
-          indent
-          label={`Package discount (-${fmtPct(r.packageDiscountPtg)})`}
-          value={`-${fmt$2(line.packageDiscountAmount)}`}
-          dim
-        />
-      )}
-
-      {r.familyFriendsPtg > 0 && (
-        <Row
-          indent
-          label={`Family & friends discount (-${fmtPct(r.familyFriendsPtg)})`}
-          value={`-${fmt$2(line.familyFriendsAmount)}`}
-          dim
-        />
-      )}
-
-      {activeDiscountCount > 1 && (
-        <Row indent label="Combined discount" value={`-${fmtPct(combinedDiscountPtg)}`} dim />
+      {/* ─── BUNDLE DISCOUNT (packages only) ─── */}
+      {line.bundleDiscountPtg > 0 && (
+        <>
+          <SectionLabel>Bundle discount</SectionLabel>
+          <Row
+            indent
+            label={`${line.label} discount (-${fmtPct(line.bundleDiscountPtg)})`}
+            value={`-${fmt$2(line.bundleDiscountAmount)}`}
+            dim
+          />
+        </>
       )}
 
       <Divider />
-      <Row label="Line total" value={fmt$2(line.linePrice)} bold />
+      <Row label="Line total" value={fmt$2(line.net)} bold />
     </div>
   );
 }
@@ -279,48 +187,24 @@ export function BreakdownPanel({
   breakdown,
   mode,
   assumptions,
-  extraRevisions,
-  digitalLicense,
-  fullColor,
-  customPaper,
   catalog = ITEM_CATALOG,
   embedded,
 }: Props) {
   const [copied, setCopied] = useState(false);
 
-  const lines = breakdown.packageLines;
+  const lines = breakdown.lines;
   const multiLine = lines.length > 1;
+  const svc = breakdown.services;
+  const hasServices = svc.servicesList > 0;
 
-  // Sheet cost note (full color / custom paper apply quote-wide).
-  const sheetNotes: string[] = [];
-  if (fullColor) sheetNotes.push(`full color x${assumptions.fullColorFactor}`);
-  if (customPaper) sheetNotes.push(`custom paper x${assumptions.customPaperFactor}`);
-  const sheetNote = sheetNotes.length > 0 ? ` (${sheetNotes.join(", ")})` : "";
+  // Your-costs aggregates (raw variable cost basis, before any markup).
+  const sumL = (sel: (l: LineResult) => number) => lines.reduce((s, l) => s + sel(l), 0);
+  const aggDesignLabor = breakdown.totalDesignLabor;
+  const aggProductionLabor = sumL((l) => l.cost.totalProductionLabor);
+  const aggMaterials = sumL((l) => l.cost.totalMaterials);
 
-  // Aggregates across all package lines.
-  const sum = (sel: (l: PackageLineResult) => number) => lines.reduce((s, l) => s + sel(l), 0);
-  const aggDesignLabor = sum((l) => l.result.totalDesignLabor);
-  const aggDigitalBonus = breakdown.digitalBonus;
-  const aggProductionLabor = sum((l) => l.result.totalProductionLabor);
-  const aggMaterialsPackaging = sum((l) => l.result.totalMaterials + l.result.packaging);
-  const aggRevisionLabor = sum((l) => l.result.revisionLabor);
-  const anyPhysical = lines.some((l) => !l.result.isDigital);
-
-  // Add-ons
-  const addOnLines = breakdown.addOnLines;
-  const visibleMisc = breakdown.miscLines;
-  const addOnsMaterials = addOnLines.reduce((s, a) => s + a.result.materialsCost, 0);
-  const addOnsLabor = addOnLines.reduce((s, a) => s + a.result.designLabor + a.result.productionLabor, 0);
-
-  const subtotalBeforeRush = breakdown.subtotalBeforeRush;
-  const rushAmount = breakdown.rushAmount;
   const finalPrice = breakdown.finalPrice;
-
-  // Your costs
-  const yourCosts =
-    sum((l) => l.result.totalDirectCosts + l.result.totalLaborCost + l.digitalBonus) +
-    addOnsMaterials +
-    addOnsLabor;
+  const yourCosts = aggDesignLabor + aggProductionLabor + aggMaterials + svc.servicesVar;
   const netProfit = finalPrice - yourCosts;
   const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
 
@@ -336,45 +220,29 @@ export function BreakdownPanel({
   const marginLabel = `${Math.abs(Math.round(marginDiff))} pts ${marginDiff >= 0 ? "above" : "below"} target`;
 
   function copyQuoteSummary() {
-    const packageLabels = lines
-      .map((l) => `${lineTitle(l, catalog)} (${l.qty})`)
-      .join(", ");
+    const lineLabels = lines.map((l) => `${l.label} (${l.qty})`).join(", ");
     const includeNames = lines
-      .flatMap((l) => {
-        if (l.pkg === "individual") {
-          const item = catalog.find((i) => i.key === (l.individualItem ?? "iInvite"))?.label;
-          return item ? [item] : [];
-        }
-        return PACKAGES[l.pkg].items.map((it) =>
-          typeof it === "string"
-            ? catalog.find((i) => i.key === it)?.label
-            : it.displayLabel || catalog.find((i) => i.key === it.key)?.label,
-        );
-      })
+      .flatMap((l) => l.cost.itemBreakdown.map((b) => b.label))
       .filter(Boolean)
       .join(", ");
-    const addOnNames = addOnLines.map((a) => `${a.label} (${a.qty})`).join(", ");
-    const miscNames = visibleMisc
+    const miscNames = breakdown.miscLines
       .map((m) => `${m.label || "Custom item"} (${m.qty} × $${m.unitPrice.toFixed(2)})`)
       .join(", ");
+    const discountNames = breakdown.quoteDiscountLines.map((d) => `${d.label} ${d.ptg}%`).join(", ");
 
+    const sep = String.fromCharCode(9472).repeat(37);
     const summaryLines = [
       "GutierrezByJanelle - Quote Summary",
-      String.fromCharCode(9472).repeat(37),
-      `Packages:    ${packageLabels}`,
+      sep,
+      `Items:       ${lineLabels}`,
       `Mode:        ${mode === "fresh" ? "Custom design (fresh artwork)" : "Reuse existing design"}`,
       `Includes:    ${includeNames}`,
-      addOnNames ? `Add-ons:     ${addOnNames}` : null,
       miscNames ? `Custom:      ${miscNames}` : null,
-      extraRevisions > 0 ? `Revisions:   ${extraRevisions} extra round${extraRevisions > 1 ? "s" : ""}` : null,
-      rushAmount > 0 ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
-      digitalLicense ? "Digital file license included" : null,
-      lines[0]?.result.vendorIncentivePtg ? `Vendor referral discount: ${lines[0].result.vendorIncentivePtg}%` : null,
-      lines[0]?.result.packageDiscountPtg ? `Package discount: ${lines[0].result.packageDiscountPtg}%` : null,
-      lines[0]?.result.familyFriendsPtg ? `Family & friends discount: ${lines[0].result.familyFriendsPtg}%` : null,
-      fullColor ? "Full color designs" : null,
-      customPaper ? "Custom paper" : null,
-      String.fromCharCode(9472).repeat(37),
+      svc.revisionCost > 0 ? "Revisions:   extra rounds included" : null,
+      breakdown.rushAmount > 0 ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
+      svc.licenseVar > 0 ? "Digital file license included" : null,
+      discountNames ? `Discounts:   ${discountNames}` : null,
+      sep,
       `Total:       ${fmt$(Math.round(finalPrice))}`,
       "",
       "* Shipping not included - added based on carrier quote.",
@@ -411,47 +279,90 @@ export function BreakdownPanel({
       <Divider strong />
 
       <div>
-        {/* Per-package buildup */}
+        {/* Per-line buildup */}
         {multiLine && (
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            {lines.length} packages
+            {lines.length} lines
           </p>
         )}
         {lines.map((l) => (
-          <PackageLineBlock
-            key={l.id}
-            line={l}
-            assumptions={assumptions}
-            mode={mode}
-            digitalLicense={digitalLicense}
-            extraRevisions={extraRevisions}
-            sheetNote={sheetNote}
-            showHeader={multiLine}
-            catalog={catalog}
-          />
+          <LineBlock key={l.id} line={l} assumptions={assumptions} mode={mode} showHeader={multiLine} />
         ))}
 
         {multiLine && (
           <>
             <Divider />
-            <Row label="Packages subtotal" value={fmt$2(breakdown.basePriceAdjusted)} dim />
+            <Row label="Items subtotal" value={fmt$2(breakdown.itemsNet)} dim />
           </>
         )}
 
-        {/* Add-ons */}
-        {(addOnLines.length > 0 || visibleMisc.length > 0) && (
+        {/* ─── PROJECT SERVICES (quote-level, once) ─── */}
+        {hasServices && (
           <>
-            <SectionLabel>Add-ons</SectionLabel>
-            {addOnLines.map(({ key, label, qty: addOnQty, result }) => (
+            <SectionLabel>Project services</SectionLabel>
+            {svc.revisionCost > 0 && (
               <Row
-                key={key}
                 indent
-                label={`${label} · ${addOnQty} ${addOnQty === 1 ? "pc" : "pcs"}`}
-                value={`+${fmt$2(result.price)}`}
+                label="Revision rounds"
+                math={`${fmtTime(assumptions.revisionMin)} × $${assumptions.hourly}/hr`}
+                value={`+${fmt$2(svc.revisionCost)}`}
+                dim
+              />
+            )}
+            {svc.packaging > 0 && <Row indent label="Packaging (once)" value={`+${fmt$2(svc.packaging)}`} dim />}
+            {svc.licenseVar > 0 && (
+              <Row
+                indent
+                label={`Digital file license (+${fmtPct(assumptions.digitalLicensePtg)})`}
+                value={`+${fmt$2(svc.licenseVar)}`}
+                dim
+              />
+            )}
+            <Row
+              indent
+              label={`Markup (admin + profit)`}
+              value={`+${fmt$2(svc.adminAmount + svc.profitAmount)}`}
+              dim
+            />
+            <Row label="Project services total" value={fmt$2(svc.servicesList)} dim />
+          </>
+        )}
+
+        {/* ─── DISCOUNTS (quote-wide, grouped) ─── */}
+        {breakdown.quoteDiscountLines.length > 0 && (
+          <>
+            <SectionLabel>Discounts</SectionLabel>
+            {breakdown.quoteDiscountLines.map((d) => (
+              <Row
+                key={d.label}
+                indent
+                label={`${d.label} (-${fmtPct(d.ptg)})`}
+                value={`-${fmt$2(d.amount)}`}
                 dim
               />
             ))}
-            {visibleMisc.map((m) => (
+            {breakdown.quoteDiscountLines.length > 1 && (
+              <Row label="Total savings" value={`-${fmt$2(breakdown.quoteDiscountAmount)}`} dim />
+            )}
+          </>
+        )}
+
+        {/* Rush */}
+        {breakdown.rushAmount > 0 && (
+          <Row
+            indent
+            label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
+            math={`${fmt$2(breakdown.discountedSubtotal)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
+            value={`+${fmt$2(breakdown.rushAmount)}`}
+            dim
+          />
+        )}
+
+        {/* Custom add-ons */}
+        {breakdown.miscLines.length > 0 && (
+          <>
+            <SectionLabel>Custom add-ons</SectionLabel>
+            {breakdown.miscLines.map((m) => (
               <Row
                 key={m.id}
                 indent
@@ -464,22 +375,11 @@ export function BreakdownPanel({
           </>
         )}
 
-        {/* Rush */}
-        {rushAmount > 0 && (
-          <Row
-            indent
-            label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
-            math={`${fmt$2(subtotalBeforeRush)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
-            value={`+${fmt$2(rushAmount)}`}
-            dim
-          />
-        )}
-
         <Divider strong />
         <Row label="Total client pays" value={fmt$2(finalPrice)} bold />
 
         {/* Shipping reminder */}
-        {anyPhysical && (
+        {breakdown.anyPhysical && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mt-2 normal-case tracking-normal">
             Remember to add shipping based on carrier quote
           </p>
@@ -490,39 +390,14 @@ export function BreakdownPanel({
         {/* ─── YOUR COSTS (aggregate) ─── */}
         <SectionLabel>Your costs</SectionLabel>
 
-        {aggDesignLabor > 0 && (
-          <Row indent label="Design labor" value={fmt$2(aggDesignLabor)} dim />
-        )}
-
-        {digitalLicense && aggDigitalBonus > 0 && (
-          <Row indent label="Digital license" value={fmt$2(aggDigitalBonus)} dim />
-        )}
-
-        {aggProductionLabor > 0 && (
-          <Row indent label="Production labor" value={fmt$2(aggProductionLabor)} dim />
-        )}
-
-        {aggMaterialsPackaging > 0 && (
-          <Row indent label="Materials + packaging" value={fmt$2(aggMaterialsPackaging)} dim />
-        )}
-
-        {aggRevisionLabor > 0 && (
-          <Row
-            indent
-            label="Revisions"
-            math={`${extraRevisions} × ${fmtTime(assumptions.revisionMin)} × $${assumptions.hourly}/hr`}
-            value={fmt$2(aggRevisionLabor)}
-            dim
-          />
-        )}
-
-        {(addOnsMaterials + addOnsLabor) > 0 && (
-          <Row indent label="Add-on costs" value={fmt$2(addOnsMaterials + addOnsLabor)} dim />
-        )}
+        {aggDesignLabor > 0 && <Row indent label="Design labor" value={fmt$2(aggDesignLabor)} dim />}
+        {aggProductionLabor > 0 && <Row indent label="Production labor" value={fmt$2(aggProductionLabor)} dim />}
+        {aggMaterials > 0 && <Row indent label="Materials" value={fmt$2(aggMaterials)} dim />}
+        {svc.servicesVar > 0 && <Row indent label="Project services" value={fmt$2(svc.servicesVar)} dim />}
 
         <Divider />
         <Row label="Total your costs" value={fmt$2(yourCosts)} dim />
-        {visibleMisc.length > 0 && (
+        {breakdown.miscLines.length > 0 && (
           <p className="text-xs text-muted-foreground/70 italic mt-1 leading-snug">
             Custom add-ons are billed at the price you entered — treated as pure margin in this view.
           </p>

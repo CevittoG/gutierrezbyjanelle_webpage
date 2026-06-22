@@ -1,5 +1,4 @@
 export type PkgKey =
-  | "individual"
   | "diy"
   | "sweet"
   | "signature"
@@ -139,16 +138,6 @@ const SHARED_PKG_COLORS = {
 };
 
 export const PACKAGES: Record<PkgKey, PackageDef> = {
-  individual: {
-    name: "Individual Item",
-    tagline: "One item type a la carte",
-    description: "Any single stationery piece. Can be sold as digital (design only) or physical (printed + shipped).",
-    items: ["iInvite"],
-    isDigital: false,
-    discountKey: "discountIndividual",
-    type: "wedding",
-    ...SHARED_PKG_COLORS,
-  },
   diy: {
     name: "Design Suite",
     tagline: "Print-ready PDFs - design only",
@@ -269,7 +258,7 @@ export function getDiscountPtg(pkgKey: PkgKey, s: QuoteState): number {
 }
 
 // Clamp a typed discount percentage into the valid [0, 100] range.
-function clampPtg(n: number): number {
+export function clampPtg(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(100, Math.max(0, n));
 }
@@ -291,52 +280,30 @@ export interface ItemBreakdown {
   materialsCost: number;
 }
 
-export interface PackageResult {
-  finalPrice: number;
-
+// Variable-cost components of one quote line (a bundle or a single item). No
+// revision, packaging, markup, or discount — the quote orchestrator
+// (computeQuoteBreakdown) layers those on. `isDigital` ⇒ no production/materials.
+export interface LineCost {
+  isDigital: boolean;
   totalFullDesignLabor: number;
   totalDesignLabor: number;
   reuseDiscount: number;
   totalProductionLabor: number;
   totalMaterials: number;
-  packaging: number;
-  revisionLabor: number;
   totalVariable: number;
   totalFullVariable: number;
-
-  adminAmount: number;
-  profitAmount: number;
-  priceBeforeDiscount: number;
-  discountPtg: number;
-  discountAmount: number;
-  vendorIncentivePtg: number;
-  vendorIncentiveAmount: number;
-  packageDiscountPtg: number;
-  packageDiscountAmount: number;
-  familyFriendsPtg: number;
-  familyFriendsAmount: number;
-
-  totalDirectCosts: number;
-  totalLaborCost: number;
-  netProfit: number;
-  effectiveMargin: number;
-
   itemBreakdown: ItemBreakdown[];
-  isDigital: boolean;
 }
 
-export interface AddOnResult {
-  qty: number;
-  designMin: number;
-  designLabor: number;
-  prodMin: number;
-  productionLabor: number;
-  materialPerUnit: number;
-  materialsCost: number;
-  itemVariable: number;
+// Quote-level project services, computed once for the whole quote.
+export interface QuoteServices {
+  revisionCost: number;
+  packaging: number;
+  licenseVar: number;
+  servicesVar: number;
   adminAmount: number;
   profitAmount: number;
-  price: number;
+  servicesList: number;
 }
 
 // --- Calculations ---
@@ -347,173 +314,181 @@ function normalizePkgItem(it: PkgItem): { key: string; multiplier: number; displ
     : { key: it.key, multiplier: it.multiplier ?? 1, displayLabel: it.displayLabel };
 }
 
-export function calcPackage(
+function sheetMul(s: QuoteState, fullColor?: boolean, customPaper?: boolean): number {
+  return (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
+}
+
+// Variable cost of a single catalog piece at a given quantity. Pure — no
+// revision, packaging, markup, or discount (those are quote-level). Design
+// labor is charged once per piece type; production + materials scale with the
+// piece count and are zero for digital (design-only) lines.
+function costOneItem(
+  itemKey: string,
+  itemQty: number,
+  isDigital: boolean,
+  isReuse: boolean,
+  s: QuoteState,
+  sheetMultiplier: number,
+  displayLabel: string | undefined,
+  catalog: CatalogItem[],
+): ItemBreakdown {
+  const designMin = stateVal(s, itemKey + "_dt");
+  const prodMin = stateVal(s, itemKey + "_pt");
+  const rawSheetCost = stateVal(s, itemKey + "_sc");
+  const sheetCost = rawSheetCost * sheetMultiplier;
+  const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
+  const catalogItem = catalog.find((i) => i.key === itemKey);
+
+  const fullDesignLabor = (designMin / 60) * s.hourly;
+  const designLabor = fullDesignLabor * (isReuse ? s.reuseFactor : 1);
+
+  let productionLabor = 0;
+  let materialPerUnitBase = 0;
+  let materialPerUnit = 0;
+  let materialsCost = 0;
+  if (!isDigital) {
+    productionLabor = (prodMin / 60) * s.hourly * itemQty;
+    materialPerUnitBase = sheetCost / yield_;
+    materialPerUnit = materialPerUnitBase * (1 + s.errorMarginPtg / 100);
+    materialsCost = materialPerUnit * itemQty;
+  }
+
+  return {
+    label: displayLabel ?? catalogItem?.label ?? itemKey,
+    qty: itemQty,
+    designMin,
+    designLabor,
+    fullDesignLabor,
+    prodMin,
+    productionLabor,
+    sheetCost,
+    yield: yield_,
+    materialPerUnitBase,
+    materialPerUnit,
+    materialsCost,
+  };
+}
+
+function accumulateLine(breakdown: ItemBreakdown[], isDigital: boolean): LineCost {
+  let totalFullDesignLabor = 0;
+  let totalDesignLabor = 0;
+  let totalProductionLabor = 0;
+  let totalMaterials = 0;
+  for (const b of breakdown) {
+    totalFullDesignLabor += b.fullDesignLabor;
+    totalDesignLabor += b.designLabor;
+    totalProductionLabor += b.productionLabor;
+    totalMaterials += b.materialsCost;
+  }
+  return {
+    isDigital,
+    totalFullDesignLabor,
+    totalDesignLabor,
+    reuseDiscount: totalFullDesignLabor - totalDesignLabor,
+    totalProductionLabor,
+    totalMaterials,
+    totalVariable: totalDesignLabor + totalProductionLabor + totalMaterials,
+    totalFullVariable: totalFullDesignLabor + totalProductionLabor + totalMaterials,
+    itemBreakdown: breakdown,
+  };
+}
+
+// Variable cost of a predefined bundle: each catalog piece sized by the bundle's
+// per-household qty rules, scaled by the line's household count.
+export function calcPackageCost(
   pkgKey: PkgKey,
   qty: number,
   mode: PricingMode,
   s: QuoteState,
-  extraRevisions: number,
-  overrideItems?: PkgItem[],
-  overrideDigital?: boolean,
   fullColor?: boolean,
   customPaper?: boolean,
-  vendorIncentive?: boolean,
-  packageDiscountPtg: number = 0,
-  familyFriendsPtg: number = 0,
   catalog: CatalogItem[] = ITEM_CATALOG,
-): PackageResult {
+): LineCost {
   const pkg = PACKAGES[pkgKey];
-  const items = (overrideItems ?? pkg.items).map(normalizePkgItem);
-  const isDigital = overrideDigital ?? pkg.isDigital;
+  const isDigital = pkg.isDigital;
   const isReuse = mode === "reuse";
-
-  let totalDesignLabor = 0;
-  let totalFullDesignLabor = 0;
-  let totalProductionLabor = 0;
-  let totalMaterials = 0;
-  const itemBreakdown: ItemBreakdown[] = [];
-
-  const sheetMultiplier = (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
-
-  for (const norm of items) {
-    const itemKey = norm.key;
-    const itemQty = getItemQty(itemKey, qty, catalog) * norm.multiplier;
-    const designMin = stateVal(s, itemKey + "_dt");
-    const prodMin = stateVal(s, itemKey + "_pt");
-    const rawSheetCost = stateVal(s, itemKey + "_sc");
-    const sheetCost = rawSheetCost * sheetMultiplier;
-    const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
-    const catalogItem = catalog.find((i) => i.key === itemKey)!;
-
-    const fullDesignLabor = (designMin / 60) * s.hourly;
-    const designLabor = fullDesignLabor * (isReuse ? s.reuseFactor : 1);
-
-    let productionLabor = 0;
-    let materialPerUnitBase = 0;
-    let materialPerUnit = 0;
-    let materialsCost = 0;
-
-    if (!isDigital) {
-      productionLabor = (prodMin / 60) * s.hourly * itemQty;
-      materialPerUnitBase = sheetCost / yield_;
-      materialPerUnit = materialPerUnitBase * (1 + s.errorMarginPtg / 100);
-      materialsCost = materialPerUnit * itemQty;
-    }
-
-    totalFullDesignLabor += fullDesignLabor;
-    totalDesignLabor += designLabor;
-    totalProductionLabor += productionLabor;
-    totalMaterials += materialsCost;
-
-    itemBreakdown.push({
-      label: norm.displayLabel ?? catalogItem.label,
-      qty: itemQty,
-      designMin,
-      designLabor,
-      fullDesignLabor,
-      prodMin,
-      productionLabor,
-      sheetCost,
-      yield: yield_,
-      materialPerUnitBase,
-      materialPerUnit,
-      materialsCost,
-    });
-  }
-
-  const revisionLabor = (extraRevisions * s.revisionMin / 60) * s.hourly;
-  const packaging = isDigital ? 0 : s.packagingCost;
-  const reuseDiscount = totalFullDesignLabor - totalDesignLabor;
-
-  const totalVariable = totalDesignLabor + totalProductionLabor + totalMaterials + revisionLabor + packaging;
-  const totalFullVariable = totalFullDesignLabor + totalProductionLabor + totalMaterials + revisionLabor + packaging;
-  const adminAmount = totalVariable * (s.adminPtg / 100);
-  const priceAfterAdmin = totalVariable + adminAmount;
-  const profitAmount = priceAfterAdmin * (s.targetProfitPtg / 100);
-  const priceBeforeDiscount = priceAfterAdmin + profitAmount;
-
-  const discountPtg = getDiscountPtg(pkgKey, s);
-  const vendorIncentivePtg = vendorIncentive ? s.vendorIncentivePtg : 0;
-  const pkgDiscountPtg = clampPtg(packageDiscountPtg);
-  const ffDiscountPtg = clampPtg(familyFriendsPtg);
-  const combinedDiscountPtg = discountPtg + vendorIncentivePtg + pkgDiscountPtg + ffDiscountPtg;
-  const discountAmount = priceBeforeDiscount * (discountPtg / 100);
-  const vendorIncentiveAmount = priceBeforeDiscount * (vendorIncentivePtg / 100);
-  const packageDiscountAmount = priceBeforeDiscount * (pkgDiscountPtg / 100);
-  const familyFriendsAmount = priceBeforeDiscount * (ffDiscountPtg / 100);
-  const finalPrice = priceBeforeDiscount * (1 - combinedDiscountPtg / 100);
-
-  const totalDirectCosts = totalMaterials + packaging;
-  const totalLaborCost = totalDesignLabor + totalProductionLabor + revisionLabor;
-  const netProfit = finalPrice - totalDirectCosts - totalLaborCost;
-  const effectiveMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
-
-  return {
-    finalPrice, totalFullDesignLabor, totalDesignLabor, reuseDiscount,
-    totalProductionLabor, totalMaterials, packaging, revisionLabor,
-    totalVariable, totalFullVariable, adminAmount, profitAmount,
-    priceBeforeDiscount, discountPtg, discountAmount,
-    vendorIncentivePtg, vendorIncentiveAmount,
-    packageDiscountPtg: pkgDiscountPtg, packageDiscountAmount,
-    familyFriendsPtg: ffDiscountPtg, familyFriendsAmount,
-    totalDirectCosts, totalLaborCost, netProfit, effectiveMargin,
-    itemBreakdown, isDigital,
-  };
+  const mult = sheetMul(s, fullColor, customPaper);
+  const breakdown = pkg.items
+    .map(normalizePkgItem)
+    .map((it) =>
+      costOneItem(
+        it.key,
+        getItemQty(it.key, qty, catalog) * it.multiplier,
+        isDigital,
+        isReuse,
+        s,
+        mult,
+        it.displayLabel,
+        catalog,
+      ),
+    );
+  return accumulateLine(breakdown, isDigital);
 }
 
-export function calcAddOn(
+// Variable cost of a single catalog piece at a raw piece count. `digital` makes
+// it design-only (no production/materials).
+export function calcItemCost(
   itemKey: string,
-  qty: number,
+  rawQty: number,
+  digital: boolean,
   mode: PricingMode,
   s: QuoteState,
   fullColor?: boolean,
   customPaper?: boolean,
   catalog: CatalogItem[] = ITEM_CATALOG,
-): AddOnResult {
-  return calcAddOnInternal(itemKey, getItemQty(itemKey, qty, catalog), mode, s, fullColor, customPaper);
-}
-
-// Add-on calc using an explicit piece count entered by the user (no household multiplier).
-export function calcAddOnRaw(
-  itemKey: string,
-  pieceCount: number,
-  mode: PricingMode,
-  s: QuoteState,
-  fullColor?: boolean,
-  customPaper?: boolean,
-): AddOnResult {
-  return calcAddOnInternal(itemKey, Math.max(0, Math.round(pieceCount)), mode, s, fullColor, customPaper);
-}
-
-function calcAddOnInternal(
-  itemKey: string,
-  itemQty: number,
-  mode: PricingMode,
-  s: QuoteState,
-  fullColor?: boolean,
-  customPaper?: boolean,
-): AddOnResult {
-  const designMin = stateVal(s, itemKey + "_dt");
-  const prodMin = stateVal(s, itemKey + "_pt");
-  const rawSheetCost = stateVal(s, itemKey + "_sc");
-  const sheetMultiplier = (fullColor ? s.fullColorFactor : 1) * (customPaper ? s.customPaperFactor : 1);
-  const sheetCost = rawSheetCost * sheetMultiplier;
-  const yield_ = Math.max(1, stateVal(s, itemKey + "_y"));
+): LineCost {
   const isReuse = mode === "reuse";
+  const mult = sheetMul(s, fullColor, customPaper);
+  const breakdown = costOneItem(
+    itemKey,
+    Math.max(0, Math.round(rawQty)),
+    digital,
+    isReuse,
+    s,
+    mult,
+    undefined,
+    catalog,
+  );
+  return accumulateLine([breakdown], digital);
+}
 
-  const designLabor = (designMin / 60) * s.hourly * (isReuse ? s.reuseFactor : 1);
-  const productionLabor = (prodMin / 60) * s.hourly * itemQty;
-  const materialPerUnit = (sheetCost / yield_) * (1 + s.errorMarginPtg / 100);
-  const materialsCost = materialPerUnit * itemQty;
+// Apply admin overhead then target profit to a variable cost. Shared by every
+// priced line and by the project-services tier so markup is identical everywhere.
+export function markupVariable(
+  variable: number,
+  s: QuoteState,
+): { admin: number; profit: number; list: number } {
+  const admin = variable * (s.adminPtg / 100);
+  const profit = (variable + admin) * (s.targetProfitPtg / 100);
+  return { admin, profit, list: variable + admin + profit };
+}
 
-  const itemVariable = designLabor + productionLabor + materialsCost;
-  const adminAmount = itemVariable * (s.adminPtg / 100);
-  const profitAmount = (itemVariable + adminAmount) * (s.targetProfitPtg / 100);
-  const price = itemVariable + adminAmount + profitAmount;
-
+// Quote-level project services, computed once for the whole quote: extra
+// revision rounds, a single packaging charge (when any piece is physical), and
+// the optional digital-file license (a % of total design labor). The sum is
+// marked up like any other cost.
+export function calcQuoteServices(
+  s: QuoteState,
+  opts: {
+    extraRevisions: number;
+    anyPhysical: boolean;
+    digitalLicense: boolean;
+    totalDesignLabor: number;
+  },
+): QuoteServices {
+  const revisionCost = ((opts.extraRevisions * s.revisionMin) / 60) * s.hourly;
+  const packaging = opts.anyPhysical ? s.packagingCost : 0;
+  const licenseVar = opts.digitalLicense ? opts.totalDesignLabor * (s.digitalLicensePtg / 100) : 0;
+  const servicesVar = revisionCost + packaging + licenseVar;
+  const { admin, profit, list } = markupVariable(servicesVar, s);
   return {
-    qty: itemQty, designMin, designLabor, prodMin, productionLabor,
-    materialPerUnit, materialsCost, itemVariable, adminAmount, profitAmount, price,
+    revisionCost,
+    packaging,
+    licenseVar,
+    servicesVar,
+    adminAmount: admin,
+    profitAmount: profit,
+    servicesList: list,
   };
 }
 

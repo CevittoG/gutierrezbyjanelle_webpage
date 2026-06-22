@@ -1,48 +1,50 @@
-// Pure quote-total computation, shared by the print view and the public client
-// portal so both render the *same* numbers from the *same* engine path.
+// Pure quote-total computation, shared by the calculator, the print view, and
+// the public client portal so every surface renders the *same* numbers from the
+// *same* engine path.
 //
-// This is the math that used to live inline in PrintQuote's useMemo. Extracted
-// verbatim (plus a few intermediate values exposed for the portal's category
-// rollup). No IO, no React — importable on the server and the client.
+// This is the single source of truth for the quote money math. The engine
+// (quote-calc-logic) only computes per-line *variable cost*; everything else —
+// markup, the per-package bundle discount, the once-per-quote project services
+// (revisions, packaging, digital license), the grouped quote-wide discount,
+// rush, and misc — is layered on here, in one place, in one order.
+//
+// No IO, no React — importable on the server and the client.
 
-import type { DraftConfig, PackageLine } from "./quote-calc-drafts";
+import type { DraftConfig, LineKind, QuoteLine } from "./quote-calc-drafts";
 import {
-  AddOnResult,
   CatalogItem,
   ITEM_CATALOG,
-  PackageResult,
+  LineCost,
+  PACKAGES,
   PkgKey,
+  QuoteServices,
   QuoteState,
-  calcAddOnRaw,
-  calcPackage,
+  calcItemCost,
+  calcPackageCost,
+  calcQuoteServices,
+  clampPtg,
+  getDiscountPtg,
+  markupVariable,
 } from "./quote-calc-logic";
 
-export interface AddOnLine {
-  key: string;
-  label: string;
-  qty: number;
-  result: AddOnResult;
-}
-
-// One priced package line: the raw `calcPackage` result plus the per-line
-// admin/profit/discount buildup. Line prices are summed into the quote total.
-export interface PackageLineResult {
+// One priced quote line — a bundle or a single item. `list` is the marked-up
+// price; `net` is after the per-package bundle discount (0 for item lines).
+export interface LineResult {
   id: string;
-  pkg: PkgKey;
+  kind: LineKind;
+  pkg?: PkgKey;
+  itemKey?: string;
   qty: number;
-  individualItem?: string;
-  individualDigital?: boolean;
-  result: PackageResult;
-  digitalBonus: number;
-  adjustedVariable: number;
-  adjustedAdmin: number;
-  adjustedProfit: number;
-  adjustedBeforeDiscount: number;
-  discountAmount: number;
-  vendorAmount: number;
-  packageDiscountAmount: number;
-  familyFriendsAmount: number;
-  linePrice: number;
+  digital: boolean;
+  /** Plain display name: the package name, or the catalog item label. */
+  label: string;
+  cost: LineCost;
+  admin: number;
+  profit: number;
+  list: number;
+  bundleDiscountPtg: number;
+  bundleDiscountAmount: number;
+  net: number;
 }
 
 export interface MiscLine {
@@ -53,149 +55,144 @@ export interface MiscLine {
   total: number;
 }
 
-export interface QuoteBreakdown {
-  packageLines: PackageLineResult[];
-  // Back-compat alias = packageLines[0].result (the first/primary line).
-  baseResult: PackageResult;
-  addOnLines: AddOnLine[];
-  miscLines: MiscLine[];
-
-  // Intermediate buildup, summed across all package lines (exposed for the
-  // portal category rollup).
-  digitalBonus: number;
-  adjustedVariable: number;
-  adjustedAdmin: number;
-  adjustedProfit: number;
-  adjustedBeforeDiscount: number;
-  discountAmount: number;
-  vendorAmount: number;
-  packageDiscountAmount: number;
-  familyFriendsAmount: number;
-
-  basePriceAdjusted: number;
-  addOnsTotal: number;
-  miscTotal: number;
-  subtotalBeforeRush: number;
-  rushAmount: number;
-  finalPrice: number;
+// One component of the grouped quote-wide discount, itemized for the breakdown
+// display. Amounts are each component's share of `preDiscount`.
+export interface QuoteDiscountLine {
+  label: string;
+  ptg: number;
+  amount: number;
 }
 
-// Price one package line: calcPackage (variable cost, with its own discount key)
-// then the digital-license / admin / profit buildup. `extraRevisions` is passed
-// only to the first line by the caller so the quote is billed revisions once.
-function computePackageLine(
-  line: PackageLine,
+export interface QuoteBreakdown {
+  lines: LineResult[];
+
+  // Line-item rollups.
+  itemsList: number; // Σ line.list (before any discount)
+  itemsNet: number; // Σ line.net (after per-package bundle discounts)
+  bundleDiscountTotal: number; // itemsList − itemsNet
+
+  // Quote-level project services (computed once).
+  services: QuoteServices;
+  anyPhysical: boolean;
+  totalDesignLabor: number; // Σ across lines — drives the digital license
+
+  // Grouped quote-wide discount stage.
+  preDiscount: number; // itemsNet + services.servicesList
+  quoteDiscountPtg: number;
+  quoteDiscountAmount: number;
+  quoteDiscountLines: QuoteDiscountLine[]; // itemized components (vendor / family / custom)
+  discountedSubtotal: number; // preDiscount − quoteDiscountAmount
+
+  // Surcharges + free-form items.
+  rushAmount: number;
+  miscLines: MiscLine[];
+  miscTotal: number;
+
+  // Totals.
+  savings: number; // bundleDiscountTotal + quoteDiscountAmount
+  finalPrice: number;
+  /** List-price subtotal (itemsList + servicesList + miscTotal); for the client projector. */
+  subtotalList: number;
+}
+
+// Price one quote line: variable cost (bundle or item) → admin/profit markup →
+// the per-package bundle discount. Item lines carry no bundle discount.
+function priceLine(
+  line: QuoteLine,
   config: DraftConfig,
   assumptions: QuoteState,
   catalog: CatalogItem[],
-  extraRevisions: number,
-): PackageLineResult {
-  const overrideItems = line.pkg === "individual" ? [line.individualItem ?? "iInvite"] : undefined;
-  const overrideDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : undefined;
+): LineResult {
+  let cost: LineCost;
+  let label: string;
+  let bundleDiscountPtg = 0;
 
-  const result = calcPackage(
-    line.pkg,
-    line.qty,
-    config.mode,
-    assumptions,
-    extraRevisions,
-    overrideItems,
-    overrideDigital,
-    config.fullColor,
-    config.customPaper,
-    config.vendorIncentive,
-    config.packageDiscountPtg,
-    config.familyFriendsPtg,
-    catalog,
-  );
+  if (line.kind === "package" && line.pkg && PACKAGES[line.pkg]) {
+    cost = calcPackageCost(line.pkg, line.qty, config.mode, assumptions, config.fullColor, config.customPaper, catalog);
+    label = PACKAGES[line.pkg].name;
+    bundleDiscountPtg = clampPtg(getDiscountPtg(line.pkg, assumptions));
+  } else {
+    const itemKey = line.itemKey ?? "iInvite";
+    cost = calcItemCost(
+      itemKey,
+      line.qty,
+      line.digital ?? false,
+      config.mode,
+      assumptions,
+      config.fullColor,
+      config.customPaper,
+      catalog,
+    );
+    label = catalog.find((i) => i.key === itemKey)?.label ?? itemKey;
+  }
 
-  const dlFactor = assumptions.digitalLicensePtg / 100;
-  const digitalBonus = config.digitalLicense ? result.totalDesignLabor * dlFactor : 0;
-  const adjustedVariable = result.totalVariable + digitalBonus;
-  const adjustedAdmin = adjustedVariable * (assumptions.adminPtg / 100);
-  const adjustedProfit = (adjustedVariable + adjustedAdmin) * (assumptions.targetProfitPtg / 100);
-  const adjustedBeforeDiscount = adjustedVariable + adjustedAdmin + adjustedProfit;
-  const discountAmount = adjustedBeforeDiscount * (result.discountPtg / 100);
-  const vendorAmount = adjustedBeforeDiscount * (result.vendorIncentivePtg / 100);
-  const packageDiscountAmount = adjustedBeforeDiscount * (result.packageDiscountPtg / 100);
-  const familyFriendsAmount = adjustedBeforeDiscount * (result.familyFriendsPtg / 100);
-  const combinedDiscountPtg =
-    result.discountPtg +
-    result.vendorIncentivePtg +
-    result.packageDiscountPtg +
-    result.familyFriendsPtg;
-  const linePrice = adjustedBeforeDiscount * (1 - combinedDiscountPtg / 100);
+  const { admin, profit, list } = markupVariable(cost.totalVariable, assumptions);
+  const bundleDiscountAmount = list * (bundleDiscountPtg / 100);
 
   return {
     id: line.id,
+    kind: line.kind,
     pkg: line.pkg,
+    itemKey: line.itemKey,
     qty: line.qty,
-    individualItem: line.individualItem,
-    individualDigital: line.individualDigital,
-    result,
-    digitalBonus,
-    adjustedVariable,
-    adjustedAdmin,
-    adjustedProfit,
-    adjustedBeforeDiscount,
-    discountAmount,
-    vendorAmount,
-    packageDiscountAmount,
-    familyFriendsAmount,
-    linePrice,
+    digital: cost.isDigital,
+    label,
+    cost,
+    admin,
+    profit,
+    list,
+    bundleDiscountPtg,
+    bundleDiscountAmount,
+    net: list - bundleDiscountAmount,
   };
 }
 
-// Compute every figure the print quote and the public portal display, from a
-// quote's config + the assumptions snapshot it was priced under. `catalog`
-// supplies item labels/qty rules; defaults to the bundled catalog.
+// Compute every figure the calculator, the print quote, and the public portal
+// display, from a quote's config + the assumptions snapshot it was priced under.
+// `catalog` supplies item labels/qty rules; defaults to the bundled catalog.
 export function computeQuoteBreakdown(
   config: DraftConfig,
   assumptions: QuoteState,
   catalog: CatalogItem[] = ITEM_CATALOG,
 ): QuoteBreakdown {
-  // Price each line independently (each with its own package discount), billing
-  // extra revisions once — on the first line only — so a single-package quote
-  // prices identically to before.
-  const packageLines: PackageLineResult[] = config.packages.map((line, i) =>
-    computePackageLine(line, config, assumptions, catalog, i === 0 ? config.extraRevisions : 0),
-  );
+  const lines: LineResult[] = config.lines.map((line) => priceLine(line, config, assumptions, catalog));
+  const sum = (sel: (l: LineResult) => number): number => lines.reduce((s, l) => s + sel(l), 0);
 
-  const sumLines = (sel: (l: PackageLineResult) => number): number =>
-    packageLines.reduce((s, l) => s + sel(l), 0);
+  const itemsList = sum((l) => l.list);
+  const itemsNet = sum((l) => l.net);
+  const bundleDiscountTotal = itemsList - itemsNet;
+  const totalDesignLabor = sum((l) => l.cost.totalDesignLabor);
+  const anyPhysical = lines.some((l) => !l.cost.isDigital);
 
-  // Defensive fallback for the degenerate "no packages" state — the UI keeps at
-  // least one line, so this only guards against malformed data.
-  const baseResult =
-    packageLines[0]?.result ??
-    calcPackage(
-      config.packages[0]?.pkg ?? "sweet",
-      0,
-      config.mode,
-      assumptions,
-      0,
-      undefined,
-      undefined,
-      config.fullColor,
-      config.customPaper,
-      config.vendorIncentive,
-      config.packageDiscountPtg,
-      config.familyFriendsPtg,
-      catalog,
-    );
+  // Project services — once per quote, marked up like any other cost.
+  const services = calcQuoteServices(assumptions, {
+    extraRevisions: Math.max(0, config.extraRevisions || 0),
+    anyPhysical,
+    digitalLicense: config.digitalLicense,
+    totalDesignLabor,
+  });
 
-  const addOnLines: AddOnLine[] = Object.entries(config.addOns)
-    .filter(([, q]) => q > 0)
-    .map(([key, q]) => {
-      const cat = catalog.find((i) => i.key === key);
-      return {
-        key,
-        label: cat?.label ?? key,
-        qty: q,
-        result: calcAddOnRaw(key, q, config.mode, assumptions, config.fullColor, config.customPaper),
-      };
-    });
+  // Grouped quote-wide discount: vendor incentive + family & friends + custom,
+  // stacked additively, applied once to the marked-up subtotal (items + services).
+  const preDiscount = itemsNet + services.servicesList;
+  const vendorPtg = config.vendorIncentive ? clampPtg(assumptions.vendorIncentivePtg) : 0;
+  const familyFriendsPtg = clampPtg(config.familyFriendsPtg);
+  const customPtg = clampPtg(config.customDiscountPtg);
+  const quoteDiscountLines: QuoteDiscountLine[] = [
+    { label: "Vendor incentive", ptg: vendorPtg },
+    { label: "Family & friends", ptg: familyFriendsPtg },
+    { label: "Custom discount", ptg: customPtg },
+  ]
+    .filter((d) => d.ptg > 0)
+    .map((d) => ({ ...d, amount: preDiscount * (d.ptg / 100) }));
+  const quoteDiscountPtg = clampPtg(vendorPtg + familyFriendsPtg + customPtg);
+  const quoteDiscountAmount = preDiscount * (quoteDiscountPtg / 100);
+  const discountedSubtotal = preDiscount - quoteDiscountAmount;
 
+  // Rush is a surcharge on the discounted order value (excludes fixed-price misc).
+  const rushAmount = config.rushFee ? discountedSubtotal * (assumptions.rushFeePtg / 100) : 0;
+
+  // Misc add-ons are entered at final selling price — no markup, no discount.
   const miscLines: MiscLine[] = (config.miscAddOns ?? [])
     .filter((m) => m.qty > 0 && m.unitPrice > 0 && (m.label ?? "").trim().length > 0)
     .map((m) => ({
@@ -205,44 +202,30 @@ export function computeQuoteBreakdown(
       unitPrice: m.unitPrice,
       total: m.qty * m.unitPrice,
     }));
-
-  const digitalBonus = sumLines((l) => l.digitalBonus);
-  const adjustedVariable = sumLines((l) => l.adjustedVariable);
-  const adjustedAdmin = sumLines((l) => l.adjustedAdmin);
-  const adjustedProfit = sumLines((l) => l.adjustedProfit);
-  const adjustedBeforeDiscount = sumLines((l) => l.adjustedBeforeDiscount);
-
-  const discountAmount = sumLines((l) => l.discountAmount);
-  const vendorAmount = sumLines((l) => l.vendorAmount);
-  const packageDiscountAmount = sumLines((l) => l.packageDiscountAmount);
-  const familyFriendsAmount = sumLines((l) => l.familyFriendsAmount);
-  const basePriceAdjusted = sumLines((l) => l.linePrice);
-
-  const addOnsTotal = addOnLines.reduce((s, a) => s + a.result.price, 0);
   const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
-  const subtotalBeforeRush = basePriceAdjusted + addOnsTotal;
-  const rushAmount = config.rushFee ? subtotalBeforeRush * (assumptions.rushFeePtg / 100) : 0;
-  const finalPrice = subtotalBeforeRush + rushAmount + miscTotal;
+
+  const finalPrice = discountedSubtotal + rushAmount + miscTotal;
+  const savings = bundleDiscountTotal + quoteDiscountAmount;
+  const subtotalList = itemsList + services.servicesList + miscTotal;
 
   return {
-    packageLines,
-    baseResult,
-    addOnLines,
-    miscLines,
-    digitalBonus,
-    adjustedVariable,
-    adjustedAdmin,
-    adjustedProfit,
-    adjustedBeforeDiscount,
-    discountAmount,
-    vendorAmount,
-    packageDiscountAmount,
-    familyFriendsAmount,
-    basePriceAdjusted,
-    addOnsTotal,
-    miscTotal,
-    subtotalBeforeRush,
+    lines,
+    itemsList,
+    itemsNet,
+    bundleDiscountTotal,
+    services,
+    anyPhysical,
+    totalDesignLabor,
+    preDiscount,
+    quoteDiscountPtg,
+    quoteDiscountAmount,
+    quoteDiscountLines,
+    discountedSubtotal,
     rushAmount,
+    miscLines,
+    miscTotal,
+    savings,
     finalPrice,
+    subtotalList,
   };
 }

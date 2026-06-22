@@ -1,8 +1,10 @@
 import {
   DEFAULTS,
+  PACKAGES,
   PkgKey,
   PricingMode,
   QuoteState,
+  getItemQty,
 } from "./quote-calc-logic";
 
 export interface DraftClientInfo {
@@ -39,53 +41,67 @@ export interface MiscAddOn {
   unitPrice: number;
 }
 
-// One package added to a quote. A quote holds an array of these so a client can
-// buy several pieces at once (e.g. two Individual Items, or a suite + an
-// Individual Item). Each line carries its own quantity; the `individual*` fields
-// are only meaningful when `pkg === "individual"`.
-export interface PackageLine {
+export type LineKind = "package" | "item";
+
+// One line on a quote. A quote holds an array of these so a client can buy
+// several things at once. A line is either a predefined bundle (`kind:
+// "package"`, keyed by `pkg`) or a single catalog piece (`kind: "item"`, keyed
+// by `itemKey`). This unified model replaces the old `packages` + `addOns` +
+// `individual` pseudo-package split — one catalog item now prices identically
+// however it is added.
+export interface QuoteLine {
   id: string;
-  pkg: PkgKey;
+  kind: LineKind;
+  /** Bundle key when `kind === "package"` (sweet, signature, diy, event-*). */
+  pkg?: PkgKey;
+  /** Catalog item key when `kind === "item"` (iInvite, iGames, …). */
+  itemKey?: string;
+  /**
+   * Package lines: household/guest count (drives the catalog qty rules).
+   * Item lines: the raw piece count.
+   */
   qty: number;
-  individualItem?: string;
-  individualDigital?: boolean;
+  /** Digital (design-only) vs physical (printed + shipped). Applies to both kinds. */
+  digital?: boolean;
 }
 
 export interface DraftConfig {
-  packages: PackageLine[];
+  lines: QuoteLine[];
   mode: PricingMode;
-  addOns: Record<string, number>;
   miscAddOns: MiscAddOn[];
+
+  // Project services (quote-level — computed once, never per line).
   rushFee: boolean;
   extraRevisions: number;
   digitalLicense: boolean;
+
+  // Quote-wide discounts (grouped — applied in one stage, stacked additively).
   vendorIncentive: boolean;
-  /** Optional extra discount (0–100) applied like vendor incentive, e.g. bulk pricing. */
-  packageDiscountPtg: number;
-  /** Optional extra discount (0–100) for friends & family, stacks with the others. */
+  /** Optional extra discount (0–100), e.g. bulk pricing. Was `packageDiscountPtg`. */
+  customDiscountPtg: number;
+  /** Optional extra discount (0–100) for friends & family. */
   familyFriendsPtg: number;
+
+  // Material toggles (quote-wide).
   fullColor: boolean;
   customPaper: boolean;
 }
 
 export const DEFAULT_CONFIG: DraftConfig = {
-  packages: [
-    { id: "default", pkg: "sweet", qty: 75, individualItem: "iInvite", individualDigital: false },
-  ],
+  lines: [{ id: "default", kind: "package", pkg: "sweet", qty: 75, digital: false }],
   mode: "fresh",
-  addOns: {},
   miscAddOns: [],
   rushFee: false,
   extraRevisions: 0,
   digitalLicense: false,
   vendorIncentive: false,
-  packageDiscountPtg: 0,
+  customDiscountPtg: 0,
   familyFriendsPtg: 0,
   fullColor: false,
   customPaper: false,
 };
 
-export const CURRENT_SCHEMA_VERSION = 3 as const;
+export const CURRENT_SCHEMA_VERSION = 4 as const;
 
 export interface Draft {
   id: string;
@@ -96,7 +112,7 @@ export interface Draft {
   config: DraftConfig;
   assumptionsSnapshot: QuoteState;
   cachedTotal: number;
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4;
 }
 
 // --- Sync status (for UI badge) ---
@@ -121,8 +137,7 @@ export function newId(): string {
   return "id-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// Migrate a draft (or DraftConfig fragment) so that legacy `iDrinkTop` add-on
-// quantities are rewritten as `iWedgeTop`. Idempotent — safe to call repeatedly.
+// Rewrite the legacy `iDrinkTop` add-on key as `iWedgeTop`. Idempotent.
 function migrateAddOns(addOns: Record<string, number> | undefined): Record<string, number> {
   const next: Record<string, number> = { ...(addOns ?? {}) };
   if ("iDrinkTop" in next) {
@@ -133,14 +148,65 @@ function migrateAddOns(addOns: Record<string, number> | undefined): Record<strin
   return next;
 }
 
-// A config as it may appear on disk / on the wire: either the current v3 shape
-// (with `packages`) or a legacy v1/v2 shape (single `pkg`/`qty`/`individual*`).
+function numOr(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+function validPkg(pkg: unknown): PkgKey {
+  return typeof pkg === "string" && pkg in PACKAGES ? (pkg as PkgKey) : "sweet";
+}
+
+// One line as it may appear on disk: either a current v4 `QuoteLine` (has
+// `kind`) or a legacy package object (`pkg`/`qty`/`individual*`, where
+// `pkg === "individual"` meant a single à-la-carte piece).
+type LegacyLine = {
+  id?: string;
+  kind?: string;
+  pkg?: string;
+  qty?: number;
+  itemKey?: string;
+  individualItem?: string;
+  individualDigital?: boolean;
+  digital?: boolean;
+};
+
+// Project any on-disk line shape to a clean v4 QuoteLine. Legacy `individual`
+// packages collapse to item lines, preserving their piece count via getItemQty
+// so the migrated quote re-prices to the same per-item quantities.
+function lineFromLegacy(p: LegacyLine): QuoteLine {
+  const id = typeof p.id === "string" && p.id ? p.id : newId();
+  if (p.kind === "item") {
+    return { id, kind: "item", itemKey: p.itemKey ?? "iInvite", qty: numOr(p.qty, 1), digital: p.digital ?? false };
+  }
+  if (p.kind === "package") {
+    return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: p.digital ?? false };
+  }
+  // Legacy package shape.
+  if (p.pkg === "individual") {
+    const itemKey = p.individualItem ?? "iInvite";
+    return {
+      id,
+      kind: "item",
+      itemKey,
+      qty: getItemQty(itemKey, numOr(p.qty, 75)),
+      digital: p.individualDigital ?? false,
+    };
+  }
+  return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: false };
+}
+
+// A config as it may appear on disk / on the wire: a current v4 shape (with
+// `lines`), a v3 shape (`packages` + `addOns`), or a legacy v1/v2 shape (single
+// `pkg`/`qty`/`individual*`).
 type LegacyConfig = Partial<DraftConfig> & {
-  pkg?: PkgKey;
+  pkg?: string;
   qty?: number;
   individualItem?: string;
   individualDigital?: boolean;
-  packages?: PackageLine[];
+  packages?: LegacyLine[];
+  lines?: LegacyLine[];
+  addOns?: Record<string, number>;
+  packageDiscountPtg?: number;
 };
 
 function migrateConfig(c: LegacyConfig): DraftConfig {
@@ -150,38 +216,44 @@ function migrateConfig(c: LegacyConfig): DraftConfig {
     individualItem: legacyItem,
     individualDigital: legacyDigital,
     packages: rawPackages,
+    lines: rawLines,
+    addOns: rawAddOns,
+    packageDiscountPtg: legacyCustomDiscount,
+    customDiscountPtg,
     ...rest
   } = c;
 
-  const fallback = DEFAULT_CONFIG.packages[0];
-  let packages: PackageLine[];
-  if (Array.isArray(rawPackages) && rawPackages.length > 0) {
-    packages = rawPackages.map((p) => ({
-      id: typeof p.id === "string" && p.id ? p.id : newId(),
-      pkg: p.pkg ?? fallback.pkg,
-      qty: typeof p.qty === "number" ? p.qty : fallback.qty,
-      individualItem: p.individualItem ?? "iInvite",
-      individualDigital: p.individualDigital ?? false,
-    }));
-  } else {
-    // Legacy single-package draft (v1/v2): wrap it into one line.
-    packages = [
-      {
-        id: newId(),
-        pkg: legacyPkg ?? fallback.pkg,
-        qty: typeof legacyQty === "number" ? legacyQty : fallback.qty,
-        individualItem: legacyItem ?? "iInvite",
-        individualDigital: legacyDigital ?? false,
-      },
+  let lines: QuoteLine[];
+  if (Array.isArray(rawLines) && rawLines.length > 0) {
+    lines = rawLines.map(lineFromLegacy);
+  } else if (Array.isArray(rawPackages) && rawPackages.length > 0) {
+    lines = rawPackages.map(lineFromLegacy);
+  } else if (legacyPkg) {
+    lines = [
+      lineFromLegacy({
+        pkg: legacyPkg,
+        qty: legacyQty,
+        individualItem: legacyItem,
+        individualDigital: legacyDigital,
+      }),
     ];
+  } else {
+    lines = [];
   }
+
+  // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
+  for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
+    if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
+  }
+
+  if (lines.length === 0) lines = DEFAULT_CONFIG.lines.map((l) => ({ ...l, id: newId() }));
 
   return {
     ...DEFAULT_CONFIG,
     ...rest,
-    packages,
-    addOns: migrateAddOns(rest.addOns),
+    lines,
     miscAddOns: Array.isArray(rest.miscAddOns) ? rest.miscAddOns : [],
+    customDiscountPtg: numOr(customDiscountPtg, numOr(legacyCustomDiscount, 0)),
   };
 }
 
@@ -206,7 +278,10 @@ export function loadDrafts(): Draft[] {
         return (
           d &&
           typeof d === "object" &&
-          (d.schemaVersion === 1 || d.schemaVersion === 2 || d.schemaVersion === 3) &&
+          (d.schemaVersion === 1 ||
+            d.schemaVersion === 2 ||
+            d.schemaVersion === 3 ||
+            d.schemaVersion === 4) &&
           typeof d.id === "string"
         );
       })

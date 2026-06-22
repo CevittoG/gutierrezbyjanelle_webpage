@@ -6,7 +6,7 @@
 // secret (cost rate, margin %, the full Draft) across to a public route.
 
 import type { Draft, DraftConfig } from "./quote-calc-drafts";
-import type { PackageLineResult, QuoteBreakdown } from "./quote-calc-totals";
+import type { LineResult, QuoteBreakdown } from "./quote-calc-totals";
 import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
 import { packagesDisplayName } from "./quote-calc-summary";
 
@@ -168,14 +168,18 @@ export function isBalancePaid(stage: ProjectStage): boolean {
   return stageIndex(stage) > stageIndex("balance");
 }
 
-// A quote is "digital" only when *every* package line is digital — any physical
-// piece pulls the whole project into the physical flow (it must be produced and
+// A quote is "digital" only when *every* line is digital — any physical piece
+// pulls the whole project into the physical flow (it must be produced and
 // shipped). Mirrors the per-line digital rule used in `buildIncludedPieces`.
 export function isDigitalQuote(config: DraftConfig): boolean {
   return (
-    config.packages.length > 0 &&
-    config.packages.every((line) =>
-      line.pkg === "individual" ? line.individualDigital ?? false : PACKAGES[line.pkg].isDigital,
+    config.lines.length > 0 &&
+    config.lines.every((line) =>
+      line.kind === "item"
+        ? line.digital ?? false
+        : line.pkg
+          ? PACKAGES[line.pkg].isDigital
+          : false,
     )
   );
 }
@@ -207,12 +211,13 @@ export interface PublicQuoteFile {
   url: string; // server proxy: /q/<token>/file/<id>
 }
 
-// One priced line on the client's investment table — a package line, an
-// à-la-carte add-on, or a misc item. Selling price only; never the cost buildup.
+// One priced line on the client's investment table — a bundle, a single item,
+// the project-services charge, or a misc item. Selling price only; never the
+// cost buildup.
 export interface PublicQuoteLine {
   label: string;
   price: number; // list price (before quote-wide savings)
-  kind: "package" | "addon" | "misc";
+  kind: "package" | "addon" | "service" | "misc";
 }
 
 // Clients see what's included, an itemized investment, how much they save, the
@@ -255,53 +260,52 @@ function buildIncludedPieces(
 ): string[] {
   const pieces: string[] = [];
 
-  // Union of pieces across every package line, each sized by its own qty.
-  for (const line of config.packages) {
-    const pkgDef = PACKAGES[line.pkg];
-    const isDigital = line.pkg === "individual" ? (line.individualDigital ?? false) : pkgDef.isDigital;
-    const qty = line.qty;
+  for (const line of config.lines) {
+    if (line.kind === "item") {
+      const cat = catalog.find((i) => i.key === line.itemKey);
+      const label = cat?.label ?? line.itemKey ?? "Item";
+      pieces.push(`${label} — ${line.digital ? "design" : `${line.qty} pcs`}`);
+      continue;
+    }
 
-    const pieceLabel = (label: string, fixed: number | undefined, catalogQty: number): string => {
-      const count = fixed !== undefined ? `${fixed} pcs` : isDigital ? "design" : `${catalogQty * qty} pcs`;
-      return `${label} — ${count}`;
-    };
-
-    if (line.pkg === "individual") {
-      const cat = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"));
-      if (cat) pieces.push(pieceLabel(cat.label, cat.fixed, cat.qty));
-    } else {
-      for (const it of pkgDef.items) {
-        const k = typeof it === "string" ? it : it.key;
-        const label =
-          (typeof it !== "string" && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
-        const cat = catalog.find((i) => i.key === k);
-        pieces.push(pieceLabel(label, cat?.fixed, cat?.qty ?? 0));
-      }
+    const pkgDef = line.pkg ? PACKAGES[line.pkg] : undefined;
+    if (!pkgDef) continue;
+    const isDigital = pkgDef.isDigital;
+    for (const it of pkgDef.items) {
+      const k = typeof it === "string" ? it : it.key;
+      const label =
+        (typeof it !== "string" && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
+      const cat = catalog.find((i) => i.key === k);
+      const count =
+        cat?.fixed !== undefined ? `${cat.fixed} pcs` : isDigital ? "design" : `${(cat?.qty ?? 0) * line.qty} pcs`;
+      pieces.push(`${label} — ${count}`);
     }
   }
 
-  // Surface à-la-carte and misc add-ons by name (their price sits in categories.addOns).
-  for (const a of breakdown.addOnLines) pieces.push(`${a.label} × ${a.qty}`);
+  // Misc add-ons surface by name (their price sits in the investment table).
   for (const m of breakdown.miscLines) pieces.push(`${m.label} × ${m.qty}`);
   return pieces;
 }
 
-// Display name for a single package line including piece count.
-// For `individual` lines: "Games — 60 pcs" (or "design" when digital).
-// For suite packages: just the suite name (e.g. "Sweet Suite").
-function packageLineLabel(line: PackageLineResult, catalog: CatalogItem[]): string {
-  if (line.pkg === "individual") {
-    const cat = catalog.find((i) => i.key === (line.individualItem ?? "iInvite"));
-    const base = cat?.label ?? line.individualItem ?? "Individual item";
-    if (line.individualDigital) return `${base} — design`;
-    if (cat) {
-      const count =
-        cat.fixed !== undefined ? `${cat.fixed} pcs` : `${cat.qty * line.qty} pcs`;
-      return `${base} — ${count}`;
-    }
-    return base;
+// Display name for a single priced line including piece count.
+// Item lines: "Games — 60 pcs" (or "Games — design" when digital).
+// Bundle lines: just the package name (e.g. "Sweet Suite").
+function lineLabel(line: LineResult, catalog: CatalogItem[]): string {
+  if (line.kind === "item") {
+    const cat = catalog.find((i) => i.key === line.itemKey);
+    const base = cat?.label ?? line.itemKey ?? "Item";
+    return line.digital ? `${base} — design` : `${base} — ${line.qty} pcs`;
   }
-  return PACKAGES[line.pkg]?.name ?? line.pkg;
+  return (line.pkg ? PACKAGES[line.pkg]?.name : undefined) ?? line.pkg ?? "Package";
+}
+
+// A short client-facing label for the quote-level project-services line.
+function servicesLabel(b: QuoteBreakdown): string {
+  const parts: string[] = [];
+  if (b.services.revisionCost > 0) parts.push("revisions");
+  if (b.services.licenseVar > 0) parts.push("file license");
+  if (b.services.packaging > 0) parts.push("packaging");
+  return parts.length > 0 ? `Project services (${parts.join(" + ")})` : "Project services";
 }
 
 // Project a full Draft + its recomputed breakdown down to the client-safe shape.
@@ -316,33 +320,34 @@ export function buildPublicQuote(
   depositPaid = 0,
 ): PublicQuote {
   const { config } = draft;
-  const savings =
-    breakdown.discountAmount +
-    breakdown.vendorAmount +
-    breakdown.packageDiscountAmount +
-    breakdown.familyFriendsAmount;
+  const savings = breakdown.savings;
 
-  // Itemized lines at list price (before quote-wide savings): one per package
-  // line, then à-la-carte add-ons, then misc. `subtotal − savings + rush` closes
-  // to `finalPrice` (verified against the engine buildup).
+  // Itemized lines at list price (before quote-wide savings): one per quote
+  // line, then the once-per-quote project-services charge, then misc.
+  // `subtotal − savings + rush` closes to `finalPrice` (verified against the
+  // engine buildup).
   const lineItems: PublicQuoteLine[] = [
-    ...breakdown.packageLines.map((pl) => ({
-      label: packageLineLabel(pl, catalog),
-      price: pl.adjustedBeforeDiscount,
-      kind: "package" as const,
-    })),
-    ...breakdown.addOnLines.map((a) => ({
-      label: a.qty > 1 ? `${a.label} × ${a.qty}` : a.label,
-      price: a.result.price,
-      kind: "addon" as const,
-    })),
-    ...breakdown.miscLines.map((m) => ({
-      label: m.qty > 1 ? `${m.label} × ${m.qty}` : m.label,
-      price: m.total,
-      kind: "misc" as const,
+    ...breakdown.lines.map((l) => ({
+      label: lineLabel(l, catalog),
+      price: l.list,
+      kind: (l.kind === "package" ? "package" : "addon") as PublicQuoteLine["kind"],
     })),
   ];
-  const subtotal = breakdown.adjustedBeforeDiscount + breakdown.addOnsTotal + breakdown.miscTotal;
+  if (breakdown.services.servicesList > 0) {
+    lineItems.push({
+      label: servicesLabel(breakdown),
+      price: breakdown.services.servicesList,
+      kind: "service",
+    });
+  }
+  for (const m of breakdown.miscLines) {
+    lineItems.push({
+      label: m.qty > 1 ? `${m.label} × ${m.qty}` : m.label,
+      price: m.total,
+      kind: "misc",
+    });
+  }
+  const subtotal = breakdown.subtotalList;
 
   const total = breakdown.finalPrice;
   const clampToTotal = (n: number) => Math.min(Math.max(n || 0, 0), total);
@@ -354,7 +359,7 @@ export function buildPublicQuote(
     clientName: draft.client.name || "",
     eventType: draft.client.eventType || "",
     eventDate: formatEventDate(draft.client.eventDate),
-    packageName: packagesDisplayName(config.packages),
+    packageName: packagesDisplayName(config.lines),
     includedPieces: buildIncludedPieces(config, breakdown, catalog),
     lineItems,
     subtotal,

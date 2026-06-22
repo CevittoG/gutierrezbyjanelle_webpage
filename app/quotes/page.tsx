@@ -48,7 +48,7 @@ export default async function QuotesDashboardPage() {
       eventType: d.client.eventType,
       eventDate: d.client.eventDate,
       name: d.name,
-      packageName: packagesDisplayName(d.config.packages),
+      packageName: packagesDisplayName(d.config.lines),
       total: Math.round(d.cachedTotal),
       updatedAt: d.updatedAt,
       publicToken: m?.publicToken ?? "",

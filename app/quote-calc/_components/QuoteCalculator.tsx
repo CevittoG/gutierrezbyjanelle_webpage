@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ADD_ON_KEYS,
   CatalogItem,
   DEFAULTS,
   ITEM_CATALOG,
@@ -11,11 +10,13 @@ import {
   PkgKey,
   PricingMode,
   QuoteState,
-  calcAddOnRaw,
-  calcPackage,
+  calcPackageCost,
+  clampPtg,
   fmt$,
   getDiscountPtg,
+  getItemQty,
   loadSavedDefaults,
+  markupVariable,
 } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
 import { mergeRemoteConfig } from "@/lib/quote-calc-config";
@@ -27,7 +28,7 @@ import {
   DraftConfig,
   EMPTY_CLIENT_INFO,
   MiscAddOn,
-  PackageLine,
+  QuoteLine,
   SyncStatus,
   createDraft,
   loadDrafts,
@@ -42,7 +43,6 @@ import {
   RemoteFailure,
 } from "@/lib/quote-calc-drafts-remote";
 import { cn } from "@/utils";
-import { AddOnRow } from "./AddOnRow";
 import { AssumptionsPanel } from "./AssumptionsPanel";
 import { BreakdownPanel } from "./BreakdownPanel";
 import { ClientInfoSection } from "./ClientInfoSection";
@@ -51,10 +51,8 @@ import { DraftsBar } from "./DraftsBar";
 import { MiscAddOnSection } from "./MiscAddOnSection";
 import { MobileBreakdownSheet } from "./MobileBreakdownSheet";
 
-// "individual" (Individual Item) is offered under both tabs — it's an
-// item-agnostic à-la-carte line that suits weddings and events alike.
-const WEDDING_PKG_KEYS: PkgKey[] = ["individual", "diy", "sweet", "signature"];
-const EVENT_PKG_KEYS: PkgKey[] = ["individual", "event-basics", "event-fun", "event-works"];
+const WEDDING_PKG_KEYS: PkgKey[] = ["diy", "sweet", "signature"];
+const EVENT_PKG_KEYS: PkgKey[] = ["event-basics", "event-fun", "event-works"];
 
 // Default per-line quantity when a package is added to the quote.
 const DEFAULT_LINE_QTY = 75;
@@ -67,25 +65,23 @@ function failureToStatus(f: RemoteFailure): SyncStatus {
 
 export function QuoteCalculator() {
   // --- Config state (mirrors DraftConfig) ---
-  const [packages, setPackages] = useState<PackageLine[]>(() =>
-    DEFAULT_CONFIG.packages.map((p) => ({ ...p })),
+  const [lines, setLines] = useState<QuoteLine[]>(() =>
+    DEFAULT_CONFIG.lines.map((l) => ({ ...l })),
   );
-  // The Wedding/Events tab is just a filter over the package picker now.
+  // The Wedding/Events tab is just a filter over the package picker.
   const [pkgType, setPkgType] = useState<PackageType>("wedding");
+  // Which catalog item the "Add item" picker will append.
+  const [itemPick, setItemPick] = useState<string>(ITEM_CATALOG[0]?.key ?? "iInvite");
   const [mode, setMode] = useState<PricingMode>(DEFAULT_CONFIG.mode);
-  const [addOns, setAddOns] = useState<Record<string, number>>({ ...DEFAULT_CONFIG.addOns });
   const [miscAddOns, setMiscAddOns] = useState<MiscAddOn[]>([...DEFAULT_CONFIG.miscAddOns]);
   const [rushFee, setRushFee] = useState(DEFAULT_CONFIG.rushFee);
   const [extraRevisions, setExtraRevisions] = useState(DEFAULT_CONFIG.extraRevisions);
   const [digitalLicense, setDigitalLicense] = useState(DEFAULT_CONFIG.digitalLicense);
   const [vendorIncentive, setVendorIncentive] = useState(DEFAULT_CONFIG.vendorIncentive);
-  const [packageDiscountPtg, setPackageDiscountPtg] = useState(DEFAULT_CONFIG.packageDiscountPtg);
+  const [customDiscountPtg, setCustomDiscountPtg] = useState(DEFAULT_CONFIG.customDiscountPtg);
   const [familyFriendsPtg, setFamilyFriendsPtg] = useState(DEFAULT_CONFIG.familyFriendsPtg);
   const [fullColor, setFullColor] = useState(DEFAULT_CONFIG.fullColor);
   const [customPaper, setCustomPaper] = useState(DEFAULT_CONFIG.customPaper);
-
-  // Reference quantity for the add-on "Suggest" buttons — the first line's qty.
-  const primaryQty = packages[0]?.qty ?? DEFAULT_LINE_QTY;
 
   // --- Client info ---
   const [client, setClient] = useState<DraftClientInfo>(EMPTY_CLIENT_INFO);
@@ -115,34 +111,33 @@ export function QuoteCalculator() {
   // Build a DraftConfig from current state.
   const config: DraftConfig = useMemo(
     () => ({
-      packages,
+      lines,
       mode,
-      addOns,
       miscAddOns,
       rushFee,
       extraRevisions,
       digitalLicense,
       vendorIncentive,
-      packageDiscountPtg,
+      customDiscountPtg,
       familyFriendsPtg,
       fullColor,
       customPaper,
     }),
-    [packages, mode, addOns, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, packageDiscountPtg, familyFriendsPtg, fullColor, customPaper],
+    [lines, mode, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, customDiscountPtg, familyFriendsPtg, fullColor, customPaper],
   );
 
   // Apply a DraftConfig into state.
   const applyConfig = useCallback((c: DraftConfig) => {
-    setPackages(c.packages.map((p) => ({ ...p })));
-    setPkgType(c.packages[0] ? PACKAGES[c.packages[0].pkg].type : "wedding");
+    setLines(c.lines.map((l) => ({ ...l })));
+    const firstPkg = c.lines.find((l) => l.kind === "package" && l.pkg);
+    setPkgType(firstPkg?.pkg ? PACKAGES[firstPkg.pkg].type : "wedding");
     setMode(c.mode);
-    setAddOns({ ...c.addOns });
     setMiscAddOns([...(c.miscAddOns ?? [])]);
     setRushFee(c.rushFee);
     setExtraRevisions(c.extraRevisions);
     setDigitalLicense(c.digitalLicense);
     setVendorIncentive(c.vendorIncentive);
-    setPackageDiscountPtg(c.packageDiscountPtg);
+    setCustomDiscountPtg(c.customDiscountPtg);
     setFamilyFriendsPtg(c.familyFriendsPtg);
     setFullColor(c.fullColor);
     setCustomPaper(c.customPaper);
@@ -161,22 +156,31 @@ export function QuoteCalculator() {
     [applyConfig],
   );
 
-  // Add a package as a new line on the quote.
+  // Add a package bundle as a new line on the quote.
   function addPackageLine(key: PkgKey) {
-    setPackages((prev) => [
+    setLines((prev) => [
       ...prev,
-      { id: newId(), pkg: key, qty: DEFAULT_LINE_QTY, individualItem: "iInvite", individualDigital: false },
+      { id: newId(), kind: "package", pkg: key, qty: DEFAULT_LINE_QTY, digital: false },
     ]);
   }
 
-  // Patch one line (qty / individual item / digital flag) by id.
-  function updateLine(id: string, patch: Partial<PackageLine>) {
-    setPackages((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  // Add a single catalog item as a new line — qty pre-filled to a sensible piece
+  // count from the household assumption (fixed items resolve to their flat count).
+  function addItemLine(itemKey: string) {
+    setLines((prev) => [
+      ...prev,
+      { id: newId(), kind: "item", itemKey, qty: getItemQty(itemKey, DEFAULT_LINE_QTY, catalog), digital: false },
+    ]);
   }
 
-  // Remove a line — but always keep at least one package on the quote.
+  // Patch one line (qty / item / digital flag) by id.
+  function updateLine(id: string, patch: Partial<QuoteLine>) {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+
+  // Remove a line — but always keep at least one on the quote.
   function removeLine(id: string) {
-    setPackages((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
+    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
   }
 
   // Pull the latest Settings + Items from the Sheet. Falls back to bundled
@@ -287,18 +291,6 @@ export function QuoteCalculator() {
     if (hydratedRef.current) setDraftDirty(true);
   }
 
-  function setAddOnQty(key: string, q: number) {
-    setAddOns((prev) => {
-      const next = { ...prev };
-      if (q <= 0) {
-        delete next[key];
-      } else {
-        next[key] = q;
-      }
-      return next;
-    });
-  }
-
   // Single source of truth for the price math — shared by the breakdown panel,
   // the mobile bar, and the saved draft total (same engine as print + portal).
   const breakdown = useMemo(
@@ -306,26 +298,26 @@ export function QuoteCalculator() {
     [config, assumptions, catalog],
   );
 
-  const addOnPreviews = useMemo(
-    () =>
-      Object.fromEntries(
-        ADD_ON_KEYS.map((k) => [k, calcAddOnRaw(k, addOns[k] ?? 0, mode, assumptions, fullColor, customPaper)])
-      ),
-    [addOns, mode, assumptions, fullColor, customPaper],
+  // Rough per-package preview price (list after the bundle discount) for the
+  // picker cards — the real number is the line's `net` once it's on the quote.
+  const pkgPreview = useCallback(
+    (key: PkgKey): number => {
+      const cost = calcPackageCost(key, DEFAULT_LINE_QTY, mode, assumptions, fullColor, customPaper, catalog);
+      const { list } = markupVariable(cost.totalVariable, assumptions);
+      const disc = clampPtg(getDiscountPtg(key, assumptions));
+      return list * (1 - disc / 100);
+    },
+    [mode, assumptions, fullColor, customPaper, catalog],
   );
 
   // Final total + net margin for the mobile bar, derived from the breakdown.
   const totals = useMemo(() => {
     const finalPrice = breakdown.finalPrice;
-    const yourCosts =
-      breakdown.packageLines.reduce(
-        (s, l) => s + l.result.totalDirectCosts + l.result.totalLaborCost + l.digitalBonus,
-        0,
-      ) +
-      breakdown.addOnLines.reduce(
-        (s, a) => s + a.result.materialsCost + a.result.designLabor + a.result.productionLabor,
-        0,
-      );
+    const lineCosts = breakdown.lines.reduce(
+      (s, l) => s + l.cost.totalMaterials + l.cost.totalDesignLabor + l.cost.totalProductionLabor,
+      0,
+    );
+    const yourCosts = lineCosts + breakdown.services.servicesVar;
     const netProfit = finalPrice - yourCosts;
     const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
     const marginDiff = netMargin - assumptions.targetProfitPtg;
@@ -437,8 +429,8 @@ export function QuoteCalculator() {
             <ClientInfoSection client={client} onChange={setClient} dateError={dateError} />
           </Section>
 
-          {/* 1. Package selector */}
-          <Section title="Package">
+          {/* 1. Package picker */}
+          <Section title="Add a package">
             {/* Wedding / Events tab toggle */}
             <div className="inline-flex rounded-lg border border-border overflow-hidden mb-4">
               {(["wedding", "events"] as PackageType[]).map((t) => {
@@ -461,12 +453,12 @@ export function QuoteCalculator() {
             </div>
 
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Tap a package to add it to the quote. Add as many as you like — each becomes its own line with its own quantity.
+              Tap a bundle to add it to the quote. Add as many as you like — each becomes its own line with its own quantity.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
-                const previewResult = calcPackage(key, DEFAULT_LINE_QTY, mode, assumptions, 0, undefined, undefined, fullColor, customPaper, vendorIncentive, packageDiscountPtg, familyFriendsPtg, catalog);
+                const previewPrice = pkgPreview(key);
                 const discount = getDiscountPtg(key, assumptions);
                 return (
                   <div key={key} className="relative group">
@@ -495,7 +487,7 @@ export function QuoteCalculator() {
                       <p className="text-xs text-muted-foreground mb-2">{def.tagline}</p>
                       <p className="text-xs text-muted-foreground/70 leading-relaxed">{def.description}</p>
                       <p className="text-sm font-mono font-semibold mt-3 tabular-nums">
-                        {fmt$(Math.round(previewResult.finalPrice))}
+                        {fmt$(Math.round(previewPrice))}
                         <span className="text-xs font-normal text-muted-foreground"> · at {DEFAULT_LINE_QTY}</span>
                       </p>
                     </button>
@@ -528,113 +520,125 @@ export function QuoteCalculator() {
             </div>
           </Section>
 
-          {/* 2. Selected package lines */}
-          <Section title="Packages in this quote">
+          {/* 2. Individual item picker (replaces the old add-ons section) */}
+          <Section title="Add an individual item">
+            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+              Any single catalog piece, à la carte — sold on its own or on top of a package. Each is its own line, priced exactly the same way wherever you add it.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={itemPick}
+                onChange={(e) => setItemPick(e.target.value)}
+                aria-label="Choose an item to add"
+                className="h-11 flex-1 min-w-[12rem] rounded-lg border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {catalog.map((item) => (
+                  <option key={item.key} value={item.key}>{item.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => addItemLine(itemPick)}
+                className="h-11 px-5 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+              >
+                + Add item
+              </button>
+            </div>
+          </Section>
+
+          {/* 3. Lines on the quote */}
+          <Section title="On this quote">
             <div className="space-y-3">
-              {packages.map((line) => {
-                const def = PACKAGES[line.pkg];
-                const lineResult = breakdown.packageLines.find((l) => l.id === line.id);
-                const isIndividual = line.pkg === "individual";
-                const lineDigital = line.individualDigital ?? false;
+              {lines.map((line) => {
+                const lr = breakdown.lines.find((l) => l.id === line.id);
+                const linePrice = lr ? fmt$(Math.round(lr.net)) : null;
+
+                if (line.kind === "package") {
+                  const def = line.pkg ? PACKAGES[line.pkg] : undefined;
+                  return (
+                    <div key={line.id} className="rounded-lg border border-border p-4 space-y-3">
+                      <LineHeader
+                        title={def?.name ?? line.pkg ?? "Package"}
+                        subtitle={def?.tagline ?? ""}
+                        price={linePrice}
+                        canRemove={lines.length > 1}
+                        onRemove={() => removeLine(line.id)}
+                      />
+                      <QtyInput
+                        label="Quantity — households / guests"
+                        value={line.qty}
+                        onChange={(q) => updateLine(line.id, { qty: q })}
+                      />
+                    </div>
+                  );
+                }
+
+                // Item line.
+                const cat = catalog.find((i) => i.key === line.itemKey);
+                const lineDigital = line.digital ?? false;
                 return (
                   <div key={line.id} className="rounded-lg border border-border p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-squarepeg text-xl leading-tight">{def.name}</p>
-                        <p className="text-xs text-muted-foreground">{def.tagline}</p>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {lineResult && (
-                          <span className="text-sm font-mono font-semibold tabular-nums">
-                            {fmt$(Math.round(lineResult.linePrice))}
-                          </span>
-                        )}
-                        <button
-                          onClick={() => removeLine(line.id)}
-                          disabled={packages.length <= 1}
-                          aria-label={`Remove ${def.name}`}
-                          className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
+                    <LineHeader
+                      title={cat?.label ?? line.itemKey ?? "Item"}
+                      subtitle="Individual item"
+                      price={linePrice}
+                      canRemove={lines.length > 1}
+                      onRemove={() => removeLine(line.id)}
+                    />
 
-                    {/* Individual item: choose the piece + sale type */}
-                    {isIndividual && (
-                      <div className="space-y-3 pt-1">
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                            Select item
-                          </label>
-                          <select
-                            value={line.individualItem ?? "iInvite"}
-                            onChange={(e) => updateLine(line.id, { individualItem: e.target.value })}
-                            className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            {catalog.map((item) => (
-                              <option key={item.key} value={item.key}>{item.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                            Sale type
-                          </label>
-                          <div className="inline-flex rounded-lg border border-border overflow-hidden">
-                            {([false, true] as const).map((isDigital) => (
-                              <button
-                                key={String(isDigital)}
-                                onClick={() => updateLine(line.id, { individualDigital: isDigital })}
-                                className={cn(
-                                  "h-11 px-5 text-sm font-medium transition-colors",
-                                  lineDigital === isDigital
-                                    ? "bg-foreground text-background"
-                                    : "bg-card text-foreground hover:bg-muted"
-                                )}
-                              >
-                                {isDigital ? "Digital" : "Physical"}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                            {lineDigital
-                              ? "Digital sale — design labor only, no printing or materials."
-                              : "Physical sale — includes production labor and materials."}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Per-line quantity */}
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
-                        Quantity — households / guests
+                        Item
                       </label>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          value={line.qty}
-                          min={1}
-                          max={500}
-                          step={5}
-                          onChange={(e) =>
-                            updateLine(line.id, { qty: Math.max(1, parseInt(e.target.value) || 1) })
-                          }
-                          className="h-11 w-32 rounded-lg border border-border bg-background px-3 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                        <span className="text-sm text-muted-foreground">qty</span>
-                      </div>
+                      <select
+                        value={line.itemKey ?? "iInvite"}
+                        onChange={(e) => updateLine(line.id, { itemKey: e.target.value })}
+                        className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {catalog.map((item) => (
+                          <option key={item.key} value={item.key}>{item.label}</option>
+                        ))}
+                      </select>
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+                        Sale type
+                      </label>
+                      <div className="inline-flex rounded-lg border border-border overflow-hidden">
+                        {([false, true] as const).map((isDigital) => (
+                          <button
+                            key={String(isDigital)}
+                            onClick={() => updateLine(line.id, { digital: isDigital })}
+                            className={cn(
+                              "h-11 px-5 text-sm font-medium transition-colors",
+                              lineDigital === isDigital
+                                ? "bg-foreground text-background"
+                                : "bg-card text-foreground hover:bg-muted"
+                            )}
+                          >
+                            {isDigital ? "Digital" : "Physical"}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                        {lineDigital
+                          ? "Digital sale — design labor only, no printing or materials."
+                          : "Physical sale — includes production labor and materials."}
+                      </p>
+                    </div>
+
+                    <QtyInput
+                      label="Quantity — pieces"
+                      value={line.qty}
+                      onChange={(q) => updateLine(line.id, { qty: q })}
+                    />
                   </div>
                 );
               })}
             </div>
           </Section>
 
-          {/* 3. Pricing mode (applies to every package line) */}
+          {/* 4. Pricing mode (applies to every line) */}
           <Section title="Configuration">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
@@ -664,66 +668,26 @@ export function QuoteCalculator() {
             </div>
           </Section>
 
-          {/* 3. Add-ons */}
-          <Section title="Add-ons">
-            <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Sold a la carte on top of any package. Enter an explicit piece count for each — use Suggest to pre-fill from {primaryQty} households.
-            </p>
-            <div className="space-y-2">
-              {ADD_ON_KEYS.map((key) => {
-                const item = catalog.find((i) => i.key === key);
-                if (!item) return null;
-                const currentQty = addOns[key] ?? 0;
-                return (
-                  <AddOnRow
-                    key={key}
-                    item={item}
-                    qty={currentQty}
-                    packageQty={primaryQty}
-                    preview={addOnPreviews[key]}
-                    onChange={(next) => setAddOnQty(key, next)}
-                    catalog={catalog}
-                  />
-                );
-              })}
-            </div>
-          </Section>
-
-          {/* 3b. Miscellaneous add-ons */}
+          {/* 5. Custom add-ons (free-form selling-price items) */}
           <Section title="Custom add-ons">
             <MiscAddOnSection items={miscAddOns} onChange={setMiscAddOns} />
           </Section>
 
-          {/* 4. Extras */}
-          <Section title="Extras">
+          {/* 6. Project services (quote-level — charged once) */}
+          <Section title="Project services">
             <div className="space-y-3">
-              {/* Rush fee */}
-              <label
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
-                  rushFee ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={rushFee}
-                  onChange={(e) => setRushFee(e.target.checked)}
-                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">Rush fee +30%</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Turnaround under 7 days — applied to the full quote total.
-                  </p>
-                </div>
-              </label>
+              <CheckRow
+                checked={rushFee}
+                onChange={setRushFee}
+                title={`Rush fee +${assumptions.rushFeePtg}%`}
+                description="Turnaround under 7 days — applied once to the discounted order total."
+              />
 
-              {/* Revision rounds */}
               <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-3">
                 <div className="flex-1">
                   <span className="text-sm font-medium">Extra revision rounds</span>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    First round is free. Each extra round adds {assumptions.revisionMin}m of design labor.
+                    First round is free. Each extra round adds {assumptions.revisionMin}m of design labor — once per quote.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -747,121 +711,64 @@ export function QuoteCalculator() {
                 </div>
               </div>
 
-              {/* Digital file license */}
-              <label
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
-                  digitalLicense ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={digitalLicense}
-                  onChange={(e) => setDigitalLicense(e.target.checked)}
-                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">Digital file license (+{assumptions.digitalLicensePtg}%)</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Print-ready source files · unlimited copies — design labor ×{(1 + assumptions.digitalLicensePtg / 100).toFixed(1)}.
-                  </p>
-                </div>
-              </label>
-
-              {/* Vendor incentive */}
-              <label
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
-                  vendorIncentive ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={vendorIncentive}
-                  onChange={(e) => setVendorIncentive(e.target.checked)}
-                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">Vendor incentive (-{assumptions.vendorIncentivePtg}%)</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Discount for customers referred by another vendor. Stacks with package discount.
-                  </p>
-                </div>
-              </label>
-
-              {/* Package discount — typed % */}
-              <DiscountInputRow
-                label="Package discount"
-                description="Optional extra discount, e.g. bulk pricing. Stacks with the package and other discounts."
-                value={packageDiscountPtg}
-                onChange={setPackageDiscountPtg}
+              <CheckRow
+                checked={digitalLicense}
+                onChange={setDigitalLicense}
+                title={`Digital file license (+${assumptions.digitalLicensePtg}%)`}
+                description={`Print-ready source files · unlimited copies — adds ${assumptions.digitalLicensePtg}% of total design labor, once.`}
               />
+            </div>
+          </Section>
 
-              {/* Family & friends discount — typed % */}
+          {/* 7. Discounts (grouped — all stack additively, applied in one stage) */}
+          <Section title="Discounts">
+            <div className="space-y-3">
+              <CheckRow
+                checked={vendorIncentive}
+                onChange={setVendorIncentive}
+                title={`Vendor incentive (-${assumptions.vendorIncentivePtg}%)`}
+                description="Discount for customers referred by another vendor."
+              />
               <DiscountInputRow
                 label="Family & friends discount"
-                description="Optional extra discount for friends and family. Stacks with the package and other discounts."
+                description="Optional extra discount for friends and family."
                 value={familyFriendsPtg}
                 onChange={setFamilyFriendsPtg}
               />
+              <DiscountInputRow
+                label="Custom discount"
+                description="Optional extra discount, e.g. bulk pricing."
+                value={customDiscountPtg}
+                onChange={setCustomDiscountPtg}
+              />
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                These stack additively and come off the whole quote (items + project services) in one step. Each package keeps its own built-in bundle discount on top.
+              </p>
+            </div>
+          </Section>
 
-              {/* Full color designs */}
-              <label
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
-                  fullColor ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={fullColor}
-                  onChange={(e) => setFullColor(e.target.checked)}
-                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">Full color designs (x{assumptions.fullColorFactor})</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Heavy ink coverage increases sheet cost. Multiplied into material pricing.
-                  </p>
-                </div>
-              </label>
-
-              {/* Custom paper */}
-              <label
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
-                  customPaper ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
-                )}
-              >
-                <input
-                  type="checkbox"
-                  checked={customPaper}
-                  onChange={(e) => setCustomPaper(e.target.checked)}
-                  className="h-5 w-5 rounded accent-foreground cursor-pointer"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-medium">Custom paper (x{assumptions.customPaperFactor})</span>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Premium or specialty paper increases sheet cost. Multiplied into material pricing.
-                  </p>
-                </div>
-              </label>
+          {/* 8. Materials */}
+          <Section title="Materials">
+            <div className="space-y-3">
+              <CheckRow
+                checked={fullColor}
+                onChange={setFullColor}
+                title={`Full color designs (x${assumptions.fullColorFactor})`}
+                description="Heavy ink coverage increases sheet cost. Multiplied into material pricing."
+              />
+              <CheckRow
+                checked={customPaper}
+                onChange={setCustomPaper}
+                title={`Custom paper (x${assumptions.customPaperFactor})`}
+                description="Premium or specialty paper increases sheet cost. Multiplied into material pricing."
+              />
             </div>
           </Section>
         </div>
 
         {/* Right: price breakdown — hidden on mobile */}
         <div className="lg:col-span-2 hidden lg:block">
-          <BreakdownPanel
-            breakdown={breakdown}
-            mode={mode}
-            assumptions={assumptions}
-            extraRevisions={extraRevisions}
-            digitalLicense={digitalLicense}
-            fullColor={fullColor}
-            customPaper={customPaper}
-            catalog={catalog}
-          />
+          <BreakdownPanel breakdown={breakdown} mode={mode} assumptions={assumptions} catalog={catalog} />
         </div>
       </div>
 
@@ -882,17 +789,7 @@ export function QuoteCalculator() {
         netMargin={totals.netMargin}
         marginDiff={totals.marginDiff}
       >
-        <BreakdownPanel
-          breakdown={breakdown}
-          mode={mode}
-          assumptions={assumptions}
-          extraRevisions={extraRevisions}
-          digitalLicense={digitalLicense}
-          fullColor={fullColor}
-          customPaper={customPaper}
-          catalog={catalog}
-          embedded
-        />
+        <BreakdownPanel breakdown={breakdown} mode={mode} assumptions={assumptions} catalog={catalog} embedded />
       </MobileBreakdownSheet>
     </div>
   );
@@ -907,8 +804,108 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-// An optional, typed percentage discount in the Extras section. Active (and
-// styled like a checked extra) whenever the value is above 0.
+// Header row for a line on the quote: title + subtitle, the line price, and a
+// remove button.
+function LineHeader({
+  title,
+  subtitle,
+  price,
+  canRemove,
+  onRemove,
+}: {
+  title: string;
+  subtitle: string;
+  price: string | null;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="font-squarepeg text-xl leading-tight">{title}</p>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {price && <span className="text-sm font-mono font-semibold tabular-nums">{price}</span>}
+        <button
+          onClick={onRemove}
+          disabled={!canRemove}
+          aria-label={`Remove ${title}`}
+          className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QtyInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+        {label}
+      </label>
+      <div className="flex items-center gap-3">
+        <input
+          type="number"
+          inputMode="numeric"
+          value={value}
+          min={1}
+          max={2000}
+          step={1}
+          onChange={(e) => onChange(Math.max(1, parseInt(e.target.value) || 1))}
+          className="h-11 w-32 rounded-lg border border-border bg-background px-3 text-base font-mono tabular-nums text-right focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <span className="text-sm text-muted-foreground">qty</span>
+      </div>
+    </div>
+  );
+}
+
+// A boolean toggle styled like a checked card when active.
+function CheckRow({
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors min-h-[44px]",
+        checked ? "border-foreground/40 bg-muted" : "border-border bg-card hover:bg-muted/40"
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-5 w-5 rounded accent-foreground cursor-pointer"
+      />
+      <div className="flex-1">
+        <span className="text-sm font-medium">{title}</span>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+    </label>
+  );
+}
+
+// An optional, typed percentage discount. Active (and styled like a checked
+// extra) whenever the value is above 0.
 function DiscountInputRow({
   label,
   description,
