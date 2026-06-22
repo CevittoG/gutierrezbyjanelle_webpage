@@ -16,9 +16,18 @@ import {
 import { mergeRemoteConfig } from "@/lib/quote-calc-config";
 import { ITEM_CATALOG, fmt$ } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
-import { buildPublicQuote, isLinkActive, type PublicQuoteFile } from "@/lib/quote-calc-portal";
+import {
+  buildPublicQuote,
+  isLinkActive,
+  projectTypeOf,
+  type PublicQuoteFile,
+} from "@/lib/quote-calc-portal";
 import { driveFileKind, folderWebLink, listFolderFiles } from "@/lib/quote-calc-drive";
 import { LinkControls } from "@/components/quote-app/LinkControls";
+import { StageControl } from "@/components/quote-app/StageControl";
+import { DepositPaidControl } from "@/components/quote-app/DepositPaidControl";
+import { HiddenNotesControl } from "@/components/quote-app/HiddenNotesControl";
+import { cn } from "@/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +39,14 @@ export const metadata = {
 
 function money(n: number): string {
   return fmt$(Math.round(n));
+}
+
+function formatApprovedAt(iso: string | undefined): string {
+  const raw = (iso ?? "").trim();
+  if (!raw) return "";
+  const t = new Date(raw);
+  if (Number.isNaN(t.getTime())) return "";
+  return t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default async function QuoteDetailPage({ params }: { params: { id: string } }) {
@@ -71,10 +88,12 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     }
   }
 
-  const quote = buildPublicQuote(draft, breakdown, files, catalog);
+  const type = projectTypeOf(draft.config);
+  const quote = buildPublicQuote(draft, breakdown, files, catalog, meta?.depositPaid ?? 0);
   const savings = Math.round(quote.savings);
   const folderUrl = meta?.driveFolderId ? folderWebLink(meta.driveFolderId) : null;
   const linkLive = meta ? isLinkActive(meta) && !!meta.publicToken : false;
+  const approvedOn = formatApprovedAt(meta?.approvedAt);
 
   return (
     <AppShell>
@@ -98,6 +117,29 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
             ← All quotes
           </Link>
         </header>
+
+        {/* Project stage */}
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4 normal-case tracking-normal">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Project stage · {type === "digital" ? "Digital" : "Physical"}
+          </p>
+          <StageControl id={id} type={type} initialStage={meta?.stage ?? ""} />
+          <div className="border-t border-border pt-4">
+            <DepositPaidControl
+              id={id}
+              initialPaid={meta?.depositPaid ?? 0}
+              expected={quote.depositExpected}
+              total={quote.total}
+            />
+          </div>
+          {meta?.approvedBy && (
+            <p className="text-xs text-muted-foreground border-t border-border pt-3">
+              <span className="text-accent" aria-hidden>✓</span> Proofs approved by{" "}
+              <span className="text-foreground">{meta.approvedBy}</span>
+              {approvedOn ? <> on {approvedOn}</> : null}
+            </p>
+          )}
+        </section>
 
         {/* Link + folder controls */}
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4 normal-case tracking-normal">
@@ -147,17 +189,51 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
             </ul>
           )}
           <dl className="space-y-1.5 text-sm border-t border-border pt-3">
-            {savings > 0 && (
-              <>
-                <SummaryRow label="Before savings" value={money(quote.total + quote.savings)} dim />
-                <SummaryRow label="Your savings" value={`-${money(savings)}`} dim />
-              </>
-            )}
+            {quote.lineItems.map((li, i) => {
+              const prevKind = i > 0 ? quote.lineItems[i - 1].kind : li.kind;
+              const isFirstExtra = li.kind !== "package" && prevKind === "package";
+              return (
+                <div key={i}>
+                  {isFirstExtra && (
+                    <div className="flex items-center gap-2 pt-0.5 pb-0.5">
+                      <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Add-ons</span>
+                      <span className="flex-1 h-px bg-border/50" />
+                    </div>
+                  )}
+                  <SummaryRow label={li.label} value={money(li.price)} />
+                </div>
+              );
+            })}
+            <div className="border-t border-border/60 my-1.5" />
+            <SummaryRow label="Subtotal" value={money(quote.subtotal)} dim />
+            {savings > 0 && <SummaryRow label="Savings" value={`-${money(savings)}`} dim />}
+            {quote.rush > 0 && <SummaryRow label="Rush" value={`+${money(quote.rush)}`} dim />}
             <div className="flex items-baseline justify-between gap-3 pt-1">
               <span className="text-sm font-medium">Total</span>
               <span className="font-mono tabular-nums text-base">{money(quote.total)}</span>
             </div>
+            {(quote.depositExpected > 0 || quote.depositPaid > 0) && (
+              <div className="space-y-1.5 border-t border-border/60 pt-2 mt-1.5">
+                {quote.depositExpected > 0 && (
+                  <SummaryRow label="Deposit expected" value={money(quote.depositExpected)} dim />
+                )}
+                <PayRow label="Deposit paid" value={money(quote.depositPaid)} paid={quote.depositPaid > 0} />
+                <PayRow
+                  label="Balance remaining"
+                  value={money(quote.balanceRemaining)}
+                  paid={quote.balanceRemaining === 0 && quote.total > 0}
+                />
+              </div>
+            )}
           </dl>
+        </section>
+
+        {/* Hidden notes (private — never shown to the client) */}
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 normal-case tracking-normal">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
+            Hidden notes · private
+          </p>
+          <HiddenNotesControl id={id} initialNotes={draft.client.notes ?? ""} />
         </section>
 
         {/* Proofs */}
@@ -214,10 +290,35 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
 function SummaryRow({ label, value, dim }: { label: string; value: string; dim?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className={"text-sm " + (dim ? "text-muted-foreground" : "text-foreground")}>{label}</span>
-      <span className={"font-mono tabular-nums text-sm " + (dim ? "text-muted-foreground" : "text-foreground")}>
+      <span className={"text-sm min-w-0 break-words " + (dim ? "text-muted-foreground" : "text-foreground")}>
+        {label}
+      </span>
+      <span
+        className={
+          "font-mono tabular-nums text-sm shrink-0 " + (dim ? "text-muted-foreground" : "text-foreground")
+        }
+      >
         {value}
       </span>
+    </div>
+  );
+}
+
+function PayRow({ label, value, paid }: { label: string; value: string; paid: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="flex items-center gap-2 text-sm text-foreground min-w-0">
+        {label}
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
+            paid ? "bg-accent/40 text-foreground" : "bg-muted text-muted-foreground",
+          )}
+        >
+          {paid ? "Paid" : "Due"}
+        </span>
+      </span>
+      <span className="font-mono tabular-nums text-sm text-foreground shrink-0">{value}</span>
     </div>
   );
 }
