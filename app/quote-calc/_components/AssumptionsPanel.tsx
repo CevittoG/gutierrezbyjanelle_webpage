@@ -219,6 +219,7 @@ export function AssumptionsPanel({ assumptions, onUpdate, onReset, onLoad, catal
                 <NumInput label="Custom paper factor" description="Sheet cost multiplier for premium / specialty paper" stateKey="customPaperFactor" value={assumptions.customPaperFactor} min={1} max={3} step={0.1} suffix="x" onUpdate={onUpdate} />
                 <NumInput label="Digital file license" description="Design labor premium when client receives source files" stateKey="digitalLicensePtg" value={assumptions.digitalLicensePtg} min={0} max={100} step={5} suffix="%" onUpdate={onUpdate} />
                 <NumInput label="Rush fee" description="Surcharge for turnaround under 7 days" stateKey="rushFeePtg" value={assumptions.rushFeePtg} min={0} max={100} step={5} suffix="%" onUpdate={onUpdate} />
+                <NumInput label="Deposit (fixed)" description="Flat upfront payment the client pays to start proofs. Shown on the client quote; never changes the total." stateKey="depositAmount" value={assumptions.depositAmount} min={0} max={5000} step={25} prefix="$" onUpdate={onUpdate} />
               </div>
             </div>
 

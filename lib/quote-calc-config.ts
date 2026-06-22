@@ -89,6 +89,7 @@ const SETTINGS_WHITELIST = new Set<keyof QuoteState>([
   "customPaperFactor",
   "rushFeePtg",
   "digitalLicensePtg",
+  "depositAmount",
 ]);
 
 export function isWhitelistedSetting(key: string): key is keyof QuoteState {

@@ -32,6 +32,10 @@ export interface QuoteState {
   rushFeePtg: number;
   digitalLicensePtg: number;
 
+  // Fixed initial payment shown on the client portal (deposit/balance split).
+  // Display-only: never enters the price math — the quote total is unchanged.
+  depositAmount: number;
+
   // Per-item: _dt = design time (min), _pt = production time/unit (min), _sc = sheet cost, _y = yield
   iSaveDate_dt: number; iSaveDate_pt: number; iSaveDate_sc: number; iSaveDate_y: number;
   iInvite_dt: number;   iInvite_pt: number;   iInvite_sc: number;   iInvite_y: number;
@@ -60,6 +64,8 @@ export const DEFAULTS: QuoteState = {
   discountEventBasics: 0, discountEventFun: 0, discountEventWorks: 0,
 
   vendorIncentivePtg: 10, fullColorFactor: 1.5, customPaperFactor: 1.3, rushFeePtg: 30, digitalLicensePtg: 30,
+
+  depositAmount: 0,
 
   //                       dt   pt    sc     y
   iSaveDate_dt: 30,      iSaveDate_pt: 3,   iSaveDate_sc: 0.55,  iSaveDate_y: 6,
