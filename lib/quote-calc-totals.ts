@@ -227,7 +227,7 @@ export function computeQuoteBreakdown(
       relAgg.set(d.label, cur);
     }
   }
-  const relationshipDiscountLines = [...relAgg.values()];
+  const relationshipDiscountLines = Array.from(relAgg.values());
 
   // Project services — once per quote, marked up like any other cost. Never
   // discounted: revisions, packaging, and the digital license are cost recovery.
