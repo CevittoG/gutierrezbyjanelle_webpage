@@ -52,6 +52,7 @@ export interface QuoteState {
   iThankYou_dt: number; iThankYou_pt: number;  iThankYou_sc: number; iThankYou_y: number;
   iPartyFavor_dt: number; iPartyFavor_pt: number; iPartyFavor_sc: number; iPartyFavor_y: number;
   iGames_dt: number;    iGames_pt: number;     iGames_sc: number;    iGames_y: number;
+  iCoaster_dt: number;    iCoaster_pt: number;     iCoaster_sc: number;    iCoaster_y: number;
 }
 
 export const DEFAULTS: QuoteState = {
@@ -83,6 +84,7 @@ export const DEFAULTS: QuoteState = {
   iThankYou_dt: 30,      iThankYou_pt: 2,   iThankYou_sc: 0.55,  iThankYou_y: 4,
   iPartyFavor_dt: 15,    iPartyFavor_pt: 4, iPartyFavor_sc: 0.55, iPartyFavor_y: 10,
   iGames_dt: 20,         iGames_pt: 2,      iGames_sc: 0.55,     iGames_y: 4,
+  iCoaster_dt: 15,        iCoaster_pt: 0.05,    iCoaster_sc: 54,       iCoaster_y: 100,
 };
 
 export interface CatalogItem {
@@ -111,10 +113,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   { key: "iThankYou",     label: "Thank you cards",            qty: 1, notes: "Common reorder after the event" },
   { key: "iPartyFavor",   label: "Party favor tags",           qty: 2, notes: "~2 per household - small format" },
   { key: "iGames",        label: "Games",                      qty: 1, notes: "Activity card per setting" },
-];
-
-export const ADD_ON_KEYS = [
-  "iMenu", "iWedgeTop", "iWaferTop", "iTableSign", "iPlaceCard", "iThankYou", "iPartyFavor", "iGames",
+  { key: "iCoaster",        label: "Coaster",                  qty: 1, notes: "Personalized coaster" },
 ];
 
 export type PkgItem = string | { key: string; multiplier?: number; displayLabel?: string };
