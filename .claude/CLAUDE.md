@@ -90,7 +90,9 @@ export type NavItem        = { title: string; href: string };
 export type Hero           = { headline: string; subheadline: string; cta?: { label: string; href: string } };
 export type InvestmentTier = { id: string; name: string; description: string; features: string[]; discount?: number };
 export type Review         = { id: string; text: string; author: string; role: string };
-export type GalleryItem    = { id: string; src: string; alt: string };
+export type GalleryTag     = "ceremony-programs" | "welcome-signs" | "drink-toppers" | "bar-signs" | "note-cards" | "shower-games" | "invitations" | "menus" | "place-cards";
+export type GalleryTagDef  = { id: GalleryTag; title: Bilingual; description: Bilingual };
+export type GalleryItem    = { id: string; src: string; alt: string; tags?: GalleryTag[]; orientation?: GalleryOrientation };
 
 export const siteConfig = {
   name: "GutierrezByJanelle",
@@ -98,7 +100,8 @@ export const siteConfig = {
   mainNav: NavItem[],
   investments: InvestmentTier[],  // 5 tiers: individual, design-suite, sweet-suite, signature-suite, add-ons
   reviews: Review[],
-  gallery: GalleryItem[],
+  galleryTags: GalleryTagDef[],   // 9 tags: 6 with photos, 3 coming-soon (invitations, menus, place-cards)
+  gallery: GalleryItem[],         // 12 photos across 6 populated tags
   // ... hero, about, weddings, etsyStore, instagram
 };
 ```
@@ -184,7 +187,7 @@ app/
 | `components/ui/sheet.tsx` | Radix Dialog-based slide-in sheet (used by mobile nav) |
 | `components/ui/price-card.tsx` | Accepts `InvestmentTier`; displays name/features/discount badge (Save X% shown when `discount` is set) |
 | `components/ui/review-card.tsx` | Accepts `Review`; blockquote style |
-| `components/ui/gallery-grid.tsx` | Responsive 1–3 col grid; renders real photos via `next/image` fill with hover overlay |
+| `components/ui/gallery-grid.tsx` | Tag-filtered flat grid; `activeFilter` prop; `AnimatePresence` tile transitions; lightbox with keyboard nav; `GalleryEmptyState` for tags with no photos |
 | `components/ui/stationery-hero.tsx` | Two portrait cards in a flex row with framer-motion entrance stagger and per-card hover lift/rotate; text column right-aligned on desktop |
 
 ---
@@ -399,7 +402,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
-- Real gallery photos — 6 JPEGs in `public/gallery/`; `GalleryGrid` upgraded to `next/image` with hover overlay
+- Real gallery photos — 12 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
 - A11y: skip-to-content link, active nav underline, focus-visible rings, `prefers-reduced-motion` global CSS rule
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers
