@@ -8,7 +8,8 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/utils";
 import type {
   GalleryItem,
-  GalleryGroup,
+  GalleryTagDef,
+  GalleryTag,
   GalleryOrientation,
 } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
@@ -16,7 +17,8 @@ import { pick } from "@/lib/i18n";
 
 interface GalleryGridProps {
   items: GalleryItem[];
-  groups: readonly GalleryGroup[];
+  tagDefs?: readonly GalleryTagDef[];
+  activeFilter?: GalleryTag | "all";
   className?: string;
 }
 
@@ -26,33 +28,37 @@ function tileAspect(o: GalleryOrientation | undefined) {
   return "aspect-square";
 }
 
-/**
- * Per-row span allocation inside the 6-col group grid.
- * Portraits sit narrow and tall, landscapes go wide, squares are mid.
- * The mobile breakpoint collapses to a single column.
- */
 function tileSpan(o: GalleryOrientation | undefined) {
   if (o === "landscape") return "md:col-span-4";
   if (o === "portrait") return "md:col-span-3";
   return "md:col-span-3";
 }
 
-export function GalleryGrid({ items, groups, className }: GalleryGridProps) {
+export function GalleryGrid({ items, activeFilter, className }: GalleryGridProps) {
   const { locale, t } = useLocale();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
+  const visibleItems =
+    activeFilter && activeFilter !== "all"
+      ? items.filter((item) => item.tags?.includes(activeFilter))
+      : items;
+
   const close = useCallback(() => setOpenIndex(null), []);
   const next = useCallback(
-    () => setOpenIndex((i) => (i === null ? null : (i + 1) % items.length)),
-    [items.length]
+    () => setOpenIndex((i) => (i === null ? null : (i + 1) % visibleItems.length)),
+    [visibleItems.length]
   );
   const prev = useCallback(
     () =>
       setOpenIndex((i) =>
-        i === null ? null : (i - 1 + items.length) % items.length
+        i === null ? null : (i - 1 + visibleItems.length) % visibleItems.length
       ),
-    [items.length]
+    [visibleItems.length]
   );
+
+  useEffect(() => {
+    setOpenIndex(null);
+  }, [activeFilter]);
 
   useEffect(() => {
     if (openIndex === null) return;
@@ -71,68 +77,56 @@ export function GalleryGrid({ items, groups, className }: GalleryGridProps) {
   }, [openIndex, close, next, prev]);
 
   return (
-    <div className={cn("space-y-16 md:space-y-24", className)}>
-      {groups.map((group) => {
-        const groupItems = items.filter((it) => it.category === group.id);
-        if (groupItems.length === 0) return null;
-        return (
-          <section key={group.id} aria-labelledby={`gallery-${group.id}`}>
-            <header className="mb-6 md:mb-8 max-w-2xl">
-              <h2
-                id={`gallery-${group.id}`}
-                className="font-squarepeg text-3xl sm:text-4xl leading-[1.05]"
+    <div className={cn(className)}>
+      {visibleItems.length === 0 ? (
+        <GalleryEmptyState />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 items-start">
+          <AnimatePresence mode="popLayout">
+            {visibleItems.map((item, localIdx) => (
+              <motion.figure
+                key={item.id}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className={cn("group", tileSpan(item.orientation))}
               >
-                {pick(group.title, locale)}
-              </h2>
-              <p className="normal-case tracking-normal font-normal text-sm md:text-base text-muted-foreground mt-2 leading-relaxed max-w-[55ch]">
-                {pick(group.intro, locale)}
-              </p>
-            </header>
-
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 items-start">
-              {groupItems.map((item) => {
-                const idx = items.indexOf(item);
-                return (
-                  <figure
-                    key={item.id}
-                    className={cn("group", tileSpan(item.orientation))}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setOpenIndex(idx)}
-                      aria-label={`${t("gallery.openItem")} ${item.alt}`}
-                      className={cn(
-                        "relative block w-full overflow-hidden rounded-lg border border-border bg-muted",
-                        "transition-[box-shadow,border-color] duration-200",
-                        "hover:border-accent/80",
-                        "hover:[box-shadow:0_4px_20px_-4px_hsl(350_55%_86%_/_0.45)]",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        tileAspect(item.orientation)
-                      )}
-                    >
-                      <Image
-                        src={item.src}
-                        alt={item.alt}
-                        fill
-                        className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.02]"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      />
-                    </button>
-                    {item.caption && (
-                      <figcaption className="mt-3 normal-case tracking-normal font-normal text-xs md:text-sm text-muted-foreground leading-snug max-w-[40ch]">
-                        {pick(item.caption, locale)}
-                      </figcaption>
-                    )}
-                  </figure>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(localIdx)}
+                  aria-label={`${t("gallery.openItem")} ${item.alt}`}
+                  className={cn(
+                    "relative block w-full overflow-hidden rounded-lg border border-border bg-muted",
+                    "transition-[box-shadow,border-color] duration-200",
+                    "hover:border-accent/80",
+                    "hover:[box-shadow:0_4px_20px_-4px_hsl(350_55%_86%_/_0.45)]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    tileAspect(item.orientation)
+                  )}
+                >
+                  <Image
+                    src={item.src}
+                    alt={item.alt}
+                    fill
+                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.02]"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                </button>
+                {item.caption && (
+                  <figcaption className="mt-3 normal-case tracking-normal font-normal text-xs md:text-sm text-muted-foreground leading-snug max-w-[40ch]">
+                    {pick(item.caption, locale)}
+                  </figcaption>
+                )}
+              </motion.figure>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
 
       <GalleryLightbox
-        items={items}
+        items={visibleItems}
         openIndex={openIndex}
         onClose={close}
         onNext={next}
@@ -145,6 +139,28 @@ export function GalleryGrid({ items, groups, className }: GalleryGridProps) {
         }}
       />
     </div>
+  );
+}
+
+function GalleryEmptyState() {
+  const { t } = useLocale();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className="flex flex-col items-center justify-center py-24 md:py-32 gap-5 text-center"
+    >
+      <div className="w-16 h-16 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+        <span className="font-squarepeg text-2xl text-muted-foreground/50">G</span>
+      </div>
+      <p className="font-squarepeg text-2xl md:text-3xl text-foreground/50">
+        {t("gallery.empty.heading")}
+      </p>
+      <p className="normal-case tracking-normal font-normal text-sm text-muted-foreground max-w-[38ch] leading-relaxed">
+        {t("gallery.empty.body")}
+      </p>
+    </motion.div>
   );
 }
 

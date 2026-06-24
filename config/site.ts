@@ -34,7 +34,23 @@ export type Review = {
   originalLang?: "en" | "es";
 };
 
-export type GalleryCategory = "cards" | "signs" | "details";
+export type GalleryTag =
+  | "ceremony-programs"
+  | "welcome-signs"
+  | "drink-toppers"
+  | "bar-signs"
+  | "note-cards"
+  | "shower-games"
+  | "invitations"
+  | "menus"
+  | "place-cards";
+
+export type GalleryTagDef = {
+  id: GalleryTag;
+  title: Bilingual;
+  description: Bilingual;
+};
+
 export type GalleryOrientation = "portrait" | "landscape" | "square";
 
 export type GalleryItem = {
@@ -43,16 +59,10 @@ export type GalleryItem = {
   alt: string;
   /** Curatorial one-line caption (bilingual). */
   caption?: Bilingual;
-  /** Editorial grouping. Defaults to "details" if omitted. */
-  category?: GalleryCategory;
+  /** Item-type tags; one image can carry multiple. */
+  tags?: GalleryTag[];
   /** Native aspect of the photo. Drives tile shape. Defaults to "square". */
   orientation?: GalleryOrientation;
-};
-
-export type GalleryGroup = {
-  id: GalleryCategory;
-  title: Bilingual;
-  intro: Bilingual;
 };
 
 export type Weddings = { paragraphs: Bilingual[] };
@@ -315,39 +325,87 @@ export const siteConfig = {
       originalLang: "en",
     },
   ] satisfies Review[],
-  galleryGroups: [
+  galleryTags: [
     {
-      id: "cards",
-      title: b("Cards in hand", "Tarjetas en mano"),
-      intro: b(
-        "Ceremony pieces and stationery that set the first tone.",
-        "Piezas de ceremonia y papelería que marcan el primer tono."
+      id: "ceremony-programs",
+      title: b("Ceremony Programs", "Programas de ceremonia"),
+      description: b(
+        "Printed programs your guests hold from the first row to the last dance.",
+        "Programas impresos que tus invitados sostienen desde la primera fila hasta el último baile."
       ),
     },
     {
-      id: "signs",
-      title: b("Signs that set the room", "Carteles que arman el salón"),
-      intro: b(
-        "Welcome boards and signage at human scale.",
-        "Carteles de bienvenida y señalización a escala humana."
+      id: "welcome-signs",
+      title: b("Welcome Signs", "Carteles de bienvenida"),
+      description: b(
+        "The first thing your guests see — a large-format sign that sets the whole tone.",
+        "Lo primero que ven tus invitados: un cartel de gran formato que marca el tono de todo."
       ),
     },
     {
-      id: "details",
-      title: b("Quiet little details", "Pequeños detalles silenciosos"),
-      intro: b(
-        "The small pieces that make a room feel finished.",
-        "Los pequeños detalles que hacen que un espacio se sienta completo."
+      id: "drink-toppers",
+      title: b("Drink Toppers", "Toppers de bebidas"),
+      description: b(
+        "Custom circular toppers that turn every glass into a personalized detail.",
+        "Toppers circulares personalizados que convierten cada copa en un detalle único."
       ),
     },
-  ] satisfies GalleryGroup[],
+    {
+      id: "bar-signs",
+      title: b("Bar Signs", "Carteles de barra"),
+      description: b(
+        "Signature drink signs and bar menus that make the bar feel designed, not just stocked.",
+        "Carteles de coctel especial y menús de barra que hacen que la barra se vea diseñada, no solo surtida."
+      ),
+    },
+    {
+      id: "note-cards",
+      title: b("Note Cards", "Tarjetas personales"),
+      description: b(
+        "Personal messages for each guest — the detail that makes them feel truly seen.",
+        "Mensajes personales para cada invitado: el detalle que los hace sentir verdaderamente vistos."
+      ),
+    },
+    {
+      id: "shower-games",
+      title: b("Shower Games", "Juegos de Shower"),
+      description: b(
+        "Game cards and activity sheets designed to match your shower's style — not a generic template.",
+        "Tarjetas de juegos y hojas de actividades diseñadas a juego con el estilo de tu shower, no una plantilla genérica."
+      ),
+    },
+    {
+      id: "invitations",
+      title: b("Invitations", "Invitaciones"),
+      description: b(
+        "The first impression of your event — designed from scratch for your date and style.",
+        "La primera impresión de tu evento: diseñada desde cero para tu fecha y tu estilo."
+      ),
+    },
+    {
+      id: "menus",
+      title: b("Menus", "Menús"),
+      description: b(
+        "Dinner and bar menus that look as good as what's on them.",
+        "Menús de cena y barra que lucen tan bien como lo que ofrecen."
+      ),
+    },
+    {
+      id: "place-cards",
+      title: b("Place Cards", "Tarjetas de lugar"),
+      description: b(
+        "Every seat, named. Small cards that make guests feel expected and welcome.",
+        "Cada asiento, nombrado. Pequeñas tarjetas que hacen que los invitados se sientan esperados y bienvenidos."
+      ),
+    },
+  ] satisfies GalleryTagDef[],
   gallery: [
     {
       id: "g1",
       src: "/gallery/ceremony-card.jpeg",
       alt: "Ceremony program card on a paper background",
       caption: b("Ceremony program, hand to hand.", "Programa de ceremonia, en mano."),
-      category: "cards",
+      tags: ["ceremony-programs"],
       orientation: "square",
     },
     {
@@ -355,7 +413,7 @@ export const siteConfig = {
       src: "/gallery/ceremony-card-2.jpeg",
       alt: "Ceremony card, close detail",
       caption: b("Same suite, the close-up.", "La misma colección, en detalle."),
-      category: "cards",
+      tags: ["ceremony-programs"],
       orientation: "square",
     },
     {
@@ -366,7 +424,7 @@ export const siteConfig = {
         "Welcome sign, made to be the first thing your guests see.",
         "Cartel de bienvenida, lo primero que ven tus invitados."
       ),
-      category: "signs",
+      tags: ["welcome-signs"],
       orientation: "portrait",
     },
     {
@@ -374,7 +432,7 @@ export const siteConfig = {
       src: "/gallery/welcome-sign-2.jpeg",
       alt: "Welcome sign, second look",
       caption: b("A second welcome, another couple.", "Otra bienvenida, otra pareja."),
-      category: "signs",
+      tags: ["welcome-signs"],
       orientation: "portrait",
     },
     {
@@ -385,19 +443,67 @@ export const siteConfig = {
         "Signature drink sign, sitting on the bar.",
         "Cartel de coctel especial, sobre la barra."
       ),
-      category: "signs",
+      tags: ["bar-signs"],
       orientation: "landscape",
     },
     {
       id: "g5",
       src: "/gallery/signature-drink-topper.jpeg",
-      alt: "Signature drink topper",
+      alt: "Signature drink topper on a glass",
       caption: b(
         "The same drink, finished with a topper.",
         "El mismo coctel, terminado con un topper."
       ),
-      category: "details",
+      tags: ["drink-toppers"],
       orientation: "landscape",
+    },
+    {
+      id: "g7",
+      src: "/gallery/drink-topper-riecherts.jpeg",
+      alt: "Dark rocks glass with THE RIECHERTS circular drink topper",
+      caption: b("The Riecherts. 6.12.26.", "The Riecherts. 6.12.26."),
+      tags: ["drink-toppers"],
+      orientation: "portrait",
+    },
+    {
+      id: "g8",
+      src: "/gallery/drink-topper-le.jpeg",
+      alt: "Hand holding a stemless glass with L|E monogram circular topper",
+      caption: b("L|E — initials on every sip.", "L|E — iniciales en cada sorbo."),
+      tags: ["drink-toppers"],
+      orientation: "portrait",
+    },
+    {
+      id: "g9",
+      src: "/gallery/drink-topper-portrait.jpeg",
+      alt: "Champagne flute with couple photo topper against string lights",
+      caption: b("Their photo, perched on a flute.", "Su foto, encima de una copa."),
+      tags: ["drink-toppers"],
+      orientation: "portrait",
+    },
+    {
+      id: "g10",
+      src: "/gallery/wedding-note-card.jpeg",
+      alt: "Personal thank-you note card next to a champagne flute",
+      caption: b("A note for titi Cynthia.", "Una nota para titi Cynthia."),
+      tags: ["note-cards"],
+      orientation: "portrait",
+    },
+    {
+      id: "g11",
+      src: "/gallery/drink-topper-good-drinks.jpeg",
+      alt: "Hand holding ribbed glass with good drinks great company topper outdoors",
+      caption: b("Good drinks. Great company.", "Buenas bebidas. Buena compañía."),
+      tags: ["drink-toppers"],
+      orientation: "portrait",
+    },
+    {
+      id: "g12",
+      src: "/gallery/baby-shower-games.jpeg",
+      alt: "Overhead black-and-white photo of baby shower game cards on a beaded plate",
+      caption: b("Baby shower games, designed to match.", "Juegos de baby shower, diseñados a juego."),
+      tags: ["shower-games"],
+      orientation: "portrait",
     },
   ] satisfies GalleryItem[],
   etsyStore: {
