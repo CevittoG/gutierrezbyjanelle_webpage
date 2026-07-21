@@ -53,6 +53,7 @@ export interface QuoteState {
   iPartyFavor_dt: number; iPartyFavor_pt: number; iPartyFavor_sc: number; iPartyFavor_y: number;
   iGames_dt: number;    iGames_pt: number;     iGames_sc: number;    iGames_y: number;
   iCoaster_dt: number;    iCoaster_pt: number;     iCoaster_sc: number;    iCoaster_y: number;
+  iSticker_dt: number;    iSticker_pt: number;     iSticker_sc: number;    iSticker_y: number;
 }
 
 export const DEFAULTS: QuoteState = {
@@ -85,6 +86,7 @@ export const DEFAULTS: QuoteState = {
   iPartyFavor_dt: 15,    iPartyFavor_pt: 4, iPartyFavor_sc: 0.55, iPartyFavor_y: 10,
   iGames_dt: 20,         iGames_pt: 2,      iGames_sc: 0.55,     iGames_y: 4,
   iCoaster_dt: 15,        iCoaster_pt: 0.05,    iCoaster_sc: 54,       iCoaster_y: 100,
+  iSticker_dt: 15,        iSticker_pt: 0.05,    iSticker_sc: 20,       iSticker_y: 100,
 };
 
 export interface CatalogItem {
@@ -114,6 +116,7 @@ export const ITEM_CATALOG: CatalogItem[] = [
   { key: "iPartyFavor",   label: "Party favor tags",           qty: 2, notes: "~2 per household - small format" },
   { key: "iGames",        label: "Games",                      qty: 1, notes: "Activity card per setting" },
   { key: "iCoaster",        label: "Coaster",                  qty: 1, notes: "Personalized coaster" },
+  { key: "iSticker",        label: "Stickers",                 qty: 1, notes: "Personalized sticker" },
 ];
 
 export type PkgItem = string | { key: string; multiplier?: number; displayLabel?: string };
