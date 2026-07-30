@@ -256,18 +256,36 @@ async function readQuotesTab(
   return { schema, header, rows };
 }
 
+// --- Draft status (soft archive) ---
+//
+// Column B ("Status") is the single source of truth for whether a quote is live
+// or deleted. Deletion is always soft: the readable row keeps every cell and the
+// _data payload is never touched, so a restore brings the quote back whole.
+
+export type DraftStatus = "active" | "archived";
+
+export interface DraftRecord {
+  draft: Draft;
+  status: DraftStatus;
+}
+
+function normalizeStatus(cell: unknown): DraftStatus {
+  return String(cell ?? "").trim().toLowerCase() === "archived" ? "archived" : "active";
+}
+
 // --- Legacy format (pre-Phase 2) ---
 
-function rowToDraftLegacy(row: Row): Draft | null {
-  const status = String(row[LEGACY_COL.status] ?? "");
-  if (status === "archived") return null;
+function rowToRecordLegacy(row: Row): DraftRecord | null {
   const payload = row[LEGACY_COL.payload];
   if (typeof payload !== "string" || !payload) return null;
+  let draft: Draft | null;
   try {
-    return normalizeIncomingDraft(JSON.parse(payload));
+    draft = normalizeIncomingDraft(JSON.parse(payload));
   } catch {
     return null;
   }
+  if (!draft) return null;
+  return { draft, status: normalizeStatus(row[LEGACY_COL.status]) };
 }
 
 // --- New format (Phase 2) ---
@@ -299,11 +317,12 @@ function draftToPayloadRow(d: Draft): Row {
 
 // Reads new-schema rows + the matching JSON payload from the _data tab, then
 // reconstructs a full Draft. Rows whose payload is missing or unparseable are
-// skipped (with a warning) so the rest of the list still loads.
-async function readDraftsNewSchema(
+// skipped (with a warning) so the rest of the list still loads. Archived rows
+// are returned too, tagged with their status — callers decide what to show.
+async function readRecordsNewSchema(
   docId: string,
   rows: Row[],
-): Promise<Draft[]> {
+): Promise<DraftRecord[]> {
   const dataRows = await readRange(docId, DATA_RANGE);
   const payloadById = new Map<string, string>();
   for (const r of dataRows) {
@@ -312,12 +331,11 @@ async function readDraftsNewSchema(
     if (id && typeof payload === "string") payloadById.set(id, payload);
   }
 
-  const out: Draft[] = [];
+  const out: DraftRecord[] = [];
   for (const row of rows) {
     const id = String(row[NEW_COL.id] ?? "").trim();
     if (!id) continue;
-    const status = String(row[NEW_COL.status] ?? "").trim();
-    if (status === "archived") continue;
+    const status = normalizeStatus(row[NEW_COL.status]);
     const payload = payloadById.get(id);
     if (!payload) {
       console.warn(`[sheets] Quote ${id}: no payload in _data — skipping.`);
@@ -325,7 +343,7 @@ async function readDraftsNewSchema(
     }
     try {
       const draft = normalizeIncomingDraft(JSON.parse(payload));
-      if (draft) out.push(draft);
+      if (draft) out.push({ draft, status });
     } catch {
       console.warn(`[sheets] Quote ${id}: payload is not valid JSON — skipping.`);
     }
@@ -461,20 +479,29 @@ async function ensureNewSchema(
 
 // --- Public API ---
 
-export async function listDrafts(): Promise<Draft[]> {
+// Every quote in the sheet, archived ones included, each tagged with its status.
+// Only the studio dashboard needs this — it renders archived quotes behind a
+// filter and must exclude them from its ledger totals.
+export async function listDraftRecords(): Promise<DraftRecord[]> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const { schema, rows } = await readQuotesTab(cfg.docId);
   if (schema === "empty") return [];
   if (schema === "legacy") {
-    const out: Draft[] = [];
+    const out: DraftRecord[] = [];
     for (const row of rows) {
-      const d = rowToDraftLegacy(row);
-      if (d) out.push(d);
+      const rec = rowToRecordLegacy(row);
+      if (rec) out.push(rec);
     }
     return out;
   }
-  return readDraftsNewSchema(cfg.docId, rows);
+  return readRecordsNewSchema(cfg.docId, rows);
+}
+
+// Live quotes only — the default everywhere except the dashboard.
+export async function listDrafts(): Promise<Draft[]> {
+  const records = await listDraftRecords();
+  return records.filter((r) => r.status === "active").map((r) => r.draft);
 }
 
 export async function upsertDraftRow(draft: Draft): Promise<void> {
@@ -527,7 +554,9 @@ async function upsertDataPayload(docId: string, id: string, row: Row): Promise<v
   }
 }
 
-export async function archiveDraftRow(id: string): Promise<boolean> {
+// Flips a quote's Status cell and nothing else. Returns false when the id isn't
+// in the sheet, so callers can tell "done" from "already gone".
+async function setDraftStatus(id: string, status: DraftStatus): Promise<boolean> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const { schema, rows } = await readQuotesTab(cfg.docId);
@@ -543,9 +572,17 @@ export async function archiveDraftRow(id: string): Promise<boolean> {
   await writeRange(
     cfg.docId,
     `${SHEET_TAB}!${statusLetter}${rowNumber}:${statusLetter}${rowNumber}`,
-    [["archived"]],
+    [[status]],
   );
   return true;
+}
+
+export async function archiveDraftRow(id: string): Promise<boolean> {
+  return setDraftStatus(id, "archived");
+}
+
+export async function restoreDraftRow(id: string): Promise<boolean> {
+  return setDraftStatus(id, "active");
 }
 
 // Read a single Draft by id straight from the _data payload tab, regardless of

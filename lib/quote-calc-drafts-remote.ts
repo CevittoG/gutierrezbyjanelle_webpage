@@ -61,12 +61,29 @@ export async function pushRemoteDraft(draft: Draft): Promise<RemoteResult<true>>
   return { ok: true, value: true };
 }
 
-export async function archiveRemoteDraft(id: string): Promise<RemoteResult<true>> {
-  const r = await safeFetch(`/quote-calc/api/drafts/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    credentials: "same-origin",
-  });
+// `found` is false when the id was no longer in the sheet — the caller's goal is
+// still met, but it can say "already gone" rather than claim it did the work.
+async function setRemoteStatus(
+  url: string,
+  method: "DELETE" | "POST",
+): Promise<RemoteResult<{ found: boolean }>> {
+  const r = await safeFetch(url, { method, credentials: "same-origin" });
   if ("kind" in r) return { ok: false, failure: r };
   if (!r.ok) return { ok: false, failure: classify(r) };
-  return { ok: true, value: true };
+  try {
+    const body = (await r.json()) as { ok?: boolean; found?: boolean };
+    if (!body.ok) return { ok: false, failure: { kind: "server" } };
+    return { ok: true, value: { found: body.found !== false } };
+  } catch {
+    return { ok: false, failure: { kind: "server" } };
+  }
+}
+
+// Soft-archive: the row stays in the sheet with status=archived.
+export async function archiveRemoteDraft(id: string): Promise<RemoteResult<{ found: boolean }>> {
+  return setRemoteStatus(`/quote-calc/api/drafts/${encodeURIComponent(id)}`, "DELETE");
+}
+
+export async function restoreRemoteDraft(id: string): Promise<RemoteResult<{ found: boolean }>> {
+  return setRemoteStatus(`/quote-calc/api/drafts/${encodeURIComponent(id)}/restore`, "POST");
 }
