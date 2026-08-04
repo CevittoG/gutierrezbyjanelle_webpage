@@ -10,6 +10,7 @@ import {
   fmt$2,
   fmtPct,
   fmtTime,
+  markupVariable,
 } from "@/lib/quote-calc-logic";
 import type { LineResult, QuoteBreakdown } from "@/lib/quote-calc-totals";
 import { cn } from "@/utils";
@@ -74,8 +75,11 @@ function Divider({ strong }: { strong?: boolean }) {
 }
 
 // Per-line cost buildup: variable cost → markups → the line's additive discount
-// (bundle + relationship, biting labor only) → line total. Revisions, packaging,
-// and the digital license are quote-level and shown once, below all the lines.
+// (bundle + relationship, biting labor only) → line total. Revisions and
+// packaging are quote-level and shown once, below all the lines. The digital
+// license is opted into per line (shown here) but its dollar amount is still
+// realized once, in the quote-level "Project services" bucket below — it's
+// never added into this line's own total.
 function LineBlock({
   line,
   assumptions,
@@ -186,6 +190,16 @@ function LineBlock({
             />
           )}
         </>
+      )}
+
+      {/* ─── DIGITAL LICENSE (opted in per line; realized in Project services below) ─── */}
+      {line.digitalLicense && c.totalDesignLabor > 0 && (
+        <Row
+          indent
+          label={`Digital file license (+${fmtPct(assumptions.digitalLicensePtg)}, in services)`}
+          value={`+${fmt$2(markupVariable(c.totalDesignLabor * (assumptions.digitalLicensePtg / 100), assumptions).list)}`}
+          dim
+        />
       )}
 
       <Divider />

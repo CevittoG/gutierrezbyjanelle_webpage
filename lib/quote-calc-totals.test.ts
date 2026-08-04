@@ -29,7 +29,6 @@ function cfg(partial: Partial<DraftConfig>): DraftConfig {
     miscAddOns: [],
     rushFee: false,
     extraRevisions: 0,
-    digitalLicense: false,
     vendorIncentive: false,
     customDiscountPtg: 0,
     familyFriendsPtg: 0,
@@ -39,18 +38,20 @@ function cfg(partial: Partial<DraftConfig>): DraftConfig {
   };
 }
 let idc = 0;
-const item = (itemKey: string, qty: number, digital = false): QuoteLine => ({
+const item = (itemKey: string, qty: number, digital = false, digitalLicense = false): QuoteLine => ({
   id: `i${idc++}`,
   kind: "item",
   itemKey,
   qty,
   digital,
+  digitalLicense,
 });
-const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => ({
+const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number, digitalLicense = false): QuoteLine => ({
   id: `p${idc++}`,
   kind: "package",
   pkg: p,
   qty,
+  digitalLicense,
 });
 
 // 1. Two identical item lines price identically (the reported bug).
@@ -79,20 +80,37 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   check("digital-only quote pays no packaging", dig.services.packaging === 0);
 }
 
-// 4. Digital license is computed once, on total design labor across the quote.
+// 4. Digital license counts only the design labor of lines flagged for it —
+// not every line on the quote.
 {
-  const b = computeQuoteBreakdown(cfg({ lines: [pkg("sweet", 75), item("iGames", 60)], digitalLicense: true }), S);
-  check("license = totalDesignLabor × dlPtg, once", approx(b.services.licenseVar, b.totalDesignLabor * (S.digitalLicensePtg / 100)));
+  const flagged = computeQuoteBreakdown(cfg({ lines: [pkg("sweet", 75, true), item("iGames", 60)] }), S);
+  const pkgDesignLabor = flagged.lines[0].cost.totalDesignLabor;
+  check(
+    "license = only the flagged line's design labor × dlPtg",
+    approx(flagged.services.licenseVar, pkgDesignLabor * (S.digitalLicensePtg / 100)),
+  );
+  check(
+    "license is less than if it counted the whole quote's design labor",
+    flagged.services.licenseVar < flagged.totalDesignLabor * (S.digitalLicensePtg / 100),
+  );
+
+  const allFlagged = computeQuoteBreakdown(cfg({ lines: [pkg("sweet", 75, true), item("iGames", 60, false, true)] }), S);
+  check(
+    "flagging every line reproduces the old whole-quote total",
+    approx(allFlagged.services.licenseVar, allFlagged.totalDesignLabor * (S.digitalLicensePtg / 100)),
+  );
+
+  const noneFlagged = computeQuoteBreakdown(cfg({ lines: [pkg("sweet", 75), item("iGames", 60)] }), S);
+  check("no lines flagged ⇒ no license charge", noneFlagged.services.licenseVar === 0);
 }
 
 // 5. The grand closure: subtotalList − savings + rush + (misc is in subtotal) == finalPrice.
 {
   const b = computeQuoteBreakdown(
     cfg({
-      lines: [pkg("sweet", 80), item("iGames", 120), item("iInvite", 30, true)],
+      lines: [pkg("sweet", 80, true), item("iGames", 120), item("iInvite", 30, true, true)],
       miscAddOns: [{ id: "m1", label: "Ribbon", qty: 10, unitPrice: 3 }],
       extraRevisions: 2,
-      digitalLicense: true,
       rushFee: true,
       vendorIncentive: true,
       familyFriendsPtg: 10,
@@ -109,7 +127,7 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
 
 // 5b. Discounts bite LABOR only, additively — never materials, admin, or services.
 {
-  const base = cfg({ lines: [pkg("signature", 90), item("iMenu", 120)], extraRevisions: 2, digitalLicense: true });
+  const base = cfg({ lines: [pkg("signature", 90, true), item("iMenu", 120)], extraRevisions: 2 });
   const plain = computeQuoteBreakdown(base, S);
   const disc = computeQuoteBreakdown({ ...base, vendorIncentive: true, familyFriendsPtg: 10 }, S);
 
@@ -209,6 +227,44 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   check("migration: packageDiscountPtg → customDiscountPtg", !!c && c.customDiscountPtg === 7);
   check("migration: no addOns field remains", !!c && !("addOns" in c));
   check("migrated draft re-prices without error", !!c && computeQuoteBreakdown(c, S).finalPrice > 0);
+}
+
+// 8b. A legacy quote-level `digitalLicense: true` backfills onto every line,
+// reproducing the exact same total as before the per-line flag existed.
+{
+  const legacyRawLicensed = {
+    id: "legacy2",
+    name: "Legacy licensed",
+    createdAt: "",
+    updatedAt: "",
+    client: { ...EMPTY_CLIENT_INFO },
+    assumptionsSnapshot: S,
+    cachedTotal: 0,
+    schemaVersion: 3,
+    config: {
+      packages: [{ id: "a", pkg: "sweet", qty: 75 }],
+      mode: "fresh",
+      addOns: { iMenu: 40 },
+      miscAddOns: [],
+      rushFee: false,
+      extraRevisions: 0,
+      digitalLicense: true,
+      vendorIncentive: false,
+      packageDiscountPtg: 0,
+      familyFriendsPtg: 0,
+      fullColor: false,
+      customPaper: false,
+    },
+  };
+  const migrated = normalizeIncomingDraft(legacyRawLicensed);
+  const c = migrated?.config;
+  check("migration: quote-level digitalLicense not carried onto DraftConfig", !!c && !("digitalLicense" in c));
+  check("migration: every line backfilled with digitalLicense = true", !!c && c.lines.every((l) => l.digitalLicense === true));
+  const b = c && computeQuoteBreakdown(c, S);
+  check(
+    "migration: backfilled license = whole-quote design labor × dlPtg (matches pre-migration behavior)",
+    !!b && approx(b.services.licenseVar, b.totalDesignLabor * (S.digitalLicensePtg / 100)),
+  );
 }
 
 console.log("");

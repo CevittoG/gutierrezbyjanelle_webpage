@@ -63,6 +63,8 @@ export interface QuoteLine {
   qty: number;
   /** Digital (design-only) vs physical (printed + shipped). Applies to both kinds. */
   digital?: boolean;
+  /** Charge the digital file license (source-file handoff) on this line's design labor. */
+  digitalLicense?: boolean;
 }
 
 export interface DraftConfig {
@@ -73,7 +75,6 @@ export interface DraftConfig {
   // Project services (quote-level — computed once, never per line).
   rushFee: boolean;
   extraRevisions: number;
-  digitalLicense: boolean;
 
   // Quote-wide discounts (grouped — applied in one stage, stacked additively).
   vendorIncentive: boolean;
@@ -93,7 +94,6 @@ export const DEFAULT_CONFIG: DraftConfig = {
   miscAddOns: [],
   rushFee: false,
   extraRevisions: 0,
-  digitalLicense: false,
   vendorIncentive: false,
   customDiscountPtg: 0,
   familyFriendsPtg: 0,
@@ -168,18 +168,22 @@ type LegacyLine = {
   individualItem?: string;
   individualDigital?: boolean;
   digital?: boolean;
+  digitalLicense?: boolean;
 };
 
 // Project any on-disk line shape to a clean v4 QuoteLine. Legacy `individual`
 // packages collapse to item lines, preserving their piece count via getItemQty
-// so the migrated quote re-prices to the same per-item quantities.
-function lineFromLegacy(p: LegacyLine): QuoteLine {
+// so the migrated quote re-prices to the same per-item quantities. `forceLicense`
+// backfills the per-line license flag for drafts saved before it existed, when
+// the old quote-level `digitalLicense` toggle was on.
+function lineFromLegacy(p: LegacyLine, forceLicense = false): QuoteLine {
   const id = typeof p.id === "string" && p.id ? p.id : newId();
+  const digitalLicense = p.digitalLicense ?? forceLicense;
   if (p.kind === "item") {
-    return { id, kind: "item", itemKey: p.itemKey ?? "iInvite", qty: numOr(p.qty, 1), digital: p.digital ?? false };
+    return { id, kind: "item", itemKey: p.itemKey ?? "iInvite", qty: numOr(p.qty, 1), digital: p.digital ?? false, digitalLicense };
   }
   if (p.kind === "package") {
-    return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: p.digital ?? false };
+    return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: p.digital ?? false, digitalLicense };
   }
   // Legacy package shape.
   if (p.pkg === "individual") {
@@ -190,9 +194,10 @@ function lineFromLegacy(p: LegacyLine): QuoteLine {
       itemKey,
       qty: getItemQty(itemKey, numOr(p.qty, 75)),
       digital: p.individualDigital ?? false,
+      digitalLicense,
     };
   }
-  return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: false };
+  return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: false, digitalLicense };
 }
 
 // A config as it may appear on disk / on the wire: a current v4 shape (with
@@ -207,6 +212,8 @@ type LegacyConfig = Partial<DraftConfig> & {
   lines?: LegacyLine[];
   addOns?: Record<string, number>;
   packageDiscountPtg?: number;
+  /** Pre-per-line-license quote-level toggle. Backfilled onto every line. */
+  digitalLicense?: boolean;
 };
 
 function migrateConfig(c: LegacyConfig): DraftConfig {
@@ -220,22 +227,31 @@ function migrateConfig(c: LegacyConfig): DraftConfig {
     addOns: rawAddOns,
     packageDiscountPtg: legacyCustomDiscount,
     customDiscountPtg,
+    digitalLicense: legacyQuoteLicense,
     ...rest
   } = c;
 
+  // Old quote-level license toggle: backfill onto every line that doesn't
+  // already carry its own per-line flag (reproduces the old total exactly,
+  // since the old fee was "all lines, always").
+  const forceLicense = legacyQuoteLicense === true;
+
   let lines: QuoteLine[];
   if (Array.isArray(rawLines) && rawLines.length > 0) {
-    lines = rawLines.map(lineFromLegacy);
+    lines = rawLines.map((l) => lineFromLegacy(l, forceLicense));
   } else if (Array.isArray(rawPackages) && rawPackages.length > 0) {
-    lines = rawPackages.map(lineFromLegacy);
+    lines = rawPackages.map((l) => lineFromLegacy(l, forceLicense));
   } else if (legacyPkg) {
     lines = [
-      lineFromLegacy({
-        pkg: legacyPkg,
-        qty: legacyQty,
-        individualItem: legacyItem,
-        individualDigital: legacyDigital,
-      }),
+      lineFromLegacy(
+        {
+          pkg: legacyPkg,
+          qty: legacyQty,
+          individualItem: legacyItem,
+          individualDigital: legacyDigital,
+        },
+        forceLicense,
+      ),
     ];
   } else {
     lines = [];
@@ -243,7 +259,7 @@ function migrateConfig(c: LegacyConfig): DraftConfig {
 
   // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
   for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
-    if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
+    if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false, digitalLicense: forceLicense });
   }
 
   if (lines.length === 0) lines = DEFAULT_CONFIG.lines.map((l) => ({ ...l, id: newId() }));

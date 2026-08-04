@@ -466,8 +466,10 @@ export function markupVariable(
 
 // Quote-level project services, computed once for the whole quote: extra
 // revision rounds, a single packaging charge (when any piece is physical), and
-// the optional digital-file license (a % of total design labor). The sum is
-// marked up like any other cost.
+// the optional digital-file license (a % of design labor). Callers choose
+// which lines' design labor counts toward the license by pre-summing it into
+// `totalDesignLabor` — the license is only opted into per line, not per quote.
+// The whole services sum is marked up like any other cost.
 export function calcQuoteServices(
   s: QuoteState,
   opts: {

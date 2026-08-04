@@ -27,13 +27,14 @@ export function summarizeLineItems(
 
   // One block per quote line: a single item, or a bundle (header + its pieces).
   for (const line of d.config.lines) {
+    const licenseSuffix = line.digitalLicense ? " +license" : "";
     if (line.kind === "item") {
       const label = labelFor(line.itemKey ?? "", catalog);
-      const suffix = line.digital ? " (digital)" : "";
+      const suffix = (line.digital ? " (digital)" : "") + licenseSuffix;
       lines.push(`${label}${suffix} — ${line.qty}`);
     } else {
       const pkgDef = line.pkg ? PACKAGES[line.pkg] : undefined;
-      lines.push(`${pkgDef?.name ?? line.pkg ?? "Package"} — ${line.qty}`);
+      lines.push(`${pkgDef?.name ?? line.pkg ?? "Package"}${licenseSuffix} — ${line.qty}`);
       for (const it of pkgDef?.items ?? []) {
         if (typeof it === "string") {
           lines.push(`  • ${labelFor(it, catalog)}`);
@@ -54,7 +55,6 @@ export function summarizeLineItems(
 
   // Pricing modifiers worth surfacing.
   if (d.config.rushFee) lines.push("⚡ Rush fee applied");
-  if (d.config.digitalLicense) lines.push("✓ Digital license");
   if (d.config.vendorIncentive) lines.push("✓ Vendor incentive");
   if (d.config.customDiscountPtg > 0) lines.push(`✓ Custom discount ${d.config.customDiscountPtg}%`);
   if (d.config.familyFriendsPtg > 0) lines.push(`✓ Family & friends discount ${d.config.familyFriendsPtg}%`);

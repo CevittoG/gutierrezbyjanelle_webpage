@@ -5,7 +5,9 @@
 // This is the single source of truth for the quote money math. The engine
 // (quote-calc-logic) only computes per-line *variable cost*; everything else —
 // markup, discounts, the once-per-quote project services (revisions, packaging,
-// digital license), rush, and misc — is layered on here, in one place.
+// and the digital license — the license amount itself is a per-line-selected
+// slice of design labor, but it's still marked up once as one services line),
+// rush, and misc — is layered on here, in one place.
 //
 // Discount model (the consistency contract):
 //   • All discounts are ADDITIVE — a package's bundle discount and the
@@ -54,6 +56,8 @@ export interface LineResult {
   itemKey?: string;
   qty: number;
   digital: boolean;
+  /** Whether this line's own design labor feeds the digital file license fee. */
+  digitalLicense: boolean;
   /** Plain display name: the package name, or the catalog item label. */
   label: string;
   cost: LineCost;
@@ -98,7 +102,7 @@ export interface QuoteBreakdown {
   // Quote-level project services (computed once, never discounted).
   services: QuoteServices;
   anyPhysical: boolean;
-  totalDesignLabor: number; // Σ across lines — drives the digital license
+  totalDesignLabor: number; // Σ across ALL lines — cost/margin rollup basis only
 
   // Surcharges + free-form items.
   rushAmount: number;
@@ -173,6 +177,7 @@ function priceLine(
     itemKey: line.itemKey,
     qty: line.qty,
     digital: cost.isDigital,
+    digitalLicense: line.digitalLicense ?? false,
     label,
     cost,
     admin,
@@ -216,6 +221,14 @@ export function computeQuoteBreakdown(
   const totalDesignLabor = sum((l) => l.cost.totalDesignLabor);
   const anyPhysical = lines.some((l) => !l.cost.isDigital);
 
+  // Digital file license: only the design labor of lines flagged for it feeds
+  // the fee — not every line on the quote (a line can be printed in-house and
+  // never hand off source files).
+  const licenseDesignLabor = lines
+    .filter((l) => l.digitalLicense)
+    .reduce((s, l) => s + l.cost.totalDesignLabor, 0);
+  const anyLicensed = lines.some((l) => l.digitalLicense);
+
   // Relationship discounts aggregated across lines (for the client-facing
   // quote-level rows; the bundle discount stays itemized per line).
   const relAgg = new Map<string, DiscountComponent>();
@@ -234,8 +247,8 @@ export function computeQuoteBreakdown(
   const services = calcQuoteServices(assumptions, {
     extraRevisions: Math.max(0, config.extraRevisions || 0),
     anyPhysical,
-    digitalLicense: config.digitalLicense,
-    totalDesignLabor,
+    digitalLicense: anyLicensed,
+    totalDesignLabor: licenseDesignLabor,
   });
 
   // Rush is a surcharge on the discounted order value (excludes fixed-price misc).

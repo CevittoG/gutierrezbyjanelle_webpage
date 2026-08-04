@@ -76,7 +76,6 @@ export function QuoteCalculator() {
   const [miscAddOns, setMiscAddOns] = useState<MiscAddOn[]>([...DEFAULT_CONFIG.miscAddOns]);
   const [rushFee, setRushFee] = useState(DEFAULT_CONFIG.rushFee);
   const [extraRevisions, setExtraRevisions] = useState(DEFAULT_CONFIG.extraRevisions);
-  const [digitalLicense, setDigitalLicense] = useState(DEFAULT_CONFIG.digitalLicense);
   const [vendorIncentive, setVendorIncentive] = useState(DEFAULT_CONFIG.vendorIncentive);
   const [customDiscountPtg, setCustomDiscountPtg] = useState(DEFAULT_CONFIG.customDiscountPtg);
   const [familyFriendsPtg, setFamilyFriendsPtg] = useState(DEFAULT_CONFIG.familyFriendsPtg);
@@ -116,14 +115,13 @@ export function QuoteCalculator() {
       miscAddOns,
       rushFee,
       extraRevisions,
-      digitalLicense,
       vendorIncentive,
       customDiscountPtg,
       familyFriendsPtg,
       fullColor,
       customPaper,
     }),
-    [lines, mode, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, customDiscountPtg, familyFriendsPtg, fullColor, customPaper],
+    [lines, mode, miscAddOns, rushFee, extraRevisions, vendorIncentive, customDiscountPtg, familyFriendsPtg, fullColor, customPaper],
   );
 
   // Apply a DraftConfig into state.
@@ -135,7 +133,6 @@ export function QuoteCalculator() {
     setMiscAddOns([...(c.miscAddOns ?? [])]);
     setRushFee(c.rushFee);
     setExtraRevisions(c.extraRevisions);
-    setDigitalLicense(c.digitalLicense);
     setVendorIncentive(c.vendorIncentive);
     setCustomDiscountPtg(c.customDiscountPtg);
     setFamilyFriendsPtg(c.familyFriendsPtg);
@@ -570,6 +567,12 @@ export function QuoteCalculator() {
                         value={line.qty}
                         onChange={(q) => updateLine(line.id, { qty: q })}
                       />
+                      <CheckRow
+                        checked={line.digitalLicense ?? false}
+                        onChange={(v) => updateLine(line.id, { digitalLicense: v })}
+                        title={`Digital file license (+${assumptions.digitalLicensePtg}%)`}
+                        description={`Print-ready source files for this package — adds ${assumptions.digitalLicensePtg}% of its design labor.`}
+                      />
                     </div>
                   );
                 }
@@ -633,6 +636,13 @@ export function QuoteCalculator() {
                       label="Quantity — pieces"
                       value={line.qty}
                       onChange={(q) => updateLine(line.id, { qty: q })}
+                    />
+
+                    <CheckRow
+                      checked={line.digitalLicense ?? false}
+                      onChange={(v) => updateLine(line.id, { digitalLicense: v })}
+                      title={`Digital file license (+${assumptions.digitalLicensePtg}%)`}
+                      description={`Print-ready source files for this item — adds ${assumptions.digitalLicensePtg}% of its design labor.`}
                     />
                   </div>
                 );
@@ -712,13 +722,6 @@ export function QuoteCalculator() {
                   </button>
                 </div>
               </div>
-
-              <CheckRow
-                checked={digitalLicense}
-                onChange={setDigitalLicense}
-                title={`Digital file license (+${assumptions.digitalLicensePtg}%)`}
-                description={`Print-ready source files · unlimited copies — adds ${assumptions.digitalLicensePtg}% of total design labor, once.`}
-              />
             </div>
           </Section>
 
