@@ -1,12 +1,12 @@
 // Gated studio dashboard — the new home for the quote tools. Joins
-// listDrafts() (client/event/total) with listPortalMeta() (link + folder),
-// exactly like the old Explorer, then hands the rows to the client Dashboard
-// which derives all overview stats. Same data, richer presentation.
+// listDraftRecords() (client/event/total + archived flag) with listPortalMeta()
+// (link + folder), then hands the rows to the client Dashboard which derives all
+// overview stats from the live ones. Same data, richer presentation.
 
 import { PasswordGate } from "@/app/quote-calc/_components/PasswordGate";
 import { AppShell } from "@/components/quote-app/AppShell";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
-import { isSheetsConfigured, listDrafts, listPortalMeta } from "@/lib/quote-calc-sheets";
+import { isSheetsConfigured, listDraftRecords, listPortalMeta } from "@/lib/quote-calc-sheets";
 import { folderWebLink } from "@/lib/quote-calc-drive";
 import { packagesDisplayName } from "@/lib/quote-calc-summary";
 import { Dashboard } from "./_components/Dashboard";
@@ -38,12 +38,18 @@ export default async function QuotesDashboardPage() {
     );
   }
 
-  const [drafts, portal] = await Promise.all([listDrafts(), listPortalMeta({ force: true })]);
+  // listDraftRecords (not listDrafts) so archived quotes come through too — the
+  // dashboard shows them behind a filter and keeps them out of its totals.
+  const [records, portal] = await Promise.all([
+    listDraftRecords(),
+    listPortalMeta({ force: true }),
+  ]);
 
-  const rows: QuoteRow[] = drafts.map((d) => {
+  const rows: QuoteRow[] = records.map(({ draft: d, status }) => {
     const m = portal.get(d.id);
     return {
       id: d.id,
+      archived: status === "archived",
       client: d.client.name,
       eventType: d.client.eventType,
       eventDate: d.client.eventDate,
