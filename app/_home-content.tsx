@@ -62,7 +62,7 @@ export function HomeContent() {
           buttonText={t("cta.invest")}
           buttonLink="/investment"
           imageUrl1="/invitation/invite-4.png"
-          imageUrl2="/invitation/invite-3.png"
+          imageUrl2="/invitation/invite-3.jpg"
         />
       </Scene>
 
