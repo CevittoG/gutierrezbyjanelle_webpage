@@ -101,7 +101,7 @@ export const siteConfig = {
   investments: InvestmentTier[],  // 5 tiers: individual, design-suite, sweet-suite, signature-suite, add-ons
   reviews: Review[],
   galleryTags: GalleryTagDef[],   // 9 tags: 6 with photos, 3 coming-soon (invitations, menus, place-cards)
-  gallery: GalleryItem[],         // 12 photos across 6 populated tags
+  gallery: GalleryItem[],         // 18 photos across 7 populated tags
   // ... hero, about, weddings, etsyStore, instagram
 };
 ```
@@ -405,7 +405,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
-- Real gallery photos — 12 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags
+- Real gallery photos — 18 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags (`menus`, `place-cards` remain coming-soon)
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
 - A11y: skip-to-content link, active nav underline, focus-visible rings, `prefers-reduced-motion` global CSS rule
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers
