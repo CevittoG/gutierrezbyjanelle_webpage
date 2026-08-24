@@ -436,6 +436,17 @@ export const siteConfig = {
       orientation: "portrait",
     },
     {
+      id: "g13",
+      src: "/gallery/welcome-sign-3.jpeg",
+      alt: "Freestanding welcome sign for a baby shower, framed on a garden pathway",
+      caption: b(
+        "Welcome sign, planted right where the path begins.",
+        "Cartel de bienvenida, plantado justo donde comienza el camino."
+      ),
+      tags: ["welcome-signs"],
+      orientation: "portrait",
+    },
+    {
       id: "g4",
       src: "/gallery/signature-drink-sign.jpeg",
       alt: "Signature drink sign on a bar table",
@@ -460,16 +471,19 @@ export const siteConfig = {
     {
       id: "g7",
       src: "/gallery/drink-topper-riecherts.jpeg",
-      alt: "Dark rocks glass with THE RIECHERTS circular drink topper",
-      caption: b("The Riecherts. 6.12.26.", "The Riecherts. 6.12.26."),
+      alt: "Dark rocks glass with a custom monogrammed circular drink topper",
+      caption: b(
+        "A wedding date, custom on the glass.",
+        "Una fecha de boda, personalizada en la copa."
+      ),
       tags: ["drink-toppers"],
       orientation: "portrait",
     },
     {
       id: "g8",
       src: "/gallery/drink-topper-le.jpeg",
-      alt: "Hand holding a stemless glass with L|E monogram circular topper",
-      caption: b("L|E — initials on every sip.", "L|E — iniciales en cada sorbo."),
+      alt: "Hand holding a stemless glass with a custom monogram circular topper",
+      caption: b("A monogram, on every sip.", "Un monograma, en cada sorbo."),
       tags: ["drink-toppers"],
       orientation: "portrait",
     },
@@ -485,7 +499,7 @@ export const siteConfig = {
       id: "g10",
       src: "/gallery/wedding-note-card.jpeg",
       alt: "Personal thank-you note card next to a champagne flute",
-      caption: b("A note for titi Cynthia.", "Una nota para titi Cynthia."),
+      caption: b("A personal note, for every guest.", "Una nota personal, para cada invitado."),
       tags: ["note-cards"],
       orientation: "portrait",
     },
@@ -503,6 +517,61 @@ export const siteConfig = {
       alt: "Overhead black-and-white photo of baby shower game cards on a beaded plate",
       caption: b("Baby shower games, designed to match.", "Juegos de baby shower, diseñados a juego."),
       tags: ["shower-games"],
+      orientation: "portrait",
+    },
+    {
+      id: "g14",
+      src: "/gallery/shower-game-would-mommy-rather.jpeg",
+      alt: 'Stack of "Would Mommy Rather" baby shower game cards beside an instant camera',
+      caption: b(
+        "Would mommy rather? A guessing game for the guests.",
+        "¿Qué preferiría mamá? Un juego de adivinanzas para los invitados."
+      ),
+      tags: ["shower-games"],
+      orientation: "portrait",
+    },
+    {
+      id: "g15",
+      src: "/gallery/shower-game-guess-who.jpeg",
+      alt: 'Stack of "Guess Who" baby shower game cards with a rocking horse illustration',
+      caption: b(
+        "Guess who — a shower game with a prize on the line.",
+        "Adivina quién — un juego de shower con premio en juego."
+      ),
+      tags: ["shower-games"],
+      orientation: "portrait",
+    },
+    {
+      id: "g16",
+      src: "/gallery/shower-game-pet-age-guess.jpeg",
+      alt: "Framed sign inviting guests to guess a pet's age, next to the entry sheet",
+      caption: b(
+        "A guessing game with a furry guest of honor.",
+        "Un juego de adivinanzas con una invitada peluda de honor."
+      ),
+      tags: ["shower-games"],
+      orientation: "portrait",
+    },
+    {
+      id: "g17",
+      src: "/gallery/shower-game-candy-guess.jpeg",
+      alt: "Framed sign inviting guests to guess how many candies fit in a baby bottle, beside decorated cookies",
+      caption: b(
+        "Take your best guess — another game for the favors table.",
+        "Adivina y gana — otro juego para la mesa de favores."
+      ),
+      tags: ["shower-games"],
+      orientation: "portrait",
+    },
+    {
+      id: "g18",
+      src: "/gallery/birthday-invitation.jpeg",
+      alt: "Blush pink birthday invitation with a wine glass and bow illustration, paired with a matching textured envelope",
+      caption: b(
+        "Aging like fine wine — an invitation with a bow on top.",
+        "Como el buen vino — una invitación con un moño de regalo."
+      ),
+      tags: ["invitations"],
       orientation: "portrait",
     },
   ] satisfies GalleryItem[],
