@@ -77,7 +77,7 @@ export function HomeContent() {
           </h2>
 
           <figure
-            className="glass relative aspect-[4/3] w-full max-w-2xl overflow-hidden rounded-2xl border border-border"
+            className="glass relative aspect-[4/3] w-full max-w-2xl overflow-hidden rounded-sm border border-border"
           >
             <Image
               src="/gallery/ceremony-card.jpeg"

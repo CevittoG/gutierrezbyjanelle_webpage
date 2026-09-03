@@ -51,9 +51,15 @@ const config: Config = {
         squarepeg: ["var(--font-squarepeg)", "cursive"],
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        none: "0px",
+        sm: "2px",
+        DEFAULT: "2px",
+        md: "3px",
+        lg: "var(--radius)", // 4px
+        xl: "4px",
+        "2xl": "4px",
+        "3xl": "6px",
+        full: "9999px",
       },
     },
   },

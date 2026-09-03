@@ -253,7 +253,7 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
                       href={img.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block rounded-lg overflow-hidden border border-border bg-muted/30 aspect-square"
+                      className="block rounded-sm overflow-hidden border border-border bg-muted/30 aspect-square"
                       title={img.name}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}

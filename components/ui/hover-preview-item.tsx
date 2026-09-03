@@ -145,7 +145,7 @@ export function HoverPreviewItem({
                     aria-modal="true"
                     aria-label={label}
                     className={cn(
-                      "relative pointer-events-auto bg-card border border-border rounded-lg overflow-hidden",
+                      "relative pointer-events-auto bg-card border border-border rounded-sm overflow-hidden",
                       orientation === "landscape"
                         ? "w-[min(80vw,320px)]"
                         : "w-[min(70vw,260px)]"
@@ -248,7 +248,7 @@ export function HoverPreviewItem({
       <AnimatePresence>
         {previewRect && (
           <motion.div
-            className="pointer-events-none fixed z-50 rounded-md overflow-hidden border border-border/30"
+            className="pointer-events-none fixed z-50 rounded-sm overflow-hidden border border-border/30"
             style={{
               left,
               top,

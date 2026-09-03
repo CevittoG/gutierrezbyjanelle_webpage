@@ -20,7 +20,7 @@ export function WeddingsContent() {
       </section>
 
       <section className="container max-w-3xl mx-auto px-4 md:px-8 pb-16">
-        <figure className="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border shadow-sm">
+        <figure className="relative aspect-[4/3] w-full overflow-hidden rounded-sm border border-border shadow-sm">
           <Image
             src="/gallery/ceremony-card.jpeg"
             alt="A ceremony card designed by Janelle"

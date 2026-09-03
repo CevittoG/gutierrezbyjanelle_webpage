@@ -122,7 +122,7 @@ function DesktopFeaturePreviewList({ items, className }: FeaturePreviewListProps
     <div
       aria-hidden="true"
       className={cn(
-        "pointer-events-none fixed z-50 overflow-hidden rounded-xl",
+        "pointer-events-none fixed z-50 overflow-hidden rounded-sm",
         "border border-border/40 bg-card/80 backdrop-blur-sm",
         "motion-reduce:transition-none"
       )}

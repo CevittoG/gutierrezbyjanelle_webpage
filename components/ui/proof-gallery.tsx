@@ -66,7 +66,7 @@ export function ProofGallery({
               type="button"
               onClick={() => setOpenIndex(i)}
               aria-label={`View ${img.name}`}
-              className="group relative mb-4 block w-full break-inside-avoid cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted/40 transition-[box-shadow,border-color] duration-200 hover:border-accent/80 hover:[box-shadow:0_4px_20px_-4px_hsl(350_55%_86%_/_0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group relative mb-4 block w-full break-inside-avoid cursor-zoom-in overflow-hidden rounded-sm border border-border bg-muted/40 transition-[box-shadow,border-color] duration-200 hover:border-accent/80 hover:[box-shadow:0_4px_20px_-4px_hsl(350_55%_86%_/_0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <motion.img
@@ -168,7 +168,7 @@ function Lightbox({
                 src={item.url}
                 alt={item.name}
                 draggable={false}
-                className="w-auto h-auto max-w-[92vw] max-h-[86vh] rounded-lg object-contain will-change-transform"
+                className="w-auto h-auto max-w-[92vw] max-h-[86vh] rounded-sm object-contain will-change-transform"
                 style={{ boxShadow: "0 24px 60px -12px hsl(var(--foreground) / 0.5)" }}
                 transition={reduce ? { duration: 0 } : spring}
               />

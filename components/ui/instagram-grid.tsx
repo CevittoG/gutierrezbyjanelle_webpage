@@ -84,7 +84,7 @@ function InstagramPostCard({ post }: { post: InstagramPost }) {
       href={post.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block aspect-square rounded-lg border overflow-hidden relative transition-transform duration-200 hover:scale-[1.02]"
+      className="group block aspect-square rounded-sm border overflow-hidden relative transition-transform duration-200 hover:scale-[1.02]"
     >
       {post.src ? (
         <Image

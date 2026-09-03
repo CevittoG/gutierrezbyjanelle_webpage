@@ -110,7 +110,7 @@ export const StationeryHero = ({
                   ? undefined
                   : { y: -10, rotate: -5, transition: { duration: 0.3 } }
               }
-              className="relative h-72 w-48 md:h-96 md:w-64 lg:h-[28rem] lg:w-72 rounded-lg shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] rotate-[-3deg] overflow-hidden border border-border/30"
+              className="relative h-72 w-48 md:h-96 md:w-64 lg:h-[28rem] lg:w-72 rounded-sm shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] rotate-[-3deg] overflow-hidden border border-border/30"
             >
               <Image
                 src={imageUrl1}
@@ -130,7 +130,7 @@ export const StationeryHero = ({
                   ? undefined
                   : { y: -10, rotate: 20, transition: { duration: 0.3 } }
               }
-              className="relative w-48 md:w-60 lg:w-72 aspect-[1429/2000] rounded-lg shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] border border-border/30 -ml-10 md:-ml-14 z-10 overflow-hidden"
+              className="relative w-48 md:w-60 lg:w-72 aspect-[1429/2000] rounded-sm shadow-[0_25px_50px_-12px_hsl(350_55%_86%/0.3)] border border-border/30 -ml-10 md:-ml-14 z-10 overflow-hidden"
             >
               <Image
                 src={imageUrl2}

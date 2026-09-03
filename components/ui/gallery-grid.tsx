@@ -98,7 +98,7 @@ export function GalleryGrid({ items, activeFilter, className }: GalleryGridProps
                   onClick={() => setOpenIndex(localIdx)}
                   aria-label={`${t("gallery.openItem")} ${item.alt}`}
                   className={cn(
-                    "relative block w-full overflow-hidden rounded-lg border border-border bg-muted",
+                    "relative block w-full overflow-hidden rounded-sm border border-border bg-muted",
                     "transition-[box-shadow,border-color] duration-200",
                     "hover:border-accent/80",
                     "hover:[box-shadow:0_4px_20px_-4px_hsl(350_55%_86%_/_0.45)]",
@@ -222,7 +222,7 @@ function GalleryLightbox({
             >
               <div
                 className={cn(
-                  "relative w-full overflow-hidden rounded-lg border border-border bg-card",
+                  "relative w-full overflow-hidden rounded-sm border border-border bg-card",
                   tileAspect(item.orientation)
                 )}
                 style={{
