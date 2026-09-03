@@ -296,6 +296,16 @@ export const siteConfig = {
   ] satisfies InvestmentTier[],
   reviews: [
     {
+      id: "r4",
+      text: b(
+        "Working with Gutierrez by Janelle was an absolute pleasure from start to finish. Janelle is incredibly responsive and always available when you need her, bringing thoughtful ideas to the table that truly elevated our vision. She handled all of our wedding stationery (welcome sign, games, invitations, etc.) with meticulous attention to detail, and everything was customizable to match our aesthetic perfectly. The quality of her work exceeded our expectations, and she delivered exactly what we envisioned without compromising on craftsmanship. I loved working with her so much that I'm already collaborating with her again on another special event. If you're looking for someone who genuinely cares about making your celebration special, Janelle is your person.",
+        "Trabajar con Gutierrez by Janelle fue un placer absoluto de principio a fin. Janelle es increíblemente atenta y siempre está disponible cuando la necesitas, aportando ideas cuidadas que de verdad elevaron nuestra visión. Se encargó de toda nuestra papelería de boda (letrero de bienvenida, juegos, invitaciones, etc.) con una atención meticulosa al detalle, y todo se pudo personalizar para que combinara con nuestra estética a la perfección. La calidad de su trabajo superó nuestras expectativas, y entregó exactamente lo que imaginábamos sin ceder en la artesanía. Me encantó tanto trabajar con ella que ya estoy colaborando de nuevo con ella en otro evento especial. Si buscas a alguien a quien de verdad le importe hacer tu celebración especial, Janelle es la persona indicada."
+      ),
+      author: "LeChae K.",
+      role: b("Bride, 2026", "Novia, 2026"),
+      originalLang: "en",
+    },
+    {
       id: "r1",
       text: b(
         "From our first conversation with Janelle at Gutierrez, we knew we had found someone special. She responded to every email and question right away, and her professionalism made the whole planning process smooth and stress-free. What really set her apart was how she listened to what we wanted and created designs that felt completely unique to us—nothing felt generic or cookie-cutter. The personal touches she added throughout our wedding day showed that she genuinely cared about making it special, going above and beyond what we expected. The quality of her work is stunning, and we couldn't be happier with how everything turned out. We will absolutely use Gutierrez by Janelle again for future events and are already recommending her to friends.",

@@ -24,7 +24,7 @@ export function ReviewsContent() {
         {featured && <ReviewCard review={featured} variant="featured" />}
 
         {supporting.length > 0 && (
-          <div className="mt-8 grid grid-cols-1 items-start gap-6 md:mt-10 md:grid-cols-2 md:gap-8">
+          <div className="mt-8 grid grid-cols-1 items-start gap-6 md:mt-10 md:grid-cols-3 md:gap-8">
             {supporting.map((review) => (
               <ReviewCard key={review.id} review={review} variant="supporting" />
             ))}
