@@ -74,7 +74,7 @@ globals.css  →  tailwind.config.ts  →  Tailwind utilities
 | `--accent` | `350 55% 86%` | `#EFC8CE` | Powder Rose — state accent (hover glow, savings badge, focus underline). Guest, not host: ≤10% of any screen |
 | `--border` | `30 20% 82%` | `#DAD1C8` | Warm Thread — all borders. Never colored |
 | `--ring` | `30 38% 55%` | `#B88C61` | Ring Tan — focus rings only; deepened tan meeting WCAG AA against Paper Cream |
-| `--radius` | `0.5rem` | — | Card radius. `rounded-md` = 6px, `rounded-sm` = 4px |
+| `--radius` | `0.25rem` | — | Card radius (4px, near-square "pressed paper"). `rounded-md` = 3px, `rounded-sm` = 2px. Tailwind scale is capped in `tailwind.config.ts` so `rounded-xl`/`rounded-2xl` also resolve to 4px; images use `rounded-sm` (2px) |
 
 To retheme the entire site, only the `:root` block in `app/globals.css` needs to change. Full visual spec (with named rules, component patterns, do's/don'ts) lives in [DESIGN.md](../DESIGN.md).
 

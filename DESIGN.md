@@ -43,9 +43,9 @@ typography:
     lineHeight: 1.2
     letterSpacing: "0.12em"
 rounded:
-  sm: "4px"
-  md: "6px"
-  lg: "8px"
+  sm: "2px"
+  md: "3px"
+  lg: "4px"
   pill: "9999px"
 spacing:
   xs: "4px"
@@ -182,7 +182,7 @@ Two state-driven elevation moves carry the system:
   - Blur: `backdrop-filter: blur(12px)` on `.glass`, `8px` on `.glass-soft`.
   - Inset ring: 1px Powder Rose/0.40 (`.glass`) or 0.35 (`.glass-soft`) — the "lit edge" highlight that makes the surface read as polished, not flat.
   - Outer shadow: Powder Rose halo — `0 14px 40px -14px hsl(--accent / 0.55)` (`.glass`) or `0 6px 18px -8px hsl(--accent / 0.50)` (`.glass-soft`), lifting on hover.
-  - Radius: `rounded-2xl` (16px) for cards; `rounded-md` (6px) for buttons.
+  - Radius: `rounded-lg` (4px) for cards; `rounded-md` (3px) for buttons. Corners are near-square by design ("pressed paper"); the Tailwind radius scale is capped so `rounded-xl`/`rounded-2xl` also resolve to 4px.
 
   This replaces the old `shadow-sm` flat-card spec as the default. The recipe is centralized in `app/globals.css` under `.glass` and `.glass-soft` so the entire site changes by editing one rule.
 
@@ -197,7 +197,7 @@ Two state-driven elevation moves carry the system:
 ## 5. Components
 
 ### Buttons
-- **Shape:** Subtly rounded corners (`6px`, `rounded-md`). Pill buttons are reserved for vendor links (Etsy, Zola, Instagram).
+- **Shape:** Near-square corners (`3px`, `rounded-md`). Pill buttons are reserved for vendor links (Etsy, Zola, Instagram).
 - **Primary:** `Warm Tan` background, `Deep Ink` text, `8px 16px` padding, `40px` height. Hover deepens to `Ring Tan`. Used for: primary CTAs (`Invest in your event`, `Inquire`).
 - **Outline:** `.glass-soft` pink-glossy surface (Powder Rose + Card White gradient + backdrop blur + inset Powder Rose ring), `Warm Thread` border, `Deep Ink` text. The Powder Rose halo intensifies on hover. Used for: secondary CTAs that should feel quieter than the primary Warm Tan fill but still carry the brand pink.
 - **Ghost:** No border, transparent background, `Deep Ink` text. Hover gains a Powder Rose fill. Used for: nav items, icon-only buttons, in-card actions.
@@ -206,7 +206,7 @@ Two state-driven elevation moves carry the system:
 - **Vendor pill buttons** (Etsy, Zola, Instagram): full-radius pill shape (`rounded-full`), thin Warm Thread border, icon + label inside. The only place pill shapes are allowed.
 
 ### Cards
-- **Corner Style:** Rounded `16px` (`rounded-2xl`). The pink-glossy surface reads softer than the old flat card, so the radius opens up a step.
+- **Corner Style:** Near-square `4px` (`rounded-lg`). Crisp edges read as pressed paper and printed card stock, the opposite of the craft-fair softness the brand avoids. Images sit a step tighter at `2px` (`rounded-sm`).
 - **Surface:** `.glass` — pink-glossy vellum (see §4 Elevation). Card White as a solid background is reserved for places where translucency would harm legibility (inputs, modals).
 - **Border:** `1px solid Warm Thread` (`#DAD1C8`), plus the inset Powder Rose lit-edge ring from `.glass`.
 - **Hover:** The `.glass` halo intensifies (deeper Powder Rose box-shadow). No separate border-color hover — the inset ring carries that role.
@@ -225,7 +225,7 @@ Two state-driven elevation moves carry the system:
 - Author and role line use Square Peg Display for the author name; role stays in Anybody Label.
 
 ### Inputs / Fields
-- **Style:** `1px solid Warm Thread` border, `Card White` background, `6px` (`rounded-md`) radius, `40px` height. Internal padding `8px 12px`. Body type at 1rem, mixed case (override the uppercase body rule for inputs — typing in caps is hostile).
+- **Style:** `1px solid Warm Thread` border, `Card White` background, `3px` (`rounded-md`) radius, `40px` height. Internal padding `8px 12px`. Body type at 1rem, mixed case (override the uppercase body rule for inputs — typing in caps is hostile).
 - **Focus:** Border deepens to `Ring Tan`; a 2px `Ring Tan` outline-ring appears with 2px offset. No glow, no animation.
 - **Error:** Border `Deep Ink`, error message in `Muted Bark`. No red — red would shatter the palette.
 - **Disabled:** `Linen Mist` background, `Muted Bark` text, no border change.
