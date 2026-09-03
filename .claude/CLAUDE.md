@@ -101,7 +101,7 @@ export const siteConfig = {
   investments: InvestmentTier[],  // 5 tiers: individual, design-suite, sweet-suite, signature-suite, add-ons
   reviews: Review[],
   galleryTags: GalleryTagDef[],   // 9 tags: 6 with photos, 3 coming-soon (invitations, menus, place-cards)
-  gallery: GalleryItem[],         // 12 photos across 6 populated tags
+  gallery: GalleryItem[],         // 18 photos across 7 populated tags
   // ... hero, about, weddings, etsyStore, instagram
 };
 ```
@@ -185,6 +185,7 @@ app/
 | `components/ui/card.tsx` | shadcn Card with Header/Title/Description/Content/Footer |
 | `components/ui/badge.tsx` | shadcn Badge — 4 variants |
 | `components/ui/sheet.tsx` | Radix Dialog-based slide-in sheet (used by mobile nav) |
+| `components/ui/dialog.tsx` | Radix Dialog-based centred modal (used by the dashboard's delete confirmation). Warm `bg-foreground/30` scrim — never `bg-black/80` |
 | `components/ui/price-card.tsx` | Accepts `InvestmentTier`; displays name/features/discount badge (Save X% shown when `discount` is set) |
 | `components/ui/review-card.tsx` | Accepts `Review`; blockquote style |
 | `components/ui/gallery-grid.tsx` | Tag-filtered flat grid; `activeFilter` prop; `AnimatePresence` tile transitions; lightbox with keyboard nav; `GalleryEmptyState` for tags with no photos |
@@ -279,9 +280,9 @@ itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public pr
 | `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
 | `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
 | `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `lines: QuoteLine[]` (unified — each line `kind: "package" \| "item"`, schema **v4**), `miscAddOns: MiscAddOn[]`, `customDiscountPtg`/`familyFriendsPtg`, `SyncStatus`, `reconcileDrafts()`. `migrateConfig` collapses every legacy shape into `lines`: v1/v2 single `pkg`/`qty`, v3 `packages[]` + `addOns` record + the `individual` pseudo-package → item lines (individual qty preserved via `getItemQty`), and `packageDiscountPtg`→`customDiscountPtg`; iDrinkTop→iWedgeTop still applied |
-| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST. Schema-aware Quotes reads (legacy JSON-in-col-M or new readable + `_data` payload tab), auto-migrates legacy rows on first write, soft-archive by id. Also exposes `listConfig()` with a 60s cache for the Settings + Items tabs |
+| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST. Schema-aware Quotes reads (legacy JSON-in-col-M or new readable + `_data` payload tab), auto-migrates legacy rows on first write. Column B is the soft-archive switch: `setDraftStatus()` backs `archiveDraftRow()`/`restoreDraftRow()` (single-cell write, `_data` payload never touched, so a restore returns the quote whole). `listDraftRecords()` returns every quote tagged `active`/`archived`; `listDrafts()` is the live-only filter over it. Also exposes `listConfig()` with a 60s cache for the Settings + Items tabs |
 | `lib/quote-calc-summary.ts` | Pure formatter — turns a `Draft` into the multiline "Line items" string that lands in column I of the new Quotes tab |
-| `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`) around the `/quote-calc/api/drafts` routes |
+| `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`, `restoreRemoteDraft`) around the `/quote-calc/api/drafts` routes. The two status wrappers surface the route's `found` flag so "already gone" is distinguishable from "just archived" |
 | `lib/quote-calc-config-remote.ts` | Client wrapper for `GET /quote-calc/api/config` (RemoteResult-shaped, supports `refresh: true`) |
 | `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; uses `isQuoteAuthValid()`; returns 503 when Sheets not configured |
 | `app/quote-calc/api/drafts/[id]/route.ts` | `DELETE` soft-archive by id |
@@ -305,10 +306,11 @@ itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public pr
 | `components/quote-app/HiddenNotesControl.tsx` | Admin editor for a quote's private hidden notes; POSTs `/quote-calc/api/drafts/[id]/notes` |
 | `components/ui/proof-gallery.tsx` | Brand proof gallery: responsive masonry + shared-element lightbox with drag-to-dismiss and keyboard nav, reduced-motion aware. Used by the client portal |
 | `app/q/[token]/file/[fileId]/route.ts` | Public streaming file proxy; re-verifies token + folder membership before streaming |
-| `app/quotes/page.tsx` · `_components/Dashboard.tsx` | Gated **studio dashboard** (`/quotes`): ledger stats + "up next" + searchable/filterable/date-sortable quote list with per-row Edit · Profile Overview · Client Quote Profile actions. Absorbs the old explorer |
+| `app/quotes/page.tsx` · `_components/Dashboard.tsx` | Gated **studio dashboard** (`/quotes`): ledger stats + "up next" + searchable/filterable/date-sortable quote list with per-row Edit · Profile Overview · Client Quote Profile · **Delete** actions. Reads `listDraftRecords()` so archived quotes come through tagged; the client derives every stat from live rows only. Delete = soft archive behind a confirm dialog (optional link revoke), restorable from the **Archived** filter chip. Absorbs the old explorer |
 | `app/quotes/[id]/page.tsx` | Gated **"Profile Overview"** — per-quote admin detail (stage control, payment/approval status, link controls, itemized client-facing summary, admin-proxied proofs) |
 | `app/quote-calc/api/portal/[id]/{token,revoke,stage,deposit,file/[fileId]}/route.ts` | Cookie-gated: generate/regenerate token, revoke link, set lifecycle stage, record deposit paid, admin-side file proxy |
 | `app/quote-calc/api/drafts/[id]/notes/route.ts` | Cookie-gated: update a quote's private hidden notes |
+| `app/quote-calc/api/drafts/[id]/restore/route.ts` | Cookie-gated: un-archive a quote (`status` → `active`); the mirror of the `DELETE` handler one level up |
 | `app/q/[token]/approve/route.ts` | Public, token-gated: record client proof approval (name + timestamp) and auto-advance the stage |
 
 ### Data model
@@ -357,7 +359,7 @@ Each quote can map to one Drive folder (proofs + the printed-quote PDF) and one 
 
 **Public route `/q/[token]`** (outside `/quote-calc`, no admin cookie, `force-dynamic`, noindex). Resolves the token → reads the `_data` Draft **server-side** → recomputes via `computeQuoteBreakdown` → projects to a `PublicQuote` (`buildPublicQuote`). The client-safe shape carries **included pieces, itemized selling-price lines (each package line + add-ons + misc), subtotal, savings, rush, total, the fixed deposit / remaining balance split, and the optional client-facing note** — never the cost buildup (design/production/admin/margin), per-item rates, the hidden note, or the `Draft` JSON. Proofs stream through `GET /q/[token]/file/[fileId]`, which re-verifies the token and confirms folder membership before streaming (the SA can read the whole tree, so membership is the cross-quote guard). Revocation/expiry is by editing column P/Q in the Sheet; propagates within the ~30s cache TTL.
 
-**Studio dashboard** (`/quotes`, server-gated; absorbs the former explorer): the list joins `listDrafts()` + `listPortalMeta()` and derives an overview (pipeline / open / shared ledger, nearest "up next" event) plus a searchable, filterable, date-sortable quote list. **Profile Overview** (`/quotes/[id]`) shows the client-facing summary, the proofs gallery (via a cookie-gated admin file proxy so it works before any public link exists), an "Open folder" link, and link controls (generate/regenerate/revoke + copy). The app-shell nav links between the dashboard and the calculator.
+**Studio dashboard** (`/quotes`, server-gated; absorbs the former explorer): the list joins `listDraftRecords()` + `listPortalMeta()` and derives an overview (pipeline / open / shared ledger, nearest "up next" event) plus a searchable, filterable, date-sortable quote list. **Archived quotes are excluded from every ledger total and from "up next"** — they appear only behind the `Archived` filter chip (itself hidden until something is archived), with Restore as their sole action. **Profile Overview** (`/quotes/[id]`) shows the client-facing summary, the proofs gallery (via a cookie-gated admin file proxy so it works before any public link exists), an "Open folder" link, and link controls (generate/regenerate/revoke + copy). The app-shell nav links between the dashboard and the calculator.
 
 **Env vars:** `GOOGLE_DRIVE_PARENT_FOLDER_ID` (required for auto-folder; unset ⇒ feature off), `GBJ_QUOTES_OWNER_EMAIL` (optional). Public tokens are raw 128-bit `crypto.randomBytes` — no signing secret needed.
 
@@ -399,10 +401,11 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Phase 4: lifecycle stages + client approval + itemized client pricing — 9-stage pipeline (physical/digital wording) Janelle drives from Profile Overview (`Quotes` cols S/T), an amount-based deposit (fixed expected `depositAmount` + recorded **deposit paid** in col U, balance = total − paid), editable hidden notes (col K + `_data`), two-step client proof approval that auto-advances `approval → balance`, and a horizontal scrollable step tracker + itemized investment on `/q/[token]`
 - Phase 5: pricing-engine redesign for consistency — unified `lines` data model (schema v4: packages + items in one array; add-ons and the `individual` pseudo-package retired), revision/packaging/digital-license moved from per-line to **once-per-quote project services**, packaging charged once per order, and the same catalog item now prices identically wherever it's added. Engine split into pure cost functions (`calcPackageCost`/`calcItemCost`/`calcQuoteServices`) with all money math centralized in `computeQuoteBreakdown`. Invariants locked by `lib/quote-calc-totals.test.ts`
 - Phase 6: discount-logic redesign for consistency & margin safety — **all discounts are additive** (bundle + vendor + family & friends + custom sum into one per-line %, no compounding) and bite the **raw labor cost only** (`laborBase` = design + production at cost, not marked up), so materials, admin overhead, target profit, and project services are never discounted — a discount only lowers your effective hourly rate; the orphaned `discountIndividual` setting removed; resulting net margin surfaced (no hard floor). One discount rule across calculator, print, and portal
+- Dashboard quote deletion — per-row Delete guarded by a confirm dialog (`components/ui/dialog.tsx`) that can also revoke the client link; deletion is a soft archive (Status column), so archived quotes leave the list and every ledger total but stay restorable from the `Archived` filter via `POST /quote-calc/api/drafts/[id]/restore`. The local `localStorage` copy is dropped too, so the calculator can't resurrect a deleted quote
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
 - Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
-- Real gallery photos — 12 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags
+- Real gallery photos — 18 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags (`menus`, `place-cards` remain coming-soon)
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
 - A11y: skip-to-content link, active nav underline, focus-visible rings, `prefers-reduced-motion` global CSS rule
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers

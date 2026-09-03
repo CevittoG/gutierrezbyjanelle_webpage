@@ -3,21 +3,40 @@
 // Studio dashboard. Absorbs the old Explorer list and adds a read-only overview
 // derived entirely from the rows it's handed (no new IO): a ledger strip, the
 // nearest upcoming event ("up next"), and a searchable / filterable / sortable
-// quote list. Each row exposes three actions:
+// quote list. Each row exposes four actions:
 //   • Edit              → /quote/new?draft=<id>  (calculator, quote preloaded)
 //   • Profile Overview  → /quotes/<id>           (manage link + info)
 //   • Client Quote Profile → /q/<token>          (the client's personal link)
+//   • Delete            → soft archive (confirm dialog; restorable)
+//
+// Deleting never destroys anything: it flips the Sheet's Status cell to
+// "archived", which drops the quote out of the list AND out of every ledger
+// total. Archived quotes live behind their own filter chip with a Restore
+// action, so a mis-click costs one click to undo.
 //
 // Brand discipline: one accent (Powder Rose) used only as state; no traffic-light
-// status colors; status is conveyed by label + shape, never color alone. Stats are
-// a flat ledger strip, deliberately not the banned SaaS stat-card grid.
+// status colors; status is conveyed by label + shape, never color alone — so the
+// delete action is a neutral bordered icon like its siblings, not a red button.
+// The confirm dialog carries the weight instead. Stats are a flat ledger strip,
+// deliberately not the banned SaaS stat-card grid.
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { fmt$ } from "@/lib/quote-calc-logic";
 import { isLinkActive, type LinkStatus } from "@/lib/quote-calc-portal";
+import { deleteDraft } from "@/lib/quote-calc-drafts";
+import { archiveRemoteDraft, restoreRemoteDraft } from "@/lib/quote-calc-drafts-remote";
 import { LinkControls } from "@/components/quote-app/LinkControls";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/utils";
 
 export interface QuoteRow {
@@ -33,9 +52,10 @@ export interface QuoteRow {
   linkStatus: LinkStatus;
   expiresAt: string;
   folderUrl: string | null;
+  archived: boolean;
 }
 
-type Filter = "all" | "upcoming" | "shared" | "nolink";
+type Filter = "all" | "upcoming" | "shared" | "nolink" | "archived";
 type Sort = "date" | "updated";
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -44,6 +64,16 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "shared", label: "Link shared" },
   { key: "nolink", label: "No link" },
 ];
+
+// Appended only when there is something archived to look at.
+const ARCHIVED_FILTER: { key: Filter; label: string } = { key: "archived", label: "Archived" };
+
+function failureMessage(kind: string, verb: "delete" | "restore"): string {
+  if (kind === "unauthorized") return "Your session expired — sign in again.";
+  if (kind === "unconfigured") return "The quote sheet isn't connected right now.";
+  if (kind === "network") return `Couldn't reach the sheet — check your connection and ${verb} again.`;
+  return `Couldn't ${verb} that quote — try again.`;
+}
 
 function formatEventDate(iso: string): string {
   if (!iso) return "Date TBD";
@@ -78,22 +108,110 @@ function linkLive(r: QuoteRow): boolean {
 }
 
 export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: string }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("date");
 
+  // Delete/restore write to the Sheet and then router.refresh(). Until the fresh
+  // server render lands, `overrides` (id → archived) keeps the list and the
+  // ledger honest, so the row and its money disappear on click, not a beat later.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [pending, setPending] = useState<QuoteRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // A new `rows` array means the server just re-rendered — it is now the truth,
+  // so the optimistic layer has done its job and must get out of the way.
+  useEffect(() => {
+    setOverrides((o) => (Object.keys(o).length ? {} : o));
+  }, [rows]);
+
+  const allRows = useMemo(
+    () => rows.map((r) => (r.id in overrides ? { ...r, archived: overrides[r.id] } : r)),
+    [rows, overrides],
+  );
+  const activeRows = useMemo(() => allRows.filter((r) => !r.archived), [allRows]);
+  const archivedRows = useMemo(() => allRows.filter((r) => r.archived), [allRows]);
+
   const isUpcoming = (r: QuoteRow) => !!r.eventDate && r.eventDate >= todayISO;
 
-  // Overview stats — pure derivations from rows.
-  const pipeline = useMemo(() => rows.reduce((s, r) => s + r.total, 0), [rows]);
-  const sharedCount = useMemo(() => rows.filter(linkLive).length, [rows]);
+  // Overview stats — pure derivations from the *live* rows. Deleted quotes never
+  // count toward the ledger.
+  const pipeline = useMemo(() => activeRows.reduce((s, r) => s + r.total, 0), [activeRows]);
+  const sharedCount = useMemo(() => activeRows.filter(linkLive).length, [activeRows]);
 
   // Up next: soonest upcoming event.
   const upNext = useMemo(() => {
-    const upcoming = rows.filter(isUpcoming).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+    const upcoming = activeRows
+      .filter(isUpcoming)
+      .sort((a, b) => a.eventDate.localeCompare(b.eventDate));
     return upcoming[0] ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, todayISO]);
+  }, [activeRows, todayISO]);
+
+  const setArchived = useCallback((id: string, archived: boolean) => {
+    setOverrides((o) => ({ ...o, [id]: archived }));
+  }, []);
+
+  // Soft-delete: archive the Sheet row, optionally kill the client link, and
+  // drop the local copy so the calculator can't resurrect it (reconcileDrafts is
+  // a union merge — it never subtracts, so localStorage would keep it alive).
+  const confirmDelete = useCallback(
+    async (row: QuoteRow, revokeLink: boolean) => {
+      setBusyId(row.id);
+      setError(null);
+      setArchived(row.id, true);
+
+      const res = await archiveRemoteDraft(row.id);
+      if (!res.ok) {
+        setArchived(row.id, false);
+        setError(failureMessage(res.failure.kind, "delete"));
+        setBusyId(null);
+        return;
+      }
+
+      if (revokeLink) {
+        // Best effort — the quote is already archived; a failed revoke must not
+        // fail the delete. Profile Overview can still revoke by hand.
+        try {
+          await fetch(`/quote-calc/api/portal/${encodeURIComponent(row.id)}/revoke`, {
+            method: "POST",
+            credentials: "same-origin",
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      deleteDraft(row.id);
+      if (!res.value.found) setError("That quote was already gone — the list is up to date.");
+      setBusyId(null);
+      setPending(null);
+      router.refresh();
+    },
+    [router, setArchived],
+  );
+
+  const restore = useCallback(
+    async (row: QuoteRow) => {
+      setBusyId(row.id);
+      setError(null);
+      setArchived(row.id, false);
+
+      const res = await restoreRemoteDraft(row.id);
+      if (!res.ok) {
+        setArchived(row.id, true);
+        setError(failureMessage(res.failure.kind, "restore"));
+        setBusyId(null);
+        return;
+      }
+
+      setBusyId(null);
+      router.refresh();
+    },
+    [router, setArchived],
+  );
 
   const byEventDate = (a: QuoteRow, b: QuoteRow) => {
     if (a.eventDate && b.eventDate) return a.eventDate.localeCompare(b.eventDate);
@@ -104,7 +222,10 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = rows.filter((r) => {
+    // Archived quotes surface in exactly one place — their own filter — and
+    // never leak into All / Upcoming / Link shared / No link.
+    const base = filter === "archived" ? archivedRows : activeRows;
+    const list = base.filter((r) => {
       if (filter === "upcoming" && !isUpcoming(r)) return false;
       if (filter === "shared" && !linkLive(r)) return false;
       if (filter === "nolink" && linkLive(r)) return false;
@@ -120,7 +241,20 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
       ? list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       : list.sort(byEventDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, query, filter, sort, todayISO]);
+  }, [activeRows, archivedRows, query, filter, sort, todayISO]);
+
+  // The Archived chip only exists once something has been deleted — until then
+  // the dashboard looks exactly as it always has.
+  const filterChips = useMemo(
+    () => (archivedRows.length ? [...FILTERS, ARCHIVED_FILTER] : FILTERS),
+    [archivedRows.length],
+  );
+
+  // Deleting the last archived quote's chip out from under the user would strand
+  // them on an empty view; fall back to All.
+  useEffect(() => {
+    if (filter === "archived" && archivedRows.length === 0) setFilter("all");
+  }, [filter, archivedRows.length]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8 md:py-10">
@@ -147,7 +281,7 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
       {/* Ledger strip — flat, hairline-divided. Not a stat-card grid. */}
       <dl className="grid grid-cols-3 border-y border-border divide-x divide-border mb-10">
         <Stat label="Active pipeline" value={fmt$(pipeline)} />
-        <Stat label="Open quotes" value={String(rows.length)} />
+        <Stat label="Open quotes" value={String(activeRows.length)} />
         <Stat label="Shared links" value={String(sharedCount)} />
       </dl>
 
@@ -184,7 +318,7 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
         </div>
 
         <div className="flex flex-wrap gap-2 mb-5" role="group" aria-label="Filter quotes">
-          {FILTERS.map((f) => {
+          {filterChips.map((f) => {
             const active = filter === f.key;
             return (
               <button
@@ -205,20 +339,49 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
           })}
         </div>
 
-        {rows.length === 0 ? (
+        {error && (
+          <p
+            role="status"
+            className="mb-4 text-sm text-foreground normal-case tracking-normal rounded-md border border-border bg-muted/60 px-3 py-2"
+          >
+            {error}
+          </p>
+        )}
+
+        {activeRows.length === 0 && archivedRows.length === 0 ? (
           <EmptyState />
         ) : visible.length === 0 ? (
           <p className="text-sm text-muted-foreground normal-case tracking-normal py-8 text-center">
-            No quotes match. Try a different search or filter.
+            {filter === "archived"
+              ? "Nothing archived. Deleted quotes land here."
+              : "No quotes match. Try a different search or filter."}
           </p>
         ) : (
           <ul className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
             {visible.map((row) => (
-              <QuoteListRow key={row.id} row={row} todayISO={todayISO} upcoming={isUpcoming(row)} />
+              <QuoteListRow
+                key={row.id}
+                row={row}
+                todayISO={todayISO}
+                upcoming={isUpcoming(row)}
+                busy={busyId === row.id}
+                onDelete={() => {
+                  setError(null);
+                  setPending(row);
+                }}
+                onRestore={() => restore(row)}
+              />
             ))}
           </ul>
         )}
       </section>
+
+      <DeleteQuoteDialog
+        row={pending}
+        busy={!!pending && busyId === pending.id}
+        onCancel={() => setPending(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
@@ -292,10 +455,16 @@ function QuoteListRow({
   row,
   todayISO,
   upcoming,
+  busy,
+  onDelete,
+  onRestore,
 }: {
   row: QuoteRow;
   todayISO: string;
   upcoming: boolean;
+  busy: boolean;
+  onDelete: () => void;
+  onRestore: () => void;
 }) {
   const days = daysBetween(todayISO, row.eventDate);
   const shared = linkLive(row);
@@ -303,41 +472,67 @@ function QuoteListRow({
   return (
     <li className="flex items-center gap-3 px-4 sm:px-5 py-3.5 normal-case tracking-normal hover:bg-muted/40 transition-colors">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{row.client || "—"}</p>
+        <p className={cn("text-sm font-medium truncate", row.archived && "text-muted-foreground")}>
+          {row.client || "—"}
+        </p>
         <p className="text-xs text-muted-foreground truncate">
           {row.eventType || "Event"} · {formatEventDate(row.eventDate)}
-          {upcoming && days !== null && <span className="text-foreground/70"> · {countdownLabel(days)}</span>}
-          {shared && <span className="text-accent-foreground/70"> · Shared</span>}
+          {upcoming && days !== null && !row.archived && (
+            <span className="text-foreground/70"> · {countdownLabel(days)}</span>
+          )}
+          {shared && !row.archived && <span className="text-accent-foreground/70"> · Shared</span>}
+          {row.archived && <span className="italic"> · Archived</span>}
         </p>
       </div>
 
-      <p className="w-20 sm:w-24 shrink-0 text-right font-mono tabular-nums text-sm">{fmt$(row.total)}</p>
-
-      <div className="flex items-center gap-1 shrink-0">
-        <RowAction
-          as="link"
-          href={`/quote/new?draft=${encodeURIComponent(row.id)}`}
-          label="Edit in calculator"
-        >
-          <PencilIcon className="h-4 w-4" />
-        </RowAction>
-        <RowAction as="link" href={`/quotes/${encodeURIComponent(row.id)}`} label="Profile Overview">
-          <OverviewIcon className="h-4 w-4" />
-        </RowAction>
-        {shared ? (
-          <RowAction
-            as="external"
-            href={`/q/${row.publicToken}`}
-            label="Open Client Quote Profile"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden />
-          </RowAction>
-        ) : (
-          <RowAction as="disabled" label="No client link yet — generate one in Profile Overview">
-            <ExternalLink className="h-4 w-4" aria-hidden />
-          </RowAction>
+      <p
+        className={cn(
+          "w-20 sm:w-24 shrink-0 text-right font-mono tabular-nums text-sm",
+          row.archived && "text-muted-foreground",
         )}
-      </div>
+      >
+        {fmt$(row.total)}
+      </p>
+
+      {/* An archived quote isn't a working quote — editing, managing its link, or
+          opening the client's view would all be misleading. Restore is the only
+          way back in. */}
+      {row.archived ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <RowAction as="button" label="Restore quote" onClick={onRestore} disabled={busy}>
+            <RestoreIcon className="h-4 w-4" />
+          </RowAction>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1 shrink-0">
+          <RowAction
+            as="link"
+            href={`/quote/new?draft=${encodeURIComponent(row.id)}`}
+            label="Edit in calculator"
+          >
+            <PencilIcon className="h-4 w-4" />
+          </RowAction>
+          <RowAction as="link" href={`/quotes/${encodeURIComponent(row.id)}`} label="Profile Overview">
+            <OverviewIcon className="h-4 w-4" />
+          </RowAction>
+          {shared ? (
+            <RowAction
+              as="external"
+              href={`/q/${row.publicToken}`}
+              label="Open Client Quote Profile"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </RowAction>
+          ) : (
+            <RowAction as="disabled" label="No client link yet — generate one in Profile Overview">
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </RowAction>
+          )}
+          <RowAction as="button" label="Delete quote" onClick={onDelete} disabled={busy}>
+            <TrashIcon className="h-4 w-4" />
+          </RowAction>
+        </div>
+      )}
     </li>
   );
 }
@@ -346,15 +541,36 @@ function RowAction({
   as,
   href,
   label,
+  onClick,
+  disabled,
   children,
 }: {
-  as: "link" | "external" | "disabled";
+  as: "link" | "external" | "disabled" | "button";
   href?: string;
   label: string;
+  onClick?: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   const base =
     "h-9 w-9 inline-flex items-center justify-center rounded-md border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  if (as === "button") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        title={label}
+        className={cn(
+          base,
+          "text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 disabled:pointer-events-none",
+        )}
+      >
+        <span className="sr-only">{label}</span>
+        {children}
+      </button>
+    );
+  }
   if (as === "disabled") {
     return (
       <span
@@ -415,6 +631,110 @@ function PencilIcon({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+// Two-part guard on a destructive-feeling action: a modal that names the quote
+// it is about to remove, and — when a client is already looking at a live link —
+// an explicit choice about whether that link dies with it. Archiving alone would
+// leave /q/<token> serving a quote Janelle believes she deleted.
+function DeleteQuoteDialog({
+  row,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  row: QuoteRow | null;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (row: QuoteRow, revokeLink: boolean) => void;
+}) {
+  const [revokeLink, setRevokeLink] = useState(true);
+  const hasLiveLink = !!row && linkLive(row);
+
+  // Fresh default every time the dialog opens for a different quote.
+  useEffect(() => {
+    if (row) setRevokeLink(true);
+  }, [row]);
+
+  return (
+    <Dialog open={!!row} onOpenChange={(open) => !open && !busy && onCancel()}>
+      <DialogContent>
+        {row && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Delete this quote?</DialogTitle>
+              <DialogDescription>
+                <span className="block text-foreground font-medium">{row.client || "Untitled"}</span>
+                {row.eventType || "Event"} · {formatEventDate(row.eventDate)} · {fmt$(row.total)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
+              It moves to <span className="text-foreground">Archived</span> — it stops counting
+              toward your totals and drops off this list. Nothing is erased, and you can restore it
+              any time.
+            </p>
+
+            {hasLiveLink && (
+              <label className="mt-4 flex items-start gap-2.5 text-sm leading-relaxed cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={revokeLink}
+                  onChange={(e) => setRevokeLink(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-border accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <span>
+                  Also revoke the client link
+                  <span className="block text-xs text-muted-foreground">
+                    Otherwise the client can still open their quote page.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            <DialogFooter className="mt-6">
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={busy}
+                className="h-10 px-4 rounded-md border border-border bg-card text-sm hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfirm(row, hasLiveLink && revokeLink)}
+                disabled={busy}
+                className="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-ring transition-colors disabled:opacity-50"
+              >
+                {busy ? "Deleting…" : "Delete quote"}
+              </button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+function RestoreIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
     </svg>
   );
 }
