@@ -54,6 +54,10 @@ export interface QuoteState {
   iGames_dt: number;    iGames_pt: number;     iGames_sc: number;    iGames_y: number;
   iCoaster_dt: number;    iCoaster_pt: number;     iCoaster_sc: number;    iCoaster_y: number;
   iSticker_dt: number;    iSticker_pt: number;     iSticker_sc: number;    iSticker_y: number;
+  iWineCharm_dt: number;        iWineCharm_pt: number;        iWineCharm_sc: number;        iWineCharm_y: number;
+  iDrinkCharm_dt: number;       iDrinkCharm_pt: number;       iDrinkCharm_sc: number;       iDrinkCharm_y: number;
+  iWineCharmBundle_dt: number;  iWineCharmBundle_pt: number;  iWineCharmBundle_sc: number;  iWineCharmBundle_y: number;
+  iDrinkCharmBundle_dt: number; iDrinkCharmBundle_pt: number; iDrinkCharmBundle_sc: number; iDrinkCharmBundle_y: number;
 }
 
 export const DEFAULTS: QuoteState = {
@@ -87,6 +91,10 @@ export const DEFAULTS: QuoteState = {
   iGames_dt: 20,         iGames_pt: 2,      iGames_sc: 0.55,     iGames_y: 4,
   iCoaster_dt: 15,        iCoaster_pt: 0.05,    iCoaster_sc: 54,       iCoaster_y: 100,
   iSticker_dt: 15,        iSticker_pt: 0.05,    iSticker_sc: 20,       iSticker_y: 100,
+  iWineCharm_dt: 20,        iWineCharm_pt: 3,       iWineCharm_sc: 0.55,       iWineCharm_y: 8,
+  iDrinkCharm_dt: 20,       iDrinkCharm_pt: 3,      iDrinkCharm_sc: 0.55,      iDrinkCharm_y: 8,
+  iWineCharmBundle_dt: 20,  iWineCharmBundle_pt: 3,  iWineCharmBundle_sc: 0.55, iWineCharmBundle_y: 8,
+  iDrinkCharmBundle_dt: 20, iDrinkCharmBundle_pt: 3, iDrinkCharmBundle_sc: 0.55, iDrinkCharmBundle_y: 8,
 };
 
 export interface CatalogItem {
@@ -117,6 +125,10 @@ export const ITEM_CATALOG: CatalogItem[] = [
   { key: "iGames",        label: "Games",                      qty: 1, notes: "Activity card per setting" },
   { key: "iCoaster",        label: "Coaster",                  qty: 1, notes: "Personalized coaster" },
   { key: "iSticker",        label: "Stickers",                 qty: 1, notes: "Personalized sticker" },
+  { key: "iWineCharm",        label: "Wine charm",         qty: 2, notes: "~2 per household - clips to a wine glass stem" },
+  { key: "iDrinkCharm",       label: "Drink charm",        qty: 2, notes: "~2 per household - clips to a cocktail/drink glass" },
+  { key: "iWineCharmBundle",  label: "Wine charm bundle",  qty: 0, fixed: 6, notes: "Set of 6 wine charms" },
+  { key: "iDrinkCharmBundle", label: "Drink charm bundle", qty: 0, fixed: 6, notes: "Set of 6 drink charms" },
 ];
 
 export type PkgItem = string | { key: string; multiplier?: number; displayLabel?: string };
