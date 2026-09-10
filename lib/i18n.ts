@@ -19,9 +19,10 @@ export const dictionary = {
   en: {
     "nav.home": "Home",
     "nav.weddings": "Weddings",
+    "nav.events": "Events",
+    "nav.about": "About",
     "nav.gallery": "Gallery",
     "nav.reviews": "Reviews",
-    "nav.investment": "Investment",
 
     "toggle.aria": "Switch language",
     "toggle.en": "EN",
@@ -74,6 +75,10 @@ export const dictionary = {
     "weddings.letterHeading": "A note from Janelle",
     "weddings.h1": "For the Brides & Grooms",
 
+    "events.h1": "Events & Corporate",
+
+    "about.heading": "Meet the Founder",
+
     "gallery.eyebrow": "Recent Work",
     "gallery.heading": "A few pieces I'm proud of.",
     "gallery.intro": "Each one started as a conversation: a date, a vision, a feeling. Here's what those turned into.",
@@ -98,9 +103,10 @@ export const dictionary = {
   es: {
     "nav.home": "Inicio",
     "nav.weddings": "Bodas",
+    "nav.events": "Eventos",
+    "nav.about": "Sobre mí",
     "nav.gallery": "Galería",
     "nav.reviews": "Reseñas",
-    "nav.investment": "Inversión",
 
     "toggle.aria": "Cambiar idioma",
     "toggle.en": "EN",
@@ -152,6 +158,10 @@ export const dictionary = {
 
     "weddings.letterHeading": "Una nota de Janelle",
     "weddings.h1": "Para los novios",
+
+    "events.h1": "Eventos y Corporativo",
+
+    "about.heading": "Conoce a la Fundadora",
 
     "gallery.eyebrow": "Trabajo Reciente",
     "gallery.heading": "Algunas piezas de las que estoy orgullosa.",

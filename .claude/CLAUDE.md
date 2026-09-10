@@ -149,13 +149,17 @@ app/
   layout.tsx              ← shared shell (SiteHeader + SiteFooter), root metadata
   page.tsx                ← /  (Home)
   investment/
-    page.tsx              ← /investment (public pricing tiers with discount badges)
+    page.tsx              ← redirects to /weddings#wedding-investment (back-compat; content moved into weddings/events)
   reviews/
     page.tsx              ← /reviews
   gallery/
     page.tsx              ← /gallery
   weddings/
-    page.tsx              ← /weddings
+    page.tsx              ← /weddings (note to brides & grooms + wedding investment tiers at the bottom)
+  events/
+    page.tsx              ← /events   (events & corporate intro + event investment tiers at the bottom)
+  about/
+    page.tsx              ← /about    ("Meet the Founder" bio)
   quotes/
     page.tsx              ← /quotes        (gated home — studio dashboard, integrates the explorer)
     [id]/page.tsx         ← /quotes/[id]   (gated "Profile Overview" — per-quote admin detail)
@@ -386,7 +390,7 @@ Each quote moves through a 9-stage pipeline that drives the client portal and th
 All public routes render with brand styling and full SEO metadata. Quote calculator fully functional with cost-plus pricing model.
 
 **Complete:**
-- 6 public routes: Home, Investment, Reviews, Gallery, Weddings, Quote Calculator
+- 7 public routes: Home, Weddings, Events & Corporate, About, Reviews, Gallery, Quote Calculator. `/investment` is now a back-compat redirect to `/weddings#wedding-investment` — investment pricing (Individual Item, suites/collections, Add-Ons) lives at the bottom of the Weddings and Events pages instead of a standalone page
 - Per-page SEO metadata on all routes
 - Root layout metadata with `metadataBase`, OG, Twitter card, and icons
 - `app/opengraph-image.tsx` — JSX-based 1200×630 OG image
@@ -404,7 +408,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Dashboard quote deletion — per-row Delete guarded by a confirm dialog (`components/ui/dialog.tsx`) that can also revoke the client link; deletion is a soft archive (Status column), so archived quotes leave the list and every ledger total but stay restorable from the `Archived` filter via `POST /quote-calc/api/drafts/[id]/restore`. The local `localStorage` copy is dropped too, so the calculator can't resurrect a deleted quote
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Wedding/Events package toggle with event-specific discount controls
-- Investment page: Individual item card above suites, "Optimized Value Suites" heading, discount badges, pill-shaped Etsy/Instagram buttons with icons
+- Investment content split by audience: Individual item card, suites/collections grid, and Add-Ons live at the bottom of `/weddings` (wedding suites) and `/events` (event collections) rather than a standalone Investment page; discount badges, pill-shaped Etsy/Instagram buttons with icons
 - Real gallery photos — 18 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags (`menus`, `place-cards` remain coming-soon)
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
 - A11y: skip-to-content link, active nav underline, focus-visible rings, `prefers-reduced-motion` global CSS rule
