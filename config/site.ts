@@ -10,10 +10,8 @@ export type Hero = {
   cta?: { label: Bilingual; href: string };
 };
 
-export type About = {
-  paragraphs: Bilingual[];
-  cta: { label: Bilingual; href: string };
-};
+export type FounderSection = { heading?: Bilingual; paragraphs: Bilingual[] };
+export type About = { sections: FounderSection[] };
 
 export type InvestmentTier = {
   id: string;
@@ -66,6 +64,7 @@ export type GalleryItem = {
 };
 
 export type Weddings = { paragraphs: Bilingual[] };
+export type EventsInfo = { paragraphs: Bilingual[] };
 
 export type EtsyStore = {
   url: string;
@@ -111,20 +110,46 @@ export const siteConfig = {
     ),
   } satisfies Hero,
   about: {
-    paragraphs: [
-      b(
-        "I am so excited you've chosen me to help make your special event memorable. I started this business after planning my own wedding and falling in love with each designed detail. Planning any event can become chaotic and stressful: that's where I come in!",
-        "Estoy muy emocionada de que me hayas elegido para ayudarte a hacer memorable tu evento especial. Comencé este negocio después de planear mi propia boda y enamorarme de cada detalle diseñado. Planear cualquier evento puede volverse caótico y estresante: ¡ahí es donde entro yo!"
-      ),
-      b(
-        "I can help take your vision from a daydream to having that dream right in your hands. Don't fret if you don't see a perfect match on my site; all designs can be customized or personalized from scratch. I look forward to our designing process! Talk soon… xx",
-        "Puedo ayudarte a llevar tu visión desde un sueño hasta tenerlo en tus manos. No te preocupes si no ves una combinación perfecta en mi sitio; todos los diseños se pueden personalizar o crear desde cero. ¡Espero con ansias nuestro proceso de diseño! Hablamos pronto… xx"
-      ),
+    sections: [
+      {
+        paragraphs: [
+          b(
+            "Hi! My name is Janelle Gutiérrez, wife, mom, traveler, lifelong learner, founder of this small business!",
+            "¡Hola! Mi nombre es Janelle Gutiérrez: esposa, mamá, viajera, eterna aprendiz y fundadora de este pequeño negocio."
+          ),
+          b(
+            "I'm a new mom and (former) teacher. I decided my little deserves the best version of me, which meant leaving the classroom to stay at home with my baby. Although it's been a hard adjustment not going back to school with my kindergartener kiddies, nothing beats being with my new bestie from sun up to sundown. During my transition to mom life I wanted to still contribute to my family and do something for myself, so here you have it… Gutiérrez by Janelle! I hope you visit my instagram, give a follow and share my business with friends. Each new client allows me to stay home with my baby and support my newest, full-time motherhood and entrepreneur adventures.",
+            "Soy mamá primeriza y maestra (ex maestra, por ahora). Decidí que mi pequeño merece la mejor versión de mí, lo que significó dejar el salón de clases para quedarme en casa con mi bebé. Aunque ha sido una transición difícil no volver a la escuela con mis niños de kínder, nada se compara con estar con mi nuevo mejor amigo de sol a sol. Durante mi transición a la vida de mamá, quería seguir contribuyendo a mi familia y hacer algo para mí misma, así que aquí lo tienen… ¡Gutiérrez by Janelle! Espero que visites mi Instagram, me sigas y compartas mi negocio con tus amigos. Cada nuevo cliente me permite quedarme en casa con mi bebé y apoyar mis nuevas aventuras de maternidad de tiempo completo y emprendimiento."
+          ),
+        ],
+      },
+      {
+        heading: b("Why Stationery?", "¿Por qué papelería?"),
+        paragraphs: [
+          b(
+            "I absolutely loved planning my wedding with my husband and designing all the little details, and wanted to open a channel for others to do the same, without the overwhelming side of DIY. I create your vision, I create from the heart, I create so we can turn your ideas into everything you've dreamed of.",
+            "Me encantó absolutamente planear mi boda con mi esposo y diseñar cada pequeño detalle, y quise abrir un espacio para que otros pudieran hacer lo mismo, sin el lado abrumador de hacerlo tú mismo. Yo creo tu visión, creo desde el corazón, creo para que podamos convertir tus ideas en todo lo que has soñado."
+          ),
+        ],
+      },
+      {
+        heading: b("Just weddings? Just events?", "¿Solo bodas? ¿Solo eventos?"),
+        paragraphs: [
+          b(
+            "I design for all events, businesses and personal stationery - weddings, showers, holidays, dinner parties, birthdays, etc. I've created: invitation suites, save the dates, signs, place setting notes, holiday cards, stickers, but my absolute favorites are place setting menus, coasters and wine and drink charms! If you don't see what you're looking for on my page, just ask… I'll do my very best to make it happen!",
+            "Diseño para todo tipo de eventos, negocios y papelería personal: bodas, showers, días festivos, cenas, cumpleaños, etc. He creado colecciones de invitaciones, save the dates, carteles, tarjetas para cada lugar en la mesa, tarjetas navideñas, stickers, ¡pero mis favoritos absolutos son los menús individuales, los posavasos y los charms para copas y bebidas! Si no ves lo que buscas en mi página, solo pregunta… ¡haré todo lo posible para lograrlo!"
+          ),
+        ],
+      },
+      {
+        paragraphs: [
+          b(
+            "I truly can't wait to meet you, hear your story and jump into our work together. Besitos! Janelle",
+            "De verdad no puedo esperar a conocerte, escuchar tu historia y comenzar a trabajar juntos. ¡Besitos! Janelle"
+          ),
+        ],
+      },
     ],
-    cta: {
-      label: b("Invest in your event", "Invierte en tu evento"),
-      href: "/investment",
-    },
   } satisfies About,
   weddings: {
     paragraphs: [
@@ -146,12 +171,25 @@ export const siteConfig = {
       ),
     ],
   } satisfies Weddings,
+  events: {
+    paragraphs: [
+      b(
+        "Not just weddings — celebrations of every kind. Graduations, baby showers, birthdays, anniversaries, quinceañeras, retirement parties, and corporate gatherings all deserve stationery and signage that feels custom, not copy-pasted.",
+        "No solo bodas: celebraciones de todo tipo. Graduaciones, baby showers, cumpleaños, aniversarios, quinceañeras, fiestas de jubilación y eventos corporativos merecen papelería y señalización que se sienta hecha a la medida, no copiada y pegada."
+      ),
+      b(
+        "Whatever you're celebrating, I bring the same care, custom design, and honest communication to your event as I do to every wedding — pieces you'll actually want to keep.",
+        "Sea lo que sea que estés celebrando, le dedico a tu evento el mismo cuidado, diseño personalizado y comunicación honesta que le dedico a cada boda: piezas que de verdad querrás conservar."
+      ),
+    ],
+  } satisfies EventsInfo,
   mainNav: [
     { title: "Home", href: "/", i18nKey: "nav.home" },
     { title: "Weddings", href: "/weddings", i18nKey: "nav.weddings" },
+    { title: "Events", href: "/events", i18nKey: "nav.events" },
+    { title: "About", href: "/about", i18nKey: "nav.about" },
     { title: "Gallery", href: "/gallery", i18nKey: "nav.gallery" },
     { title: "Reviews", href: "/reviews", i18nKey: "nav.reviews" },
-    { title: "Investment", href: "/investment", i18nKey: "nav.investment" },
   ] satisfies NavItem[],
   investments: [
     {

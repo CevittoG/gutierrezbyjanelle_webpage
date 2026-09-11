@@ -1,33 +1,7 @@
-import type { Metadata } from "next";
-import { siteConfig } from "@/config/site";
-import { InvestmentContent } from "./_content";
+import { redirect } from "next/navigation";
 
-const pageDescription = `View investment options for custom wedding stationery and event design by ${siteConfig.name}.`;
-const pageTitle = `Investment | ${siteConfig.name}`;
-const pageUrl = `${siteConfig.url}/investment`;
-
-export const metadata: Metadata = {
-  title: "Investment",
-  description: pageDescription,
-  alternates: { canonical: pageUrl },
-  openGraph: {
-    type: "website",
-    locale: siteConfig.locale,
-    alternateLocale: siteConfig.alternateLocales,
-    url: pageUrl,
-    siteName: siteConfig.name,
-    title: pageTitle,
-    description: pageDescription,
-    images: siteConfig.ogImages,
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: pageTitle,
-    description: pageDescription,
-    images: siteConfig.twitterImages,
-  },
-};
-
+// Investment pricing moved to the bottom of /weddings and /events.
+// Keep this path as a back-compat redirect for any existing bookmarks/links.
 export default function InvestmentPage() {
-  return <InvestmentContent />;
+  redirect("/weddings#wedding-investment");
 }
