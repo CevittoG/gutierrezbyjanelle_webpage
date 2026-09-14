@@ -82,6 +82,9 @@ export function QuoteCalculator() {
   const [familyFriendsPtg, setFamilyFriendsPtg] = useState(DEFAULT_CONFIG.familyFriendsPtg);
   const [fullColor, setFullColor] = useState(DEFAULT_CONFIG.fullColor);
   const [customPaper, setCustomPaper] = useState(DEFAULT_CONFIG.customPaper);
+  // Pricing rules the quote is built under — new quotes use the current rules;
+  // an opened quote keeps its own so its total doesn't move.
+  const [pricingVersion, setPricingVersion] = useState(DEFAULT_CONFIG.pricingVersion);
 
   // --- Client info ---
   const [client, setClient] = useState<DraftClientInfo>(EMPTY_CLIENT_INFO);
@@ -122,8 +125,9 @@ export function QuoteCalculator() {
       familyFriendsPtg,
       fullColor,
       customPaper,
+      pricingVersion,
     }),
-    [lines, mode, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, customDiscountPtg, familyFriendsPtg, fullColor, customPaper],
+    [lines, mode, miscAddOns, rushFee, extraRevisions, digitalLicense, vendorIncentive, customDiscountPtg, familyFriendsPtg, fullColor, customPaper, pricingVersion],
   );
 
   // Apply a DraftConfig into state.
@@ -141,6 +145,7 @@ export function QuoteCalculator() {
     setFamilyFriendsPtg(c.familyFriendsPtg);
     setFullColor(c.fullColor);
     setCustomPaper(c.customPaper);
+    setPricingVersion(c.pricingVersion);
   }, []);
 
   // Load a full saved draft into state (used by the ?draft=<id> edit deep-link
@@ -178,9 +183,9 @@ export function QuoteCalculator() {
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
 
-  // Remove a line — but always keep at least one on the quote.
+  // Remove a line. A quote may have zero lines (e.g. custom add-ons only).
   function removeLine(id: string) {
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
+    setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
   // Pull the latest Settings + Items from the Sheet. Falls back to bundled
@@ -550,6 +555,11 @@ export function QuoteCalculator() {
           {/* 3. Lines on the quote */}
           <Section title="On this quote">
             <div className="space-y-3">
+              {lines.length === 0 && (
+                <p className="text-sm text-muted-foreground italic">
+                  Nothing on this quote yet — add a package, an individual item, or a custom add-on below.
+                </p>
+              )}
               {lines.map((line) => {
                 const lr = breakdown.lines.find((l) => l.id === line.id);
                 const linePrice = lr ? fmt$(Math.round(lr.net)) : null;
@@ -562,7 +572,6 @@ export function QuoteCalculator() {
                         title={def?.name ?? line.pkg ?? "Package"}
                         subtitle={def?.tagline ?? ""}
                         price={linePrice}
-                        canRemove={lines.length > 1}
                         onRemove={() => removeLine(line.id)}
                       />
                       <QtyInput
@@ -583,7 +592,6 @@ export function QuoteCalculator() {
                       title={cat?.label ?? line.itemKey ?? "Item"}
                       subtitle="Individual item"
                       price={linePrice}
-                      canRemove={lines.length > 1}
                       onRemove={() => removeLine(line.id)}
                     />
 
@@ -682,7 +690,11 @@ export function QuoteCalculator() {
                 checked={rushFee}
                 onChange={setRushFee}
                 title={`Rush fee +${assumptions.rushFeePtg}%`}
-                description="Turnaround under 7 days — applied once to the discounted order total."
+                description={
+                  (pricingVersion ?? 1) >= 2
+                    ? "Turnaround under 7 days — applied once to the discounted order total, custom add-ons included."
+                    : "Turnaround under 7 days — applied once to the discounted order total (this older quote leaves custom add-ons out)."
+                }
               />
 
               <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-3">
@@ -814,13 +826,11 @@ function LineHeader({
   title,
   subtitle,
   price,
-  canRemove,
   onRemove,
 }: {
   title: string;
   subtitle: string;
   price: string | null;
-  canRemove: boolean;
   onRemove: () => void;
 }) {
   return (
@@ -833,9 +843,8 @@ function LineHeader({
         {price && <span className="text-sm font-mono font-semibold tabular-nums">{price}</span>}
         <button
           onClick={onRemove}
-          disabled={!canRemove}
           aria-label={`Remove ${title}`}
-          className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted disabled:opacity-30 transition-colors"
+          className="h-9 w-9 rounded-full border border-border flex items-center justify-center text-base hover:bg-muted transition-colors"
         >
           ×
         </button>

@@ -250,9 +250,9 @@ export function BreakdownPanel({
     const summaryLines = [
       "GutierrezByJanelle - Quote Summary",
       sep,
-      `Items:       ${lineLabels}`,
-      `Mode:        ${mode === "fresh" ? "Custom design (fresh artwork)" : "Reuse existing design"}`,
-      `Includes:    ${includeNames}`,
+      lineLabels ? `Items:       ${lineLabels}` : null,
+      lines.length > 0 ? `Mode:        ${mode === "fresh" ? "Custom design (fresh artwork)" : "Reuse existing design"}` : null,
+      includeNames ? `Includes:    ${includeNames}` : null,
       miscNames ? `Custom:      ${miscNames}` : null,
       svc.revisionCost > 0 ? "Revisions:   extra rounds included" : null,
       breakdown.rushAmount > 0 ? `Rush fee:    Yes (+${assumptions.rushFeePtg}%)` : null,
@@ -295,6 +295,12 @@ export function BreakdownPanel({
       <Divider strong />
 
       <div>
+        {lines.length === 0 && breakdown.miscLines.length === 0 && (
+          <p className="text-sm text-muted-foreground italic text-center py-2">
+            Nothing priced yet — add a package, an item, or a custom add-on.
+          </p>
+        )}
+
         {/* Per-line buildup */}
         {multiLine && (
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -350,17 +356,6 @@ export function BreakdownPanel({
           <Row label="Total discounts" value={`-${fmt$2(breakdown.discountTotal)}`} dim />
         )}
 
-        {/* Rush */}
-        {breakdown.rushAmount > 0 && (
-          <Row
-            indent
-            label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
-            math={`${fmt$2(breakdown.itemsNet + breakdown.services.servicesList)} x ${(1 + assumptions.rushFeePtg / 100).toFixed(2)}`}
-            value={`+${fmt$2(breakdown.rushAmount)}`}
-            dim
-          />
-        )}
-
         {/* Custom add-ons */}
         {breakdown.miscLines.length > 0 && (
           <>
@@ -369,13 +364,24 @@ export function BreakdownPanel({
               <Row
                 key={m.id}
                 indent
-                label={`${m.label || "Custom item"} · ${m.qty} ${m.qty === 1 ? "pc" : "pcs"}`}
+                label={`${m.label} · ${m.qty} ${m.qty === 1 ? "pc" : "pcs"}${m.digital ? " · digital" : ""}`}
                 math={`${m.qty} × $${m.unitPrice.toFixed(2)}`}
                 value={`+${fmt$2(m.total)}`}
                 dim
               />
             ))}
           </>
+        )}
+
+        {/* Rush — after the add-ons, which are part of its base on current quotes */}
+        {breakdown.rushAmount > 0 && (
+          <Row
+            indent
+            label={`Rush fee (+${fmtPct(assumptions.rushFeePtg)})`}
+            math={`${fmt$2(breakdown.rushBase)} x ${(assumptions.rushFeePtg / 100).toFixed(2)}`}
+            value={`+${fmt$2(breakdown.rushAmount)}`}
+            dim
+          />
         )}
 
         <Divider strong />

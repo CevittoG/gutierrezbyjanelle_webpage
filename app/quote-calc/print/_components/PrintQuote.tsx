@@ -141,7 +141,7 @@ export function PrintQuote() {
 
   if (!computed) return null;
 
-  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines } = computed;
+  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines, anyPhysical } = computed;
 
   interface DisplayItem {
     rowKey: string;
@@ -204,8 +204,6 @@ export function PrintQuote() {
       isItem: false,
     };
   });
-
-  const anyPhysical = lineViews.some((v) => !v.isDigital);
 
   return (
     <div className="min-h-screen bg-background">
@@ -374,7 +372,7 @@ export function PrintQuote() {
                 />
               ))}
 
-              {config.rushFee && (
+              {rushAmount > 0 && (
                 <PrintRow
                   label={`Rush production (+${assumptions.rushFeePtg}%)`}
                   detail="Turnaround under 7 days"

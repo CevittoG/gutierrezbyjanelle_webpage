@@ -18,7 +18,7 @@ export function MiscAddOnSection({ items, onChange }: Props) {
   function add() {
     onChange([
       ...items,
-      { id: newId(), label: "", qty: 1, unitPrice: 0 },
+      { id: newId(), label: "", qty: 1, unitPrice: 0, digital: false },
     ]);
   }
 
@@ -30,7 +30,8 @@ export function MiscAddOnSection({ items, onChange }: Props) {
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground leading-relaxed">
         One-off requests outside the standard catalog. Enter the selling price per unit — added to the
-        client total as-is, with no markup.
+        client total as-is, with no markup. Physical add-ons count as something to ship (packaging +
+        shipping reminder).
       </p>
 
       {items.length === 0 ? (
@@ -120,6 +121,26 @@ export function MiscAddOnSection({ items, onChange }: Props) {
                     </p>
                     <p className="text-xs text-muted-foreground">subtotal</p>
                   </div>
+                </div>
+
+                <div className="inline-flex rounded-lg border border-border overflow-hidden" role="group" aria-label="Sale type">
+                  {([false, true] as const).map((isDigital) => {
+                    const active = (m.digital ?? false) === isDigital;
+                    return (
+                      <button
+                        key={String(isDigital)}
+                        type="button"
+                        onClick={() => patch(m.id, { digital: isDigital })}
+                        aria-pressed={active}
+                        className={cn(
+                          "h-11 px-4 text-sm font-medium transition-colors",
+                          active ? "bg-foreground text-background" : "bg-card text-foreground hover:bg-muted"
+                        )}
+                      >
+                        {isDigital ? "Digital" : "Physical"}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
