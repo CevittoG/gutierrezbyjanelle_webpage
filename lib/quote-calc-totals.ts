@@ -19,7 +19,7 @@
 //
 // No IO, no React — importable on the server and the client.
 
-import type { DraftConfig, LineKind, QuoteLine } from "./quote-calc-drafts";
+import type { DraftConfig, LineKind, MiscAddOn, QuoteLine } from "./quote-calc-drafts";
 import {
   CatalogItem,
   ITEM_CATALOG,
@@ -79,6 +79,30 @@ export interface MiscLine {
   qty: number;
   unitPrice: number;
   total: number;
+  digital: boolean;
+}
+
+// Display name for a custom add-on saved without a name (pricing v2+).
+export const CUSTOM_ITEM_FALLBACK_LABEL = "Custom item";
+
+// The one rule for which custom add-ons count toward a quote. An add-on needs a
+// quantity and a price; under pricing v1 it also needed a name (an unnamed row
+// was silently dropped), which v2 replaces with a "Custom item" label.
+export function countedMiscLines(
+  miscAddOns: MiscAddOn[] | undefined,
+  pricingVersion: number | undefined,
+): MiscLine[] {
+  const requireName = (pricingVersion ?? 1) < 2;
+  return (miscAddOns ?? [])
+    .filter((m) => m.qty > 0 && m.unitPrice > 0 && (!requireName || (m.label ?? "").trim().length > 0))
+    .map((m) => ({
+      id: m.id,
+      label: (m.label ?? "").trim() || CUSTOM_ITEM_FALLBACK_LABEL,
+      qty: m.qty,
+      unitPrice: m.unitPrice,
+      total: m.qty * m.unitPrice,
+      digital: m.digital ?? false,
+    }));
 }
 
 export interface QuoteBreakdown {
@@ -97,10 +121,13 @@ export interface QuoteBreakdown {
 
   // Quote-level project services (computed once, never discounted).
   services: QuoteServices;
+  /** Any physical line or physical custom add-on — drives packaging + shipping. */
   anyPhysical: boolean;
   totalDesignLabor: number; // Σ across lines — drives the digital license
 
   // Surcharges + free-form items.
+  /** What the rush % is applied to (discounted items + services, + misc from pricing v2). */
+  rushBase: number;
   rushAmount: number;
   miscLines: MiscLine[];
   miscTotal: number;
@@ -214,7 +241,13 @@ export function computeQuoteBreakdown(
   const discountTotal = itemsList - itemsNet;
   const bundleDiscountTotal = sum((l) => l.bundleDiscountAmount);
   const totalDesignLabor = sum((l) => l.cost.totalDesignLabor);
-  const anyPhysical = lines.some((l) => !l.cost.isDigital);
+
+  // Misc add-ons are entered at final selling price — no markup, no discount.
+  const pricingVersion = config.pricingVersion ?? 1;
+  const miscLines = countedMiscLines(config.miscAddOns, pricingVersion);
+  const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
+
+  const anyPhysical = lines.some((l) => !l.cost.isDigital) || miscLines.some((m) => !m.digital);
 
   // Relationship discounts aggregated across lines (for the client-facing
   // quote-level rows; the bundle discount stays itemized per line).
@@ -238,21 +271,11 @@ export function computeQuoteBreakdown(
     totalDesignLabor,
   });
 
-  // Rush is a surcharge on the discounted order value (excludes fixed-price misc).
+  // Rush is a surcharge on the discounted order value. Pricing v1 left the
+  // fixed-price custom add-ons out of it; v2 includes them.
   const orderSubtotal = itemsNet + services.servicesList;
-  const rushAmount = config.rushFee ? orderSubtotal * (assumptions.rushFeePtg / 100) : 0;
-
-  // Misc add-ons are entered at final selling price — no markup, no discount.
-  const miscLines: MiscLine[] = (config.miscAddOns ?? [])
-    .filter((m) => m.qty > 0 && m.unitPrice > 0 && (m.label ?? "").trim().length > 0)
-    .map((m) => ({
-      id: m.id,
-      label: m.label.trim(),
-      qty: m.qty,
-      unitPrice: m.unitPrice,
-      total: m.qty * m.unitPrice,
-    }));
-  const miscTotal = miscLines.reduce((s, m) => s + m.total, 0);
+  const rushBase = orderSubtotal + (pricingVersion >= 2 ? miscTotal : 0);
+  const rushAmount = config.rushFee ? rushBase * (assumptions.rushFeePtg / 100) : 0;
 
   const finalPrice = orderSubtotal + rushAmount + miscTotal;
   const savings = discountTotal;
@@ -269,6 +292,7 @@ export function computeQuoteBreakdown(
     services,
     anyPhysical,
     totalDesignLabor,
+    rushBase,
     rushAmount,
     miscLines,
     miscTotal,

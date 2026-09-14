@@ -5,10 +5,10 @@
 // shape is defined in exactly one place and can never accidentally carry a
 // secret (cost rate, margin %, the full Draft) across to a public route.
 
-import type { Draft, DraftConfig } from "./quote-calc-drafts";
-import type { LineResult, QuoteBreakdown } from "./quote-calc-totals";
+import { isLineDigital, type Draft, type DraftConfig } from "./quote-calc-drafts";
+import { countedMiscLines, type LineResult, type QuoteBreakdown } from "./quote-calc-totals";
 import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
-import { packagesDisplayName } from "./quote-calc-summary";
+import { quoteDisplayName } from "./quote-calc-summary";
 
 export type LinkStatus = "active" | "revoked" | "";
 
@@ -168,20 +168,15 @@ export function isBalancePaid(stage: ProjectStage): boolean {
   return stageIndex(stage) > stageIndex("balance");
 }
 
-// A quote is "digital" only when *every* line is digital — any physical piece
-// pulls the whole project into the physical flow (it must be produced and
-// shipped). Mirrors the per-line digital rule used in `buildIncludedPieces`.
+// A quote is "digital" only when *every* line and every counted custom add-on is
+// digital — any physical piece pulls the whole project into the physical flow
+// (it must be produced and shipped). An empty quote reads as physical.
 export function isDigitalQuote(config: DraftConfig): boolean {
-  return (
-    config.lines.length > 0 &&
-    config.lines.every((line) =>
-      line.kind === "item"
-        ? line.digital ?? false
-        : line.pkg
-          ? PACKAGES[line.pkg].isDigital
-          : false,
-    )
-  );
+  const flags = [
+    ...config.lines.map(isLineDigital),
+    ...countedMiscLines(config.miscAddOns, config.pricingVersion).map((m) => m.digital),
+  ];
+  return flags.length > 0 && flags.every(Boolean);
 }
 export function projectTypeOf(config: DraftConfig): ProjectType {
   return isDigitalQuote(config) ? "digital" : "physical";
@@ -359,7 +354,7 @@ export function buildPublicQuote(
     clientName: draft.client.name || "",
     eventType: draft.client.eventType || "",
     eventDate: formatEventDate(draft.client.eventDate),
-    packageName: packagesDisplayName(config.lines),
+    packageName: quoteDisplayName(config),
     includedPieces: buildIncludedPieces(config, breakdown, catalog),
     lineItems,
     subtotal,

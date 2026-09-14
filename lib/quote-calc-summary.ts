@@ -5,8 +5,9 @@
 // default; pass a live catalog in if you want the summary to reflect names
 // Janelle has renamed in the Items tab.
 
-import type { Draft, QuoteLine } from "./quote-calc-drafts";
+import type { Draft, DraftConfig, QuoteLine } from "./quote-calc-drafts";
 import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
+import { countedMiscLines } from "./quote-calc-totals";
 
 function labelFor(key: string, catalog: CatalogItem[], fallback?: string): string {
   return fallback || catalog.find((i) => i.key === key)?.label || key;
@@ -44,12 +45,10 @@ export function summarizeLineItems(
     }
   }
 
-  // Misc add-ons (free-form name + qty + unit price).
-  for (const m of d.config.miscAddOns ?? []) {
-    if (m.qty > 0 && m.unitPrice > 0 && (m.label ?? "").trim().length > 0) {
-      const total = m.qty * m.unitPrice;
-      lines.push(`+ ${m.label.trim()} × ${m.qty} @ ${fmtMoney(m.unitPrice)} = ${fmtMoney(total)} (misc)`);
-    }
+  // Misc add-ons (free-form name + qty + unit price) — same counting rule as the engine.
+  for (const m of countedMiscLines(d.config.miscAddOns, d.config.pricingVersion)) {
+    const suffix = m.digital ? ", digital" : "";
+    lines.push(`+ ${m.label} × ${m.qty} @ ${fmtMoney(m.unitPrice)} = ${fmtMoney(m.total)} (misc${suffix})`);
   }
 
   // Pricing modifiers worth surfacing.
@@ -69,12 +68,16 @@ export function summarizeLineItems(
 }
 
 // Joined, human-readable line names for a quote. Collapses repeats into a count
-// (e.g. "Games ×2 + Sweet Suite").
+// (e.g. "Games ×2 + Sweet Suite"). A quote with no catalog lines (custom add-ons
+// only) falls back to `fallbackNames` — the add-on names — before "—".
 export function packagesDisplayName(
   lines: QuoteLine[],
   catalog: CatalogItem[] = ITEM_CATALOG,
+  fallbackNames: string[] = [],
 ): string {
-  if (!lines || lines.length === 0) return "—";
+  if (!lines || lines.length === 0) {
+    return fallbackNames.length > 0 ? fallbackNames.join(" + ") : "—";
+  }
   const counts = new Map<string, number>();
   const order: string[] = [];
   for (const l of lines) {
@@ -91,4 +94,13 @@ export function packagesDisplayName(
       return n > 1 ? `${name} ×${n}` : name;
     })
     .join(" + ");
+}
+
+// The quote's display name for the dashboard, the Sheet, and the client page:
+// its catalog lines, or — for a custom-add-ons-only quote — the add-on names.
+export function quoteDisplayName(
+  config: Pick<DraftConfig, "lines" | "miscAddOns" | "pricingVersion">,
+): string {
+  const miscNames = countedMiscLines(config.miscAddOns, config.pricingVersion).map((m) => m.label);
+  return packagesDisplayName(config.lines, ITEM_CATALOG, miscNames);
 }

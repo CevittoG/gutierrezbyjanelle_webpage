@@ -20,7 +20,7 @@ import type {
 } from "./quote-calc-config";
 import type { LinkStatus, PortalMeta, ProjectStage } from "./quote-calc-portal";
 import { nextStage } from "./quote-calc-portal";
-import { packagesDisplayName, summarizeLineItems } from "./quote-calc-summary";
+import { quoteDisplayName, summarizeLineItems } from "./quote-calc-summary";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
@@ -301,7 +301,7 @@ function draftToReadableRow(
     d.client.eventType,
     d.client.eventDate,
     d.name,
-    packagesDisplayName(d.config.lines),
+    quoteDisplayName(d.config),
     d.config.lines.map((l) => l.qty).join(", "),
     summarizeLineItems(d),
     Math.round(d.cachedTotal),

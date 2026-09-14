@@ -39,6 +39,12 @@ export interface MiscAddOn {
   label: string;
   qty: number;
   unitPrice: number;
+  /**
+   * Digital (nothing to ship) vs physical. A physical add-on pulls the quote
+   * into packaging + the shipping reminder + the physical stage wording. Never
+   * changes the add-on's own price. Backfilled on load for older quotes.
+   */
+  digital?: boolean;
 }
 
 export type LineKind = "package" | "item";
@@ -85,10 +91,21 @@ export interface DraftConfig {
   // Material toggles (quote-wide).
   fullColor: boolean;
   customPaper: boolean;
+
+  /**
+   * Which pricing rules this quote was built under, so a rule change never
+   * silently re-prices a quote that was already saved/sent.
+   *   1 — rush excludes custom add-ons; an add-on needs a name to count.
+   *   2 — rush includes custom add-ons; an unnamed add-on counts as "Custom item".
+   * Missing ⇒ 1 (quotes saved before the field existed).
+   */
+  pricingVersion?: number;
 }
 
+export const CURRENT_PRICING_VERSION = 2;
+
 export const DEFAULT_CONFIG: DraftConfig = {
-  lines: [{ id: "default", kind: "package", pkg: "sweet", qty: 75, digital: false }],
+  lines: [],
   mode: "fresh",
   miscAddOns: [],
   rushFee: false,
@@ -99,7 +116,15 @@ export const DEFAULT_CONFIG: DraftConfig = {
   familyFriendsPtg: 0,
   fullColor: false,
   customPaper: false,
+  pricingVersion: CURRENT_PRICING_VERSION,
 };
+
+// A line is digital (design-only, nothing shipped) when it's a digital item or a
+// digital package. Shared by the physical/digital project-type rule.
+export function isLineDigital(line: QuoteLine): boolean {
+  if (line.kind === "item") return line.digital ?? false;
+  return line.pkg && PACKAGES[line.pkg] ? PACKAGES[line.pkg].isDigital : false;
+}
 
 export const CURRENT_SCHEMA_VERSION = 4 as const;
 
@@ -224,36 +249,51 @@ function migrateConfig(c: LegacyConfig): DraftConfig {
   } = c;
 
   let lines: QuoteLine[];
-  if (Array.isArray(rawLines) && rawLines.length > 0) {
+  if (Array.isArray(rawLines)) {
+    // v4 shape: trust it as saved — an empty list is a real zero-line quote
+    // (e.g. custom add-ons only), never a cue to inject a default package.
     lines = rawLines.map(lineFromLegacy);
-  } else if (Array.isArray(rawPackages) && rawPackages.length > 0) {
-    lines = rawPackages.map(lineFromLegacy);
-  } else if (legacyPkg) {
-    lines = [
-      lineFromLegacy({
-        pkg: legacyPkg,
-        qty: legacyQty,
-        individualItem: legacyItem,
-        individualDigital: legacyDigital,
-      }),
-    ];
   } else {
-    lines = [];
+    if (Array.isArray(rawPackages) && rawPackages.length > 0) {
+      lines = rawPackages.map(lineFromLegacy);
+    } else if (legacyPkg) {
+      lines = [
+        lineFromLegacy({
+          pkg: legacyPkg,
+          qty: legacyQty,
+          individualItem: legacyItem,
+          individualDigital: legacyDigital,
+        }),
+      ];
+    } else {
+      lines = [];
+    }
+
+    // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
+    for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
+      if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
+    }
+
+    // Pre-v4 quotes always carried a package; keep their old Sweet Suite
+    // fallback so an odd legacy shape still re-prices the way it did.
+    if (lines.length === 0) lines = [{ id: newId(), kind: "package", pkg: "sweet", qty: 75, digital: false }];
   }
 
-  // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
-  for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
-    if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
-  }
-
-  if (lines.length === 0) lines = DEFAULT_CONFIG.lines.map((l) => ({ ...l, id: newId() }));
+  // Backfill the add-on digital flag without moving any existing total: an
+  // add-on only "adds" physicality when the quote already has a physical line.
+  const hasPhysicalLine = lines.some((l) => !isLineDigital(l));
+  const miscAddOns: MiscAddOn[] = (Array.isArray(rest.miscAddOns) ? rest.miscAddOns : []).map((m) => ({
+    ...m,
+    digital: typeof m.digital === "boolean" ? m.digital : !hasPhysicalLine,
+  }));
 
   return {
     ...DEFAULT_CONFIG,
     ...rest,
     lines,
-    miscAddOns: Array.isArray(rest.miscAddOns) ? rest.miscAddOns : [],
+    miscAddOns,
     customDiscountPtg: numOr(customDiscountPtg, numOr(legacyCustomDiscount, 0)),
+    pricingVersion: numOr(rest.pricingVersion, 1),
   };
 }
 
