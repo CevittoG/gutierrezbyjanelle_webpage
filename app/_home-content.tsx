@@ -62,8 +62,8 @@ export function HomeContent() {
           title={pick(siteConfig.hero.headline, locale)}
           description={pick(siteConfig.hero.subheadline, locale)}
           actions={[
-            { label: t("cta.weddingPricing"), href: "/weddings#wedding-investment" },
-            { label: t("cta.eventPricing"), href: "/events#event-investment" },
+            { label: t("cta.weddingInvestment"), href: "/weddings#wedding-investment" },
+            { label: t("cta.eventInvestment"), href: "/events#event-investment" },
           ]}
           imageUrl1="/invitation/invite-4.png"
           imageUrl2="/invitation/invite-3.jpg"
