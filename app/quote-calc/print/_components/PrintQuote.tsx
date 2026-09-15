@@ -395,7 +395,7 @@ export function PrintQuote() {
               <p>· Shipping is added based on carrier quote at the time of production.</p>
             )}
             <p>· One round of revisions is included. Additional rounds are billed at our standard design rate.</p>
-            <p>· Final pricing may shift based on design complexity discovered during sketching.</p>
+            <p>· Final investment may shift based on design complexity discovered during sketching.</p>
             <p>· A 50% deposit confirms your spot; balance due before production begins.</p>
           </section>
 
