@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, ExternalLink, Mail } from "lucide-react";
 import FlowArt, { FlowSection, FlowSectionProps } from "@/components/ui/flow-art";
 import { StationeryHero } from "@/components/ui/hero-section";
+import { FounderPortrait } from "@/components/ui/founder-portrait";
 import { ReviewCard } from "@/components/ui/review-card";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { Button } from "@/components/ui/button";
@@ -48,9 +49,10 @@ function Scene({
 export function HomeContent() {
   const { locale, t } = useLocale();
   const [featuredReview] = siteConfig.reviews;
+  const [founderIntro] = siteConfig.about.sections[0].paragraphs;
 
   return (
-    <FlowArt aria-label="Gutierrez by Janelle — story scroll">
+    <FlowArt aria-label={`${siteConfig.name} — story scroll`}>
       {/* ── Scene 1 · Hero ───────────────────────────────────── */}
       <Scene
         aria-label="Hero"
@@ -59,48 +61,48 @@ export function HomeContent() {
         <StationeryHero
           title={pick(siteConfig.hero.headline, locale)}
           description={pick(siteConfig.hero.subheadline, locale)}
-          buttonText={t("cta.invest")}
-          buttonLink="/investment"
+          actions={[
+            { label: t("cta.weddingPricing"), href: "/weddings#wedding-investment" },
+            { label: t("cta.eventPricing"), href: "/events#event-investment" },
+          ]}
           imageUrl1="/invitation/invite-4.png"
           imageUrl2="/invitation/invite-3.jpg"
         />
       </Scene>
 
-      {/* ── Scene 2 · Weddings ───────────────────────────────── */}
+      {/* ── Scene 2 · Meet the Founder ───────────────────────── */}
       <Scene
-        aria-label="For brides and grooms"
+        aria-label="Meet the founder"
         style={{ backgroundColor: "hsl(30 38% 90%)" }}
       >
-        <div className="container max-w-4xl mx-auto px-4 md:px-8 flex flex-col items-center gap-10 text-center">
-          <h2 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
-            {t("weddings.h1")}
-          </h2>
+        {/* Portrait is opt-in (see siteConfig.founder). Without it the scene
+            collapses to a single centred column rather than an empty frame. */}
+        <div className="container max-w-4xl mx-auto px-4 md:px-8 flex flex-col md:flex-row items-center justify-center gap-10 md:gap-14">
+          <FounderPortrait className="shrink-0" />
 
-          <figure
-            className="glass relative aspect-[4/3] w-full max-w-2xl overflow-hidden rounded-sm border border-border"
-          >
-            <Image
-              src="/gallery/ceremony-card.jpeg"
-              alt="A ceremony card designed by Janelle"
-              fill
-              sizes="(min-width: 768px) 640px, 100vw"
-              className="object-cover"
-            />
-          </figure>
+          <div className="flex flex-col items-center md:items-start gap-6 text-center md:text-left">
+            <h2 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
+              {t("about.heading")}
+            </h2>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
-            <Button asChild size="lg" variant="outline">
-              <Link href="/weddings">
-                {t("nav.weddings")}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/gallery">
-                {t("cta.viewFullGallery")}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <p className="normal-case tracking-normal font-normal text-foreground/80 text-base md:text-lg leading-relaxed max-w-lg">
+              {pick(founderIntro, locale)}
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <Button asChild size="lg" variant="outline">
+                <Link href="/about">
+                  {t("cta.readMyStory")}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/gallery">
+                  {t("cta.viewFullGallery")}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </Scene>

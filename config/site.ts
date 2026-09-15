@@ -13,13 +13,26 @@ export type Hero = {
 export type FounderSection = { heading?: Bilingual; paragraphs: Bilingual[] };
 export type About = { sections: FounderSection[] };
 
+/**
+ * Founder headshot, shared by the home story scroll and the About page.
+ * `photo` is optional on purpose: while it is unset, `FounderPortrait`
+ * renders nothing at all rather than a placeholder frame.
+ */
+export type Founder = { photo?: string; alt: Bilingual };
+
 export type InvestmentTier = {
   id: string;
   name: Bilingual;
   description: Bilingual;
   features: Bilingual[];
-  discount?: number;
-  /** Display label for the savings badge. Decoupled from the numeric discount. */
+  /**
+   * Optional showcase photo of the finished suite. Absent ⇒ the card renders
+   * with no image area (never an empty "coming soon" block). Each tier below
+   * carries its intended entry commented out — drop the file in
+   * `public/suites/` and uncomment the line to turn it on.
+   */
+  image?: { src: string; alt: Bilingual };
+  /** Savings badge: ✦ / ✦✦ / ✦✦✦. Relative, never a percentage. */
   savingsLabel?: string;
 };
 
@@ -88,15 +101,18 @@ export type InstagramConfig = {
 };
 
 export const siteConfig = {
-  name: "GutierrezByJanelle",
+  // Single source of truth for the brand name in prose. Accented, spaced.
+  // URLs, the Instagram handle, the contact email and the Etsy shop name below
+  // are the real-world identifiers and stay unaccented.
+  name: "Gutiérrez by Janelle",
   description:
     "Custom invitations, décor, signs, and digital resources for your wedding and events. Designed with love by Janelle.",
   url: "https://www.gutierrezbyjanelle.com",
   locale: "en_US",
   alternateLocales: ["es_ES"],
   ogImages: [
-    { url: "/logo.svg", width: 1785, height: 1785, alt: "GutierrezByJanelle logo", type: "image/svg+xml" },
-    { url: "/opengraph-image", width: 1200, height: 630, alt: "GutierrezByJanelle", type: "image/png" },
+    { url: "/logo.svg", width: 1785, height: 1785, alt: "Gutiérrez by Janelle logo", type: "image/svg+xml" },
+    { url: "/opengraph-image", width: 1200, height: 630, alt: "Gutiérrez by Janelle", type: "image/png" },
   ],
   twitterImages: ["/opengraph-image"],
   hero: {
@@ -105,8 +121,8 @@ export const siteConfig = {
       "Tu día soñado, bellamente diseñado."
     ),
     subheadline: b(
-      "Custom invitations, décor, signs, and digital resources, crafted with love for the moments that matter most.",
-      "Invitaciones personalizadas, decoración, carteles y recursos digitales, creados con amor para los momentos que más importan."
+      "Custom invitations, decor, signs, and enhancements, crafted with love for the moments that matter most.",
+      "Invitaciones personalizadas, decoración, carteles y complementos, creados con amor para los momentos que más importan."
     ),
   } satisfies Hero,
   about: {
@@ -151,6 +167,12 @@ export const siteConfig = {
       },
     ],
   } satisfies About,
+  founder: {
+    // Drop the headshot at public/founder/janelle.jpg, then uncomment the line
+    // below. Until then FounderPortrait renders nothing — no placeholder frame.
+    // photo: "/founder/janelle.jpg",
+    alt: b("Janelle Gutiérrez, founder", "Janelle Gutiérrez, fundadora"),
+  } satisfies Founder,
   weddings: {
     paragraphs: [
       b(
@@ -174,8 +196,8 @@ export const siteConfig = {
   events: {
     paragraphs: [
       b(
-        "Not just weddings — celebrations of every kind. Graduations, baby showers, birthdays, anniversaries, quinceañeras, retirement parties, and corporate gatherings all deserve stationery and signage that feels custom, not copy-pasted.",
-        "No solo bodas: celebraciones de todo tipo. Graduaciones, baby showers, cumpleaños, aniversarios, quinceañeras, fiestas de jubilación y eventos corporativos merecen papelería y señalización que se sienta hecha a la medida, no copiada y pegada."
+        "Not just weddings — celebrations of every kind. Dinner parties, graduations, baby showers, birthdays, anniversaries, quinceañeras, retirement parties, and corporate gatherings all deserve stationery and signage that feels custom, not copy-pasted.",
+        "No solo bodas: celebraciones de todo tipo. Cenas, graduaciones, baby showers, cumpleaños, aniversarios, quinceañeras, fiestas de jubilación y eventos corporativos merecen papelería y señalización que se sienta hecha a la medida, no copiada y pegada."
       ),
       b(
         "Whatever you're celebrating, I bring the same care, custom design, and honest communication to your event as I do to every wedding — pieces you'll actually want to keep.",
@@ -185,28 +207,13 @@ export const siteConfig = {
   } satisfies EventsInfo,
   mainNav: [
     { title: "Home", href: "/", i18nKey: "nav.home" },
+    { title: "About", href: "/about", i18nKey: "nav.about" },
     { title: "Weddings", href: "/weddings", i18nKey: "nav.weddings" },
     { title: "Events", href: "/events", i18nKey: "nav.events" },
-    { title: "About", href: "/about", i18nKey: "nav.about" },
     { title: "Gallery", href: "/gallery", i18nKey: "nav.gallery" },
     { title: "Reviews", href: "/reviews", i18nKey: "nav.reviews" },
   ] satisfies NavItem[],
   investments: [
-    {
-      id: "individual",
-      name: b("Individual Item", "Pieza Individual"),
-      description: b(
-        "Buy any single stationery piece: invite, thank you note, RSVP, menu, and more. Mix and match to suit your event.",
-        "Compra cualquier pieza individual de papelería: invitación, tarjeta de agradecimiento, RSVP, menú y más. Combínalas como mejor le quede a tu evento."
-      ),
-      features: [
-        b("Invite", "Invitación"),
-        b("Thank you note", "Tarjeta de agradecimiento"),
-        b("RSVP card", "Tarjeta RSVP"),
-        b("Menu", "Menú"),
-        b("And more (inquire for the full list)", "Y más (consulta por la lista completa)"),
-      ],
-    },
     {
       id: "diy-digital",
       name: b("Short and Suite", "Corto y Dulce"),
@@ -218,7 +225,7 @@ export const siteConfig = {
         b("Detail card", "Tarjeta de detalles"),
         b("Invite", "Invitación"),
       ],
-      discount: 10,
+      // image: { src: "/suites/short-and-suite.jpeg", alt: b("Short and Suite", "Corto y Dulce") },
       savingsLabel: "✦",
     },
     {
@@ -234,7 +241,7 @@ export const siteConfig = {
         b("RSVP", "RSVP"),
         b("Envelope printing", "Impresión de sobres"),
       ],
-      discount: 12,
+      // image: { src: "/suites/sweet-spot-suite.jpeg", alt: b("Sweet Spot Suite", "Colección Punto Dulce") },
       savingsLabel: "✦✦",
     },
     {
@@ -254,22 +261,27 @@ export const siteConfig = {
         b("Table top sign (memory table, dance floor, or drink sign)", "Cartel de mesa (mesa de recuerdos, pista de baile o cartel de bebidas)"),
         b("AI-generated render to envision your event", "Render con IA para visualizar tu evento"),
       ],
-      discount: 15,
+      // image: { src: "/suites/signature-suite.jpeg", alt: b("Signature Suite", "Colección Firma") },
       savingsLabel: "✦✦✦",
     },
     {
+      // Single à-la-carte menu: the standalone pieces and the suite enhancements
+      // are one list, de-duplicated (one "Menu"; "Thank you note" folded into
+      // "Thank you cards"). Rendered as the MarqueeTicker, not a PriceCard.
       id: "add-ons",
-      name: b("Add-Ons", "Complementos"),
+      name: b("Individual Items and Enhancements", "Piezas Individuales y Complementos"),
       description: b(
-        "Enhance any suite with these extra touches, available individually alongside any investment.",
-        "Realza cualquier colección con estos toques extra, disponibles individualmente junto con cualquier inversión."
+        "Every piece can be ordered on its own or added to any suite — mix and match to suit your event.",
+        "Cada pieza se puede pedir por separado o sumarse a cualquier colección: combínalas como mejor le quede a tu evento."
       ),
       features: [
+        b("Invite", "Invitación"),
+        b("RSVP card", "Tarjeta RSVP"),
         b("Menu", "Menú"),
+        b("Thank you cards", "Tarjetas de agradecimiento"),
         b("Drink toppers", "Toppers para bebidas"),
         b("Table top signs (signature drink sign)", "Carteles de mesa (cartel de bebida especial)"),
         b("Place cards", "Tarjetas de lugar"),
-        b("Thank you cards", "Tarjetas de agradecimiento"),
         b("Party favor tags", "Etiquetas para recuerdos"),
         b("Coasters", "Posavasos"),
         b("Wine charms", "Charms para copas de vino"),
@@ -282,6 +294,7 @@ export const siteConfig = {
         b("Extra card or shape design", "Diseño de tarjeta o forma adicional"),
         b("Full color designs", "Diseños a todo color"),
         b("Textured paper", "Papel texturizado"),
+        b("And more (inquire for the full list)", "Y más (consulta por la lista completa)"),
       ],
     },
   ] satisfies InvestmentTier[],
@@ -297,6 +310,7 @@ export const siteConfig = {
         b("Invite", "Invitación"),
         b("Thank you cards", "Tarjetas de agradecimiento"),
       ],
+      // image: { src: "/suites/event-basics.jpeg", alt: b("The Basics", "Lo Esencial") },
       savingsLabel: "✦",
     },
     {
@@ -313,6 +327,7 @@ export const siteConfig = {
         b("Event sign", "Cartel del evento"),
         b("Dessert sign", "Cartel de postres"),
       ],
+      // image: { src: "/suites/event-fun.jpeg", alt: b("Add Some Fun", "Agrega Diversión") },
       savingsLabel: "✦✦",
     },
     {
@@ -333,6 +348,7 @@ export const siteConfig = {
         b("Dessert sign", "Cartel de postres"),
         b("Signature drink sign", "Cartel de bebida especial"),
       ],
+      // image: { src: "/suites/event-works.jpeg", alt: b("Give Me the Works", "Dame Todo") },
       savingsLabel: "✦✦✦",
     },
   ] satisfies InvestmentTier[],

@@ -13,6 +13,7 @@ import {
 } from "@/lib/quote-calc-logic";
 import type { LineResult, QuoteBreakdown } from "@/lib/quote-calc-totals";
 import { cn } from "@/utils";
+import { siteConfig } from "@/config/site";
 
 interface Props {
   breakdown: QuoteBreakdown;
@@ -248,7 +249,7 @@ export function BreakdownPanel({
 
     const sep = String.fromCharCode(9472).repeat(37);
     const summaryLines = [
-      "GutierrezByJanelle - Quote Summary",
+      `${siteConfig.name} - Quote Summary`,
       sep,
       lineLabels ? `Items:       ${lineLabels}` : null,
       lines.length > 0 ? `Mode:        ${mode === "fresh" ? "Custom design (fresh artwork)" : "Reuse existing design"}` : null,
@@ -263,7 +264,7 @@ export function BreakdownPanel({
       "",
       "* Shipping not included - added based on carrier quote.",
       "Prices are estimates. Final quote may vary based on design complexity and final details.",
-      "- GutierrezByJanelle",
+      `- ${siteConfig.name}`,
     ]
       .filter(Boolean)
       .join("\n");

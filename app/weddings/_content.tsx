@@ -13,11 +13,8 @@ import { pick } from "@/lib/i18n";
 export function WeddingsContent() {
   const { locale, t } = useLocale();
 
-  const individualTier = siteConfig.investments.find((p) => p.id === "individual")!;
-  const weddingSuites = siteConfig.investments.filter(
-    (p) => p.id !== "individual" && p.id !== "add-ons"
-  );
-  const addOnsTier = siteConfig.investments.find((p) => p.id === "add-ons")!;
+  const weddingSuites = siteConfig.investments.filter((p) => p.id !== "add-ons");
+  const itemsTier = siteConfig.investments.find((p) => p.id === "add-ons")!;
 
   return (
     <>
@@ -97,11 +94,22 @@ export function WeddingsContent() {
             </p>
           </div>
 
-          <div id="individual" className="max-w-5xl mx-auto mb-20 scroll-mt-20">
-            <PriceCard plan={individualTier} className="max-w-xl mx-auto" />
+          <div id="individual-items" className="scroll-mt-20 max-w-5xl mx-auto mb-20">
+            <div className="text-center mb-8">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                {t("investment.addons.eyebrow")}
+              </p>
+              <h2 className="font-squarepeg text-3xl sm:text-4xl">
+                {pick(itemsTier.name, locale)}
+              </h2>
+              <p className="mt-3 text-sm text-muted-foreground max-w-lg mx-auto">
+                {pick(itemsTier.description, locale)}
+              </p>
+            </div>
+            <MarqueeTicker items={itemsTier.features.map((f) => pick(f, locale))} />
           </div>
 
-          <div id="wedding-suites" className="scroll-mt-20 max-w-5xl mx-auto mb-20">
+          <div id="wedding-suites" className="scroll-mt-20 max-w-5xl mx-auto">
             <div className="text-center mb-8">
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
                 {t("investment.wedding.eyebrow")}
@@ -113,26 +121,11 @@ export function WeddingsContent() {
                 {t("investment.wedding.body")}
               </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {weddingSuites.map((plan) => (
-                <PriceCard key={plan.id} plan={plan} showPlaceholder />
+                <PriceCard key={plan.id} plan={plan} />
               ))}
             </div>
-          </div>
-
-          <div id="add-ons" className="scroll-mt-20 max-w-5xl mx-auto">
-            <div className="text-center mb-8">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                {t("investment.addons.eyebrow")}
-              </p>
-              <h2 className="font-squarepeg text-3xl sm:text-4xl">
-                {pick(addOnsTier.name, locale)}
-              </h2>
-              <p className="mt-3 text-sm text-muted-foreground max-w-lg mx-auto">
-                {pick(addOnsTier.description, locale)}
-              </p>
-            </div>
-            <MarqueeTicker items={addOnsTier.features.map((f) => pick(f, locale))} />
           </div>
         </div>
       </section>
