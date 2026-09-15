@@ -6,6 +6,7 @@
 // server-side here and projected to a PublicQuote — only that crosses to the client.
 
 import { notFound } from "next/navigation";
+import { siteConfig } from "@/config/site";
 import {
   findByPublicToken,
   getDraftById,
@@ -30,7 +31,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "Your quote · Gutierrez by Janelle",
+  title: `Your quote · ${siteConfig.name}`,
   robots: { index: false, follow: false },
 };
 

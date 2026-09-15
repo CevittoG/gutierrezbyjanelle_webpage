@@ -75,7 +75,7 @@ export function PublicQuoteView({
         {/* Header */}
         <motion.header variants={item} className="text-center">
           <p className="text-[11px] uppercase tracking-[0.28em] text-muted-foreground">Custom stationery</p>
-          <h1 className="font-squarepeg text-6xl sm:text-7xl leading-[0.95] mt-3">Gutierrez by Janelle</h1>
+          <h1 className="font-squarepeg text-6xl sm:text-7xl leading-[0.95] mt-3">{siteConfig.name}</h1>
           <p className="text-sm text-muted-foreground mt-4">
             Prepared for <span className="text-foreground font-medium">{quote.clientName || "you"}</span>
             {quote.eventType ? <> · {quote.eventType}</> : null}

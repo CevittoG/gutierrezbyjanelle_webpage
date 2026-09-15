@@ -8,11 +8,13 @@ import { ArrowRight } from "lucide-react";
 import { cn } from "@/utils";
 import { Button } from "@/components/ui/button";
 
+export type HeroAction = { label: string; href: string };
+
 interface StationeryHeroProps {
   title: React.ReactNode;
   description: React.ReactNode;
-  buttonText: string;
-  buttonLink: string;
+  /** One button per entry, rendered in order. Wraps on narrow screens. */
+  actions: HeroAction[];
   /** First vertical card image (front — invitation). */
   imageUrl1: string;
   /** Second vertical card image (back). */
@@ -50,8 +52,7 @@ const cardItemVariants = {
 export const StationeryHero = ({
   title,
   description,
-  buttonText,
-  buttonLink,
+  actions,
   imageUrl1,
   imageUrl2,
   className,
@@ -86,13 +87,24 @@ export const StationeryHero = ({
           >
             {description}
           </motion.p>
-          <motion.div variants={itemVariants} className="mt-8">
-            <Button asChild size="lg" variant="outline" className="h-12 px-8 text-base">
-              <Link href={buttonLink}>
-                {buttonText}
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+          <motion.div
+            variants={itemVariants}
+            className="mt-8 flex flex-wrap justify-center lg:justify-end gap-3"
+          >
+            {actions.map((action) => (
+              <Button
+                key={action.href}
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-12 px-8 text-base"
+              >
+                <Link href={action.href}>
+                  {action.label}
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            ))}
           </motion.div>
         </div>
 
