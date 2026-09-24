@@ -1,0 +1,104 @@
+/* Concept V3 — "The Stationery Table": playful, tactile, bento-era.
+   Bricolage Grotesque + Instrument Serif italic; butter, chocolate, cherry, blush. */
+.v3-root {
+  --background: 44 78% 92%;        /* butter      #FBF1D5 */
+  --foreground: 22 50% 14%;        /* chocolate   #361F12 */
+  --card: 45 90% 97%;
+  --card-foreground: 22 50% 14%;
+  --primary: 4 66% 46%;            /* cherry      #C3342A */
+  --primary-foreground: 45 90% 97%;
+  --muted: 350 78% 90%;            /* blush       #F9D2D9 */
+  --muted-foreground: 22 30% 28%;
+  --accent: 350 78% 90%;
+  --accent-foreground: 22 50% 14%;
+  --border: 22 50% 14%;
+  --input: 22 50% 14%;
+  --ring: 4 66% 40%;
+  --butter-deep: 42 85% 78%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-bricolage), sans-serif;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  overflow-x: clip;
+}
+.v3-root ::selection { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.v3-display { font-family: var(--font-bricolage), sans-serif; font-weight: 700; letter-spacing: -0.035em; line-height: 0.92; }
+.v3-serif { font-family: var(--font-instrument), serif; font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+
+/* Soft neo-brutal surfaces */
+.v3-card { border: 2px solid hsl(var(--foreground)); border-radius: 28px; box-shadow: 5px 5px 0 hsl(var(--foreground)); }
+.v3-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 3rem; padding: 0 1.4rem; border-radius: 9999px; font-weight: 600;
+  border: 2px solid hsl(var(--foreground)); box-shadow: 3px 3px 0 hsl(var(--foreground));
+  transition: transform 0.2s cubic-bezier(0.3, 1.6, 0.5, 1), box-shadow 0.2s;
+}
+.v3-pill:hover { transform: translate(-2px, -2px) rotate(-1.5deg); box-shadow: 5px 5px 0 hsl(var(--foreground)); }
+.v3-pill:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 hsl(var(--foreground)); }
+.v3-pill:focus-visible { outline: 3px solid hsl(var(--ring)); outline-offset: 3px; }
+
+/* Desk surface */
+.v3-desk {
+  background-color: hsl(var(--muted));
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  touch-action: pan-y;
+}
+.v3-piece { touch-action: none; cursor: grab; }
+.v3-piece:active { cursor: grabbing; }
+
+/* Rotating sticker */
+.v3-sticker svg { animation: v3-spin 18s linear infinite; }
+@keyframes v3-spin { to { transform: rotate(360deg); } }
+
+/* Wiggle on hover */
+.v3-wiggle:hover { animation: v3-wiggle 0.5s ease-in-out; }
+@keyframes v3-wiggle { 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+
+/* Pop-in when content swaps */
+.v3-pop { animation: v3-pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes v3-pop { from { opacity: 0; transform: translateY(24px) scale(0.94) rotate(-2deg); } }
+
+/* Flip cards */
+.v3-flip { perspective: 1400px; }
+.v3-flip-inner { display: grid; transform-style: preserve-3d; transition: transform 0.9s cubic-bezier(0.3, 1.2, 0.4, 1); height: 100%; }
+.v3-flip-face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.v3-flip-back { transform: rotateY(180deg); }
+.v3-flip[data-flipped="true"] .v3-flip-inner { transform: rotateY(180deg); }
+@media (hover: hover) { .v3-flip:hover .v3-flip-inner { transform: rotateY(180deg); } }
+
+/* Tilt tiles (vars set from pointer position) */
+.v3-tilt { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) rotate(var(--rot, 0deg)); transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform; }
+.v3-tilt:hover { --rot: 0deg; }
+
+/* Tape corners on notes */
+.v3-tape { position: relative; }
+.v3-tape::before, .v3-tape::after {
+  content: ""; position: absolute; width: 96px; height: 28px; top: -12px;
+  background: hsl(var(--butter-deep) / 0.85); border: 1px dashed hsl(var(--foreground) / 0.2);
+}
+.v3-tape::before { left: 24px; transform: rotate(-8deg); }
+.v3-tape::after { right: 24px; transform: rotate(7deg); }
+
+/* Crossing ribbons */
+.v3-ribbon { transform: rotate(-2.5deg); }
+.v3-ribbon-2 { transform: rotate(2deg); margin-top: -1.6rem; }
+
+/* Carousel */
+.v3-snap { scroll-snap-type: x mandatory; scroll-padding-inline: 1rem; }
+.v3-snap > * { scroll-snap-align: start; }
+@media (min-width: 768px) { .v3-snap { scroll-padding-inline: 2.5rem; } }
+
+/* Nav pill link */
+.v3-navlink { border-radius: 9999px; padding: 0.5rem 0.9rem; transition: background 0.25s, color 0.25s; }
+.v3-navlink:hover { background: hsl(var(--muted)); }
+.v3-navlink[aria-current="page"] { background: hsl(var(--foreground)); color: hsl(var(--background)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-sticker svg { animation: none; }
+  .v3-tilt { transform: rotate(var(--rot, 0deg)); }
+}

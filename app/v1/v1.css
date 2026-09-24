@@ -1,0 +1,145 @@
+/* Concept V1 — "Linen, Re-inked": same two voices (Square Peg + Anybody),
+   new Sage Garden palette with a terracotta wax-seal accent. */
+.v1-root {
+  --background: 40 38% 95%;        /* linen cream  #F6F2EA */
+  --foreground: 90 16% 16%;        /* olive ink    #2A3023 */
+  --card: 42 50% 98%;
+  --card-foreground: 90 16% 16%;
+  --primary: 88 20% 30%;           /* deep olive   #4D5B3D */
+  --primary-foreground: 40 38% 96%;
+  --muted: 84 20% 89%;             /* sage mist */
+  --muted-foreground: 88 10% 32%;
+  --accent: 16 50% 50%;            /* terracotta seal #BF6340 */
+  --accent-foreground: 40 38% 97%;
+  --border: 70 14% 80%;
+  --input: 70 14% 80%;
+  --ring: 16 50% 42%;
+  --sage: 95 16% 62%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  overflow-x: clip;
+}
+
+.v1-root ::selection { background: hsl(var(--accent) / 0.25); }
+
+.v1-paper {
+  background-color: hsl(var(--card));
+  background-image:
+    radial-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 5px 5px;
+}
+
+/* Stitched edge, like a sewn envelope */
+.v1-stitch { position: relative; }
+.v1-stitch::after {
+  content: ""; position: absolute; inset: 8px; pointer-events: none;
+  border: 1.5px dashed hsl(var(--sage) / 0.7); border-radius: 2px;
+}
+
+/* Wax seal */
+.v1-seal {
+  display: grid; place-items: center; border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, hsl(16 55% 62%), hsl(var(--accent)) 55%, hsl(14 52% 38%));
+  color: hsl(var(--accent-foreground));
+  box-shadow: inset 0 0 0 3px hsl(14 50% 40% / 0.45), inset 0 0 0 6px hsl(16 60% 66% / 0.35), 0 6px 14px -6px hsl(14 50% 30% / 0.6);
+}
+
+/* ── Envelope hero ───────────────────────────────────────── */
+.v1-stage { position: relative; width: min(88vw, 440px); aspect-ratio: 2 / 3; margin-inline: auto; }
+.v1-env { position: absolute; left: 0; right: 0; bottom: 0; aspect-ratio: 10 / 7; perspective: 1400px; cursor: pointer; }
+.v1-env-back { position: absolute; inset: 0; border-radius: 4px; background: hsl(36 28% 84%); box-shadow: 0 30px 60px -30px hsl(90 30% 15% / 0.45); }
+.v1-env-clip { position: absolute; left: 0; right: 0; bottom: 0; height: 220%; overflow: hidden; z-index: 10; }
+.v1-env-card {
+  position: absolute; left: 8%; width: 84%; top: 58%; aspect-ratio: 1964 / 2750;
+  border-radius: 3px; overflow: hidden;
+  box-shadow: 0 12px 30px -12px hsl(90 30% 15% / 0.45);
+  animation: v1-card-rise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 1.55s both;
+}
+.v1-env-front {
+  position: absolute; inset: 0; z-index: 20; border-radius: 4px;
+  background: linear-gradient(170deg, hsl(38 36% 90%), hsl(36 30% 86%));
+  clip-path: polygon(0 0, 50% 52%, 100% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 -2px 3px hsl(90 30% 15% / 0.12));
+}
+.v1-env-front::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to top right, transparent 49.6%, hsl(36 20% 70% / 0.55) 50%, transparent 50.4%),
+              linear-gradient(to top left, transparent 49.6%, hsl(36 20% 70% / 0.55) 50%, transparent 50.4%);
+}
+.v1-env-flap {
+  position: absolute; left: 0; right: 0; top: 0; height: 58%; z-index: 30;
+  transform-origin: top center;
+  background: linear-gradient(180deg, hsl(36 30% 82%), hsl(38 34% 88%));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation: v1-flap-open 0.9s cubic-bezier(0.6, 0, 0.3, 1) 0.75s both;
+}
+.v1-env-seal {
+  position: absolute; left: 50%; top: 58%; z-index: 40; width: 22%; aspect-ratio: 1;
+  transform: translate(-50%, -62%);
+  animation: v1-seal-break 0.6s ease-in 0.25s both;
+}
+@keyframes v1-flap-open {
+  0%   { transform: rotateX(0deg); z-index: 30; }
+  49%  { z-index: 30; }
+  50%  { z-index: 5; }
+  100% { transform: rotateX(180deg); z-index: 5; }
+}
+@keyframes v1-seal-break {
+  0%   { opacity: 1; transform: translate(-50%, -62%) scale(1) rotate(0); }
+  40%  { transform: translate(-50%, -62%) scale(1.08) rotate(-6deg); }
+  100% { opacity: 0; transform: translate(-50%, -30%) scale(0.6) rotate(18deg); }
+}
+@keyframes v1-card-rise { to { transform: translateY(-70%); } }
+.v1-env:hover .v1-env-card { filter: brightness(1.02); }
+
+/* Suite fan */
+.v1-fan { position: relative; height: 260px; --spread: 38px; }
+@media (min-width: 768px) { .v1-fan { height: 340px; --spread: 76px; } }
+.v1-fan-card {
+  position: absolute; left: 50%; bottom: 0; width: 112px; transform-origin: 50% 120%;
+  transform: translateX(-50%) rotate(0deg);
+  transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 70ms), box-shadow 0.3s;
+}
+@media (min-width: 768px) { .v1-fan-card { width: 150px; } }
+.v1-fan[data-inview] .v1-fan-card { transform: translateX(calc(-50% + calc(var(--k) * var(--spread)))) rotate(var(--r)); }
+.v1-fan .v1-fan-card:hover { transform: translateX(calc(-50% + calc(var(--k) * var(--spread)))) translateY(-28px) rotate(var(--r)) scale(1.06); z-index: 20; transition-delay: 0s; }
+
+/* Process thread */
+.v1-thread { transform-origin: left; transform: scaleX(0); transition: transform 1.6s cubic-bezier(0.6, 0, 0.2, 1) 0.2s; }
+[data-inview] > .v1-thread, [data-inview] .v1-thread { transform: scaleX(1); }
+
+/* Envelope collection card */
+.v1-tier { transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s; }
+.v1-tier:hover { transform: translateY(-6px); box-shadow: 0 24px 50px -24px hsl(var(--accent) / 0.55); }
+.v1-tier-flap {
+  height: 64px; background: hsl(var(--muted));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: top; transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.v1-tier:hover .v1-tier-flap { transform: rotateX(55deg); }
+
+/* Sticky mobile CTA */
+.v1-sticky { animation: v1-slide-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.5s both; }
+@keyframes v1-slide-up { from { transform: translateY(110%); } to { transform: none; } }
+
+/* Nav underline */
+.v1-navlink { position: relative; }
+.v1-navlink::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 2px; border-radius: 2px;
+  background: hsl(var(--accent)); transform: scaleX(0); transform-origin: left; transition: transform 0.35s ease;
+}
+.v1-navlink:hover::after, .v1-navlink[aria-current="page"]::after { transform: scaleX(1); }
+
+/* Gallery */
+.v1-masonry { columns: 2; column-gap: 1rem; }
+@media (min-width: 768px) { .v1-masonry { columns: 3; column-gap: 1.25rem; } }
+@media (min-width: 1280px) { .v1-masonry { columns: 4; } }
+.v1-masonry > * { break-inside: avoid; margin-bottom: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v1-env-flap { transform: rotateX(180deg); z-index: 5; animation: none; }
+  .v1-env-seal { display: none; }
+  .v1-env-card { transform: translateY(-70%); animation: none; }
+  .v1-fan-card { transform: translateX(calc(-50% + calc(var(--k) * var(--spread)))) rotate(var(--r)); }
+  .v1-thread { transform: none; }
+}
