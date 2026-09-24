@@ -431,6 +431,24 @@ Each quote moves through a 9-stage pipeline that drives the client portal and th
 
 ---
 
+## Design Concepts — `/v1`, `/v2`, `/v3` (hidden, throwaway)
+
+Three redesign mock-ups of all six public pages, built to compare directions side by side. Same content (everything reads `siteConfig` + the i18n dictionary, EN/ES works), different look. **They deliberately break the brand rules above** (new palettes and fonts) — they are experiments, not the system.
+
+| Route | Concept | Look |
+|---|---|---|
+| `/v1/*` | **Linen, Re-inked** | Current fonts (Square Peg + Anybody), Sage Garden palette, terracotta wax seal. Envelope-opening hero, fanned suite, stitched envelope cards, sticky mobile Email/Instagram bar |
+| `/v2/*` | **Editorial Atelier** | Fraunces + Manrope, ivory/oxblood/champagne. Magazine chapters, word-rise headlines, scroll-driven parallax, lookbook strip, table-of-contents collections, full-screen menu |
+| `/v3/*` | **Stationery Table** | Bricolage Grotesque + Instrument Serif, butter/chocolate/cherry/blush. Draggable desk of real pieces (framer-motion), spinning stickers, flip-card collections, bento grid, à-la-carte **wish list → pre-written email** |
+
+- Hidden: `robots` noindex in each `app/vN/layout.tsx`, disallowed in `app/robots.ts`, not in the sitemap or `mainNav`. The live header/footer self-hide on these routes (`HIDE_CHROME`).
+- Floating **Concept switcher** (bottom-left) jumps to the same page in Live / V1 / V2 / V3.
+- Shared helpers in `components/concepts/` (`Reveal`, `Marquee`, `Lightbox`, `ConceptSwitcher`, `use-concept.ts`, `use-gallery.ts`, `concepts.css`); concept-only copy in `config/concepts.ts`. Tokens are re-scoped per concept by redefining the shadcn CSS variables on `.v1-root` / `.v2-root` / `.v3-root`.
+- No new dependencies. Motion is CSS-first (IntersectionObserver reveals, keyframes, `animation-timeline: view()` behind `@supports`), and everything honours `prefers-reduced-motion`. Concept fonts load only inside their own layout.
+- To remove a concept: delete `app/vN/`, drop it from `HIDE_CHROME` and `robots.ts`. Deleting all three also frees `components/concepts/`, `config/concepts.ts`, and the four concept font families in `tailwind.config.ts`.
+
+---
+
 ## Current Status
 
 All public routes render with brand styling and full SEO metadata. Quote calculator fully functional with cost-plus pricing model.

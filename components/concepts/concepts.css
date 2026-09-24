@@ -1,0 +1,81 @@
+/* Shared by the hidden design concepts (/v1, /v2, /v3). Imported from their layouts only. */
+
+/* ── Scroll reveal ─────────────────────────────────────────── */
+.reveal {
+  --reveal-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition:
+    opacity 0.9s var(--reveal-ease) var(--reveal-delay, 0ms),
+    transform 0.9s var(--reveal-ease) var(--reveal-delay, 0ms),
+    clip-path 1.1s var(--reveal-ease) var(--reveal-delay, 0ms),
+    filter 0.9s var(--reveal-ease) var(--reveal-delay, 0ms);
+}
+.reveal:not([data-inview]) { opacity: 0; }
+.reveal[data-reveal="up"]:not([data-inview])    { transform: translateY(28px); }
+.reveal[data-reveal="left"]:not([data-inview])  { transform: translateX(-32px); }
+.reveal[data-reveal="right"]:not([data-inview]) { transform: translateX(32px); }
+.reveal[data-reveal="scale"]:not([data-inview]) { transform: scale(0.94); filter: blur(4px); }
+.reveal[data-reveal="mask"]:not([data-inview]) { opacity: 1; }
+/* The mask clips the children, not the observed element — a fully clipped
+   target never reports as intersecting. */
+.reveal[data-reveal="mask"] > * { clip-path: inset(0 0 0 0); transition: clip-path 1.1s var(--reveal-ease) var(--reveal-delay, 0ms); }
+.reveal[data-reveal="mask"]:not([data-inview]) > * { clip-path: inset(100% 0 0 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal[data-reveal="mask"] > * { clip-path: none !important; }
+  .reveal, .reveal:not([data-inview]) { opacity: 1 !important; transform: none !important; clip-path: none !important; filter: none !important; }
+}
+
+/* ── Marquee ───────────────────────────────────────────────── */
+.concept-marquee { overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.concept-marquee-track { display: flex; width: max-content; animation: concept-marquee var(--marquee-duration, 40s) linear infinite; }
+.concept-marquee.is-reverse .concept-marquee-track { animation-direction: reverse; }
+.concept-marquee:hover .concept-marquee-track { animation-play-state: paused; }
+.concept-marquee-row { display: flex; flex-shrink: 0; }
+.concept-marquee-item { display: inline-flex; align-items: center; gap: 1.5rem; padding-right: 1.5rem; white-space: nowrap; }
+.concept-marquee-sep { opacity: 0.55; }
+@keyframes concept-marquee { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .concept-marquee-track { animation: none; flex-wrap: wrap; width: auto; }
+  .concept-marquee-row[aria-hidden] { display: none; }
+  .concept-marquee-row { flex-wrap: wrap; justify-content: center; }
+}
+
+/* ── Lightbox ──────────────────────────────────────────────── */
+.concept-lightbox {
+  width: 100vw; height: 100dvh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0;
+  background: transparent;
+}
+.concept-lightbox::backdrop { background: rgb(20 14 10 / 0.86); backdrop-filter: blur(6px); }
+.concept-lightbox[open] .concept-lightbox-img { animation: concept-pop 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.concept-lightbox figcaption { color: #f4ede4; }
+.concept-lightbox-btn {
+  position: absolute; display: grid; place-items: center;
+  width: 2.75rem; height: 2.75rem; border-radius: 9999px;
+  background: rgb(255 250 244 / 0.12); color: #f4ede4;
+  border: 1px solid rgb(255 250 244 / 0.25);
+  transition: background 0.2s;
+}
+.concept-lightbox-btn:hover { background: rgb(255 250 244 / 0.25); }
+.concept-lightbox-btn:focus-visible { outline: 2px solid #f4ede4; outline-offset: 2px; }
+@keyframes concept-pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+/* ── Concept switcher ──────────────────────────────────────── */
+.concept-switcher {
+  position: fixed; left: 0.75rem; bottom: var(--switcher-bottom, 0.75rem); z-index: 60;
+  display: flex; align-items: center; gap: 0.125rem;
+  padding: 0.25rem; border-radius: 9999px;
+  background: rgb(30 22 16 / 0.82); color: #f6efe6;
+  backdrop-filter: blur(8px);
+  font: 500 11px/1 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.04em; text-transform: none;
+  box-shadow: 0 8px 24px -10px rgb(30 22 16 / 0.6);
+}
+.concept-switcher-link { padding: 0.45rem 0.6rem; border-radius: 9999px; transition: background 0.2s; }
+.concept-switcher-link:hover { background: rgb(255 255 255 / 0.12); }
+.concept-switcher-link[aria-current="page"] { background: #f6efe6; color: #1e1610; }
+.concept-switcher-link:focus-visible { outline: 2px solid #f6efe6; outline-offset: 1px; }
+
+/* Hide scrollbars on horizontal strips, keep them scrollable */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

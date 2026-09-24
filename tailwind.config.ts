@@ -49,6 +49,11 @@ const config: Config = {
       fontFamily: {
         anybody:   ["var(--font-anybody)",   "sans-serif"],
         squarepeg: ["var(--font-squarepeg)", "cursive"],
+        // Design-concept fonts — loaded only inside app/v2 and app/v3 layouts.
+        fraunces:   ["var(--font-fraunces)",   "serif"],
+        manrope:    ["var(--font-manrope)",    "sans-serif"],
+        bricolage:  ["var(--font-bricolage)",  "sans-serif"],
+        instrument: ["var(--font-instrument)", "serif"],
       },
       borderRadius: {
         none: "0px",

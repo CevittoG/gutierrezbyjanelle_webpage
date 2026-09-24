@@ -5,8 +5,8 @@ import { siteConfig } from "../config/site";
 import { useLocale } from "@/lib/locale-context";
 
 // Mirror of SiteHeader: hide the marketing footer on the gated quote tools and
-// the client portal, which carry their own chrome.
-const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q)(\/|$)/;
+// the client portal (and the /v1–/v3 design concepts), which carry their own chrome.
+const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q|v1|v2|v3)(\/|$)/;
 
 function InstagramIcon({ className }: { className?: string }) {
   return (
