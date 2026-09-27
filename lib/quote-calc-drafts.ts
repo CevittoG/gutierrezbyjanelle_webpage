@@ -1,11 +1,10 @@
-import {
-  DEFAULTS,
-  PACKAGES,
-  PkgKey,
-  PricingMode,
-  QuoteState,
-  getItemQty,
-} from "./quote-calc-logic";
+import type { QuoteState } from "./legacy/logic";
+import type { DraftConfig } from "./legacy/types";
+import { migrateConfig, withSnapshotDefaults } from "./legacy/migrate";
+
+// The v1–v4 config shape and its migration are frozen in lib/legacy/.
+export * from "./legacy/types";
+export { withSnapshotDefaults } from "./legacy/migrate";
 
 export interface DraftClientInfo {
   name: string;
@@ -33,98 +32,6 @@ export const EVENT_TYPES = [
   "Corporate",
   "Other",
 ] as const;
-
-export interface MiscAddOn {
-  id: string;
-  label: string;
-  qty: number;
-  unitPrice: number;
-  /**
-   * Digital (nothing to ship) vs physical. A physical add-on pulls the quote
-   * into packaging + the shipping reminder + the physical stage wording. Never
-   * changes the add-on's own price. Backfilled on load for older quotes.
-   */
-  digital?: boolean;
-}
-
-export type LineKind = "package" | "item";
-
-// One line on a quote. A quote holds an array of these so a client can buy
-// several things at once. A line is either a predefined bundle (`kind:
-// "package"`, keyed by `pkg`) or a single catalog piece (`kind: "item"`, keyed
-// by `itemKey`). This unified model replaces the old `packages` + `addOns` +
-// `individual` pseudo-package split — one catalog item now prices identically
-// however it is added.
-export interface QuoteLine {
-  id: string;
-  kind: LineKind;
-  /** Bundle key when `kind === "package"` (sweet, signature, diy, event-*). */
-  pkg?: PkgKey;
-  /** Catalog item key when `kind === "item"` (iInvite, iGames, …). */
-  itemKey?: string;
-  /**
-   * Package lines: household/guest count (drives the catalog qty rules).
-   * Item lines: the raw piece count.
-   */
-  qty: number;
-  /** Digital (design-only) vs physical (printed + shipped). Applies to both kinds. */
-  digital?: boolean;
-}
-
-export interface DraftConfig {
-  lines: QuoteLine[];
-  mode: PricingMode;
-  miscAddOns: MiscAddOn[];
-
-  // Project services (quote-level — computed once, never per line).
-  rushFee: boolean;
-  extraRevisions: number;
-  digitalLicense: boolean;
-
-  // Quote-wide discounts (grouped — applied in one stage, stacked additively).
-  vendorIncentive: boolean;
-  /** Optional extra discount (0–100), e.g. bulk pricing. Was `packageDiscountPtg`. */
-  customDiscountPtg: number;
-  /** Optional extra discount (0–100) for friends & family. */
-  familyFriendsPtg: number;
-
-  // Material toggles (quote-wide).
-  fullColor: boolean;
-  customPaper: boolean;
-
-  /**
-   * Which pricing rules this quote was built under, so a rule change never
-   * silently re-prices a quote that was already saved/sent.
-   *   1 — rush excludes custom add-ons; an add-on needs a name to count.
-   *   2 — rush includes custom add-ons; an unnamed add-on counts as "Custom item".
-   * Missing ⇒ 1 (quotes saved before the field existed).
-   */
-  pricingVersion?: number;
-}
-
-export const CURRENT_PRICING_VERSION = 2;
-
-export const DEFAULT_CONFIG: DraftConfig = {
-  lines: [],
-  mode: "fresh",
-  miscAddOns: [],
-  rushFee: false,
-  extraRevisions: 0,
-  digitalLicense: false,
-  vendorIncentive: false,
-  customDiscountPtg: 0,
-  familyFriendsPtg: 0,
-  fullColor: false,
-  customPaper: false,
-  pricingVersion: CURRENT_PRICING_VERSION,
-};
-
-// A line is digital (design-only, nothing shipped) when it's a digital item or a
-// digital package. Shared by the physical/digital project-type rule.
-export function isLineDigital(line: QuoteLine): boolean {
-  if (line.kind === "item") return line.digital ?? false;
-  return line.pkg && PACKAGES[line.pkg] ? PACKAGES[line.pkg].isDigital : false;
-}
 
 export const CURRENT_SCHEMA_VERSION = 4 as const;
 
@@ -160,141 +67,6 @@ export function newId(): string {
     return crypto.randomUUID();
   }
   return "id-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-// Rewrite the legacy `iDrinkTop` add-on key as `iWedgeTop`. Idempotent.
-function migrateAddOns(addOns: Record<string, number> | undefined): Record<string, number> {
-  const next: Record<string, number> = { ...(addOns ?? {}) };
-  if ("iDrinkTop" in next) {
-    const qty = next.iDrinkTop;
-    delete next.iDrinkTop;
-    if (qty > 0) next.iWedgeTop = (next.iWedgeTop ?? 0) + qty;
-  }
-  return next;
-}
-
-function numOr(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
-
-function validPkg(pkg: unknown): PkgKey {
-  return typeof pkg === "string" && pkg in PACKAGES ? (pkg as PkgKey) : "sweet";
-}
-
-// One line as it may appear on disk: either a current v4 `QuoteLine` (has
-// `kind`) or a legacy package object (`pkg`/`qty`/`individual*`, where
-// `pkg === "individual"` meant a single à-la-carte piece).
-type LegacyLine = {
-  id?: string;
-  kind?: string;
-  pkg?: string;
-  qty?: number;
-  itemKey?: string;
-  individualItem?: string;
-  individualDigital?: boolean;
-  digital?: boolean;
-};
-
-// Project any on-disk line shape to a clean v4 QuoteLine. Legacy `individual`
-// packages collapse to item lines, preserving their piece count via getItemQty
-// so the migrated quote re-prices to the same per-item quantities.
-function lineFromLegacy(p: LegacyLine): QuoteLine {
-  const id = typeof p.id === "string" && p.id ? p.id : newId();
-  if (p.kind === "item") {
-    return { id, kind: "item", itemKey: p.itemKey ?? "iInvite", qty: numOr(p.qty, 1), digital: p.digital ?? false };
-  }
-  if (p.kind === "package") {
-    return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: p.digital ?? false };
-  }
-  // Legacy package shape.
-  if (p.pkg === "individual") {
-    const itemKey = p.individualItem ?? "iInvite";
-    return {
-      id,
-      kind: "item",
-      itemKey,
-      qty: getItemQty(itemKey, numOr(p.qty, 75)),
-      digital: p.individualDigital ?? false,
-    };
-  }
-  return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: false };
-}
-
-// A config as it may appear on disk / on the wire: a current v4 shape (with
-// `lines`), a v3 shape (`packages` + `addOns`), or a legacy v1/v2 shape (single
-// `pkg`/`qty`/`individual*`).
-type LegacyConfig = Partial<DraftConfig> & {
-  pkg?: string;
-  qty?: number;
-  individualItem?: string;
-  individualDigital?: boolean;
-  packages?: LegacyLine[];
-  lines?: LegacyLine[];
-  addOns?: Record<string, number>;
-  packageDiscountPtg?: number;
-};
-
-function migrateConfig(c: LegacyConfig): DraftConfig {
-  const {
-    pkg: legacyPkg,
-    qty: legacyQty,
-    individualItem: legacyItem,
-    individualDigital: legacyDigital,
-    packages: rawPackages,
-    lines: rawLines,
-    addOns: rawAddOns,
-    packageDiscountPtg: legacyCustomDiscount,
-    customDiscountPtg,
-    ...rest
-  } = c;
-
-  let lines: QuoteLine[];
-  if (Array.isArray(rawLines)) {
-    // v4 shape: trust it as saved — an empty list is a real zero-line quote
-    // (e.g. custom add-ons only), never a cue to inject a default package.
-    lines = rawLines.map(lineFromLegacy);
-  } else {
-    if (Array.isArray(rawPackages) && rawPackages.length > 0) {
-      lines = rawPackages.map(lineFromLegacy);
-    } else if (legacyPkg) {
-      lines = [
-        lineFromLegacy({
-          pkg: legacyPkg,
-          qty: legacyQty,
-          individualItem: legacyItem,
-          individualDigital: legacyDigital,
-        }),
-      ];
-    } else {
-      lines = [];
-    }
-
-    // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
-    for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
-      if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
-    }
-
-    // Pre-v4 quotes always carried a package; keep their old Sweet Suite
-    // fallback so an odd legacy shape still re-prices the way it did.
-    if (lines.length === 0) lines = [{ id: newId(), kind: "package", pkg: "sweet", qty: 75, digital: false }];
-  }
-
-  // Backfill the add-on digital flag without moving any existing total: an
-  // add-on only "adds" physicality when the quote already has a physical line.
-  const hasPhysicalLine = lines.some((l) => !isLineDigital(l));
-  const miscAddOns: MiscAddOn[] = (Array.isArray(rest.miscAddOns) ? rest.miscAddOns : []).map((m) => ({
-    ...m,
-    digital: typeof m.digital === "boolean" ? m.digital : !hasPhysicalLine,
-  }));
-
-  return {
-    ...DEFAULT_CONFIG,
-    ...rest,
-    lines,
-    miscAddOns,
-    customDiscountPtg: numOr(customDiscountPtg, numOr(legacyCustomDiscount, 0)),
-    pricingVersion: numOr(rest.pricingVersion, 1),
-  };
 }
 
 export function migrateDraft(d: Draft): Draft {
@@ -417,11 +189,6 @@ export function saveLastSession(session: LastSession): void {
 export function clearLastSession(): void {
   if (!isBrowser()) return;
   localStorage.removeItem(LAST_KEY);
-}
-
-// Sanity helper for QuoteState completeness when loading a snapshot.
-export function withSnapshotDefaults(snapshot: Partial<QuoteState>): QuoteState {
-  return { ...DEFAULTS, ...snapshot };
 }
 
 // Helper used by remote-load paths to take an unknown draft-shaped object

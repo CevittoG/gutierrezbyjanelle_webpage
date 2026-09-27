@@ -1255,6 +1255,29 @@ on an existing quote.
 - App shell on phones: the logo hides and Sign out becomes an icon button so the three nav items
   fit at 375 px; `ConfigBanner` lost its 4 px side stripe (forbidden by DESIGN.md) and wraps.
 
+**P2 (engine, data model, conversion)**
+- The v5 types live in `lib/quote-types.ts` (pure) and are re-exported from `quote-calc-drafts.ts`
+  when the surfaces switch in P3, so the engine never imports browser storage code.
+- Three small fields beyond §8.1: `config.reuseDesignPct` (the reuse % is a policy snapshot, like
+  `rushPct`, so totals stay config-only), `line.listDesignFee` (so the refresh diff can tell a
+  changed design fee from an edited one), and `line.system` (`"services"` / `"rush"`, marking the
+  fixed-$ lines a conversion writes so they stay out of the display name).
+- **Converted quotes keep the old engine's arithmetic.** When `config.legacy` is present the
+  engine skips cent rounding, and the surfaces keep the whole-dollar display those quotes always
+  had. Rounding each converted component to cents drifts the total by up to $0.013 across the
+  254 parity fixtures, which fails the < $0.005 rule; without rounding the worst case is 1e-13.
+  Quotes built in the new builder round every component to cents as §6.3 says.
+- Converted lines keep the old label as `name` ("Sweet Suite") and put the count in `detail`
+  ("80 households", "120 pcs", "design") instead of "Sweet Suite — 75 households". The dashboard's
+  display name stays exactly what it was, and the copy avoids em dashes. Order: priced lines,
+  project services, custom add-ons, rush. Line ids are derived from the quote id, so converting
+  twice gives the same config.
+- A digital product line is its digital price only: no design fee, no per-piece options (percent
+  and flat options still apply). Custom lines are always `qty × unitPrice` (+ design fee/options);
+  their digital flag only drives packaging and the project type.
+- Today's engine was moved, unchanged, to `lib/legacy/` (`logic`, `totals`, `types`, `migrate`).
+  The old module paths re-export it so the old calculator keeps working until P5.
+
 ## Appendix A: Current-engine numbers (default settings, fresh design, no toggles)
 
 | Quote | List | Discount (stated → actual) | Total | $/household | Design h | Production h | Materials |
