@@ -1278,6 +1278,29 @@ on an existing quote.
 - Today's engine was moved, unchanged, to `lib/legacy/` (`logic`, `totals`, `types`, `migrate`).
   The old module paths re-export it so the old calculator keeps working until P5.
 
+**P3 (read surfaces + freeze)**
+- `Draft` is now the v5 draft; the pre-v5 draft is `LegacyDraft`, still written by the old
+  calculator until P4. `StoredDraft = Draft | LegacyDraft` is what a `_data` cell holds.
+  `toV5Draft(stored, catalog)` is the single conversion, used by every read surface.
+- Sheets readers: `listDraftRecords()` / `getDraftById()` return v5 (legacy converted in memory
+  with the live `Items` catalog); `listStoredDraftRecords()` / `getStoredDraftById()` return
+  payloads as stored, for the paths that write back (hidden notes, duplicate, freeze), so none of
+  them converts a quote as a side effect. `GET /quote-calc/api/drafts` still returns stored drafts
+  (the old calculator reads them until P4).
+- **Duplicate** copies the stored payload as-is (a legacy quote stays legacy until the freeze), so
+  the copy's total is identical; it gets a fresh id and no portal columns.
+- **Print** reads the quote from the new `GET /quote-calc/api/drafts/[id]` (the same v5 view as
+  `/q`), falling back to this browser's cache; "Working quote" prints the builder's last session.
+  The fine print now names the real deposit instead of "a 50% deposit".
+- `PublicQuote` v2 adds `wholeDollars` (true for converted quotes), `anyPhysical` (drives the
+  shipping footnote) and `extras[].includes`. Converted fixed-price lines show no "× 1".
+  One shared `InvestmentList` renders it on `/q`, Profile Overview and print.
+- The freeze report adds `unreadable` and `dashboardCorrections`: quotes whose old dashboard figure
+  (`cachedTotal`, which the C2/C3 bugs could leave stale) differed from their client link. After
+  P3 the dashboard shows the client-link total for every quote, so those rows change on the
+  dashboard only; `/q`, Profile Overview and print do not move.
+- Dashboard rows wrap their actions under the name on phones so every action is a 44 px target.
+
 ## Appendix A: Current-engine numbers (default settings, fresh design, no toggles)
 
 | Quote | List | Discount (stated → actual) | Total | $/household | Design h | Production h | Materials |

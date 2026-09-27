@@ -26,6 +26,10 @@ import { computeHealth } from "./quote-health";
 import { convertLegacyDraft } from "./quote-legacy";
 import { DEFAULT_PRICE_BOOK, packageSample, type PriceBook } from "./quote-pricebook";
 import type { DraftConfigV5 } from "./quote-types";
+import { EMPTY_CLIENT_INFO, normalizeStoredDraft, toV5Draft, type Draft, type LegacyDraft } from "./quote-calc-drafts";
+import { buildPublicQuote } from "./quote-calc-portal";
+import { planFreeze } from "./quote-freeze";
+import { summarizeLinesV5 } from "./quote-calc-summary";
 import { round2 } from "./money";
 
 declare const process: { exit(code: number): never };
@@ -421,6 +425,66 @@ check(`9. parity < $0.005 on all ${parityRuns} fixtures (worst ${worst.toExponen
   check("physical add-on keeps a legacy quote physical", !isDigitalQuote(phys));
   const set = setTargetTotal(v, 700);
   check("set total on a converted quote lands on the cent", Math.abs(computeTotals(set).total - 700) < 1e-9);
+}
+
+console.log("P3 read surfaces");
+{
+  const legacyDraft = (id: string, config: unknown, cachedTotal = 0): LegacyDraft =>
+    ({ id, name: "Q " + id, createdAt: "2026-01-01", updatedAt: "2026-02-02", client: { ...EMPTY_CLIENT_INFO, name: "Ana", notes: "SECRET-NOTE" }, config, assumptionsSnapshot: S, cachedTotal, schemaVersion: 4 }) as LegacyDraft;
+
+  // Projector: closes, and carries nothing admin-only.
+  const c = richQuote();
+  const v5: Draft = { id: "v", name: "V", createdAt: NOW, updatedAt: NOW, client: { ...EMPTY_CLIENT_INFO, notes: "SECRET-NOTE" }, config: c, cachedTotal: computeTotals(c).total, schemaVersion: 5 };
+  const t = computeTotals(c);
+  const q = buildPublicQuote(v5, t, [], 50);
+  const closesPublic = approx(round2(q.subtotal - q.savings + (q.rush?.amount ?? 0) + (q.adjustment?.amount ?? 0) + (q.shipping ?? 0)), q.total);
+  check("public: subtotal − savings + rush + adj + shipping == total", closesPublic);
+  check("public total == engine total", q.total === t.total);
+  const json = JSON.stringify(q);
+  const leaks = ["listUnitPrice", "listDesignFee", '"est"', "estCost", "unitCost", "productId", "legacy", "SECRET-NOTE", "health", "hourly"].filter((k) => json.includes(k));
+  check("public quote carries no cost/admin data", leaks.length === 0, leaks.join(","));
+  check("public suite shows its true savings %", q.groups[0].savingsPct === 15 && q.groups[0].savings === t.groups[0].savings);
+  check("deposit paid clamps; balance = total − paid", q.depositPaid === 50 && approx(q.balanceRemaining, t.total - 50));
+
+  const conv = toV5Draft(legacyDraft("L1", legacy({ lines: [pkg("sweet", 80), item("iGames", 60)], rushFee: true, familyFriendsPtg: 10 })));
+  const cq = buildPublicQuote(conv, computeTotals(conv.config), [], 0);
+  check("converted quote: public shows whole dollars", cq.wholeDollars);
+  check("converted quote: suite lists its pieces", (cq.extras[0].includes ?? []).length === 5 && cq.extras[0].qty === null);
+  check("converted quote: no legacy data in the public JSON", !JSON.stringify(cq).includes("assumptions") && !JSON.stringify(cq).includes("legacy"));
+  check("converted quote: title unchanged", cq.title === "Sweet Suite + Games");
+
+  // Stored drafts round-trip.
+  const back = normalizeStoredDraft(JSON.parse(JSON.stringify(v5)));
+  check("v5 draft survives the wire unchanged", !!back && computeTotals((back as Draft).config).total === t.total && back.schemaVersion === 5);
+  check("pre-v5 drafts still normalize as legacy", normalizeStoredDraft(legacyDraft("L2", legacy({ lines: [pkg("sweet", 75)] })))?.schemaVersion === 4);
+  check("a v5 draft passes through toV5Draft untouched", toV5Draft(back!) === back);
+
+  // Freeze plan.
+  const rows = [
+    { rowNumber: 2, id: "L1", payload: JSON.stringify(legacyDraft("L1", legacy({ lines: [pkg("signature", 90)], rushFee: true }), 1)) },
+    { rowNumber: 3, id: "V", payload: JSON.stringify(v5) },
+    { rowNumber: 4, id: "BAD", payload: "{not json" },
+    { rowNumber: 5, id: "L3", payload: JSON.stringify(legacyDraft("L3", legacy({ pricingVersion: 2, miscAddOns: [misc("Map", 1, 300, true)] }), 300)) },
+  ];
+  const plan = planFreeze(rows, ITEM_CATALOG, NOW);
+  check("freeze converts pre-v5, skips v5, reports unreadable", plan.report.converted === 2 && plan.report.skipped === 1 && plan.report.unreadable.join() === "BAD");
+  check("freeze: parityFailures 0", plan.report.parityFailures.length === 0);
+  check("freeze keeps updatedAt and rows", plan.updates[0].rowNumber === 2 && plan.updates[0].draft.updatedAt === "2026-02-02" && plan.updates[0].draft.schemaVersion === 5);
+  check("freeze reports stale dashboard totals (cachedTotal ≠ client link)", plan.report.dashboardCorrections.length === 1 && plan.report.dashboardCorrections[0].id === "L1");
+  const frozenTotal = plan.updates[0].draft.cachedTotal;
+  const liveTotal = computeTotals(toV5Draft(JSON.parse(rows[0].payload)).config).total;
+  check("frozen total == what the read surfaces showed before", frozenTotal === liveTotal);
+  const rerun = planFreeze(plan.updates.map((u) => ({ rowNumber: u.rowNumber, id: u.draft.id, payload: JSON.stringify(u.draft) })), ITEM_CATALOG, NOW);
+  check("freeze is idempotent", rerun.report.converted === 0 && rerun.report.skipped === 2 && rerun.updates.length === 0);
+  const edited = ITEM_CATALOG.map((it) => (it.key === "iEnvelope" ? { ...it, qty: 9 } : it));
+  const frozen = normalizeStoredDraft(JSON.parse(JSON.stringify(plan.updates[0].draft)))!;
+  check("after the freeze, editing Items changes no quote", computeTotals(toV5Draft(frozen, edited).config).total === frozenTotal);
+  const unfrozen = toV5Draft(JSON.parse(rows[0].payload), edited);
+  check("(before the freeze, Items still moved it — why the freeze exists)", computeTotals(unfrozen.config).total !== frozenTotal);
+
+  // Readable Sheet row summary.
+  const sum = summarizeLinesV5(c);
+  check("Sheet summary lists priced lines and savings", sum.includes("Signature Suite:") && sum.includes("Suite savings (15%)") && sum.includes("Family & friends (10%)"));
 }
 
 console.log("");

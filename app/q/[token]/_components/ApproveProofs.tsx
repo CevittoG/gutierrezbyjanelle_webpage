@@ -41,8 +41,8 @@ export function ApproveProofs({ token }: { token: string }) {
     <div className="rounded-2xl border border-accent bg-accent/10 px-6 py-6">
       <p className="font-squarepeg text-3xl leading-none">Ready to approve?</p>
       <p className="text-sm text-muted-foreground mt-2 max-w-prose">
-        Once everything above looks perfect, approve your proofs and I'll move into production. Need a
-        tweak first? Just reply and we'll get it right.
+        Once everything above looks perfect, approve your proofs and I&apos;ll move into production. Need a
+        tweak first? Just reply and we&apos;ll get it right.
       </p>
 
       <label className="mt-5 flex items-start gap-3 cursor-pointer">
@@ -52,7 +52,7 @@ export function ApproveProofs({ token }: { token: string }) {
           onChange={(e) => setChecked(e.target.checked)}
           className="mt-0.5 h-4 w-4 accent-[hsl(var(--ring))]"
         />
-        <span className="text-sm leading-snug">I've reviewed my proofs and I'm ready to approve them.</span>
+        <span className="text-sm leading-snug">I&apos;ve reviewed my proofs and I&apos;m ready to approve them.</span>
       </label>
 
       {checked && (

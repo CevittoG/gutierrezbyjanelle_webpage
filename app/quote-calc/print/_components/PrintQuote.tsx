@@ -1,65 +1,65 @@
 "use client";
 
+// Printable client quote. Same projector and investment list as the client
+// portal (/q), so the paper and the link always agree; no cost data, no
+// health. A saved quote is read from the server first (the same v5 view the
+// portal uses) and from this browser's cache when offline.
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { loadSavedDefaults } from "@/lib/quote-calc-logic";
 import {
-  CatalogItem,
-  ITEM_CATALOG,
-  PACKAGES,
-  fmt$,
-  fmt$2,
-  fmtEffectivePct,
-  loadSavedDefaults,
-} from "@/lib/quote-calc-logic";
-import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
-import { mergeRemoteConfig } from "@/lib/quote-calc-config";
-import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
-import {
-  Draft,
-  DraftClientInfo,
-  DraftConfig,
+  isV5Draft,
   loadDrafts,
   loadLastSession,
-  withSnapshotDefaults,
+  normalizeDraftV5,
+  toV5Draft,
+  type Draft,
 } from "@/lib/quote-calc-drafts";
+import { computeTotals } from "@/lib/quote-engine";
+import { buildPublicQuote } from "@/lib/quote-calc-portal";
+import { formatMoney } from "@/lib/money";
+import { InvestmentList } from "@/components/quote-app/InvestmentList";
 import { siteConfig } from "@/config/site";
-import { cn } from "@/utils";
 
 interface Snapshot {
-  name: string;
-  client: DraftClientInfo;
-  config: DraftConfig;
-  assumptions: ReturnType<typeof withSnapshotDefaults>;
+  draft: Draft;
   generatedAt: string;
   shortId: string;
 }
 
-function loadSnapshot(draftId: string | null): Snapshot | null {
-  if (!draftId) return null;
-  if (draftId === "__current") {
-    const last = loadLastSession();
-    if (!last) return null;
-    return {
-      name: "Working quote",
-      client: last.client,
-      config: last.config,
-      // No snapshot for an unsaved quote — use the same live defaults the calculator reads.
-      assumptions: loadSavedDefaults(),
-      generatedAt: new Date().toISOString(),
-      shortId: "draft",
-    };
+// The unsaved working quote from the builder's last session.
+function workingQuote(): Draft | null {
+  const last = loadLastSession();
+  if (!last) return null;
+  const now = new Date().toISOString();
+  const base = { id: "draft", name: "Working quote", createdAt: now, updatedAt: now, client: last.client };
+  const cfg = last.config as unknown as { schema?: number };
+  if (cfg && cfg.schema === 5) {
+    return normalizeDraftV5({ ...base, config: last.config, cachedTotal: 0, schemaVersion: 5 });
   }
-  const drafts = loadDrafts();
-  const draft = drafts.find((d: Draft) => d.id === draftId);
-  if (!draft) return null;
-  return {
-    name: draft.name,
-    client: draft.client,
-    config: draft.config,
-    assumptions: withSnapshotDefaults(draft.assumptionsSnapshot),
-    generatedAt: new Date().toISOString(),
-    shortId: draft.id.slice(0, 6).toUpperCase(),
-  };
+  // The old calculator's session has no snapshot: it priced with the live defaults.
+  return toV5Draft({ ...base, config: last.config, assumptionsSnapshot: loadSavedDefaults(), cachedTotal: 0, schemaVersion: 4 });
+}
+
+function localDraft(draftId: string): Draft | null {
+  const found = loadDrafts().find((d) => d.id === draftId);
+  if (!found) return null;
+  return isV5Draft(found as never) ? (found as unknown as Draft) : toV5Draft(found);
+}
+
+async function remoteDraft(draftId: string): Promise<Draft | null> {
+  try {
+    const res = await fetch(`/quote-calc/api/drafts/${encodeURIComponent(draftId)}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { ok?: boolean; draft?: unknown };
+    return body.ok ? normalizeDraftV5(body.draft) : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatEventDate(iso: string): string {
@@ -87,44 +87,44 @@ export function PrintQuote() {
   const draftId = searchParams.get("draft");
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [catalog, setCatalog] = useState<CatalogItem[]>(ITEM_CATALOG);
 
-  useEffect(() => {
-    setSnap(loadSnapshot(draftId));
-    setHydrated(true);
-  }, [draftId]);
-
-  // Pull the live catalog so printed labels match the current Sheet. Falls
-  // back silently to bundled defaults — no banner on the print view.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const result = await fetchRemoteConfig();
+      let draft: Draft | null = null;
+      if (draftId === "__current") draft = workingQuote();
+      else if (draftId) draft = (await remoteDraft(draftId)) ?? localDraft(draftId);
       if (cancelled) return;
-      if (result.ok) {
-        setCatalog(mergeRemoteConfig(result.value).catalog);
-      }
+      setSnap(
+        draft
+          ? {
+              draft,
+              generatedAt: new Date().toISOString(),
+              shortId: draftId === "__current" ? "draft" : draft.id.slice(0, 6).toUpperCase(),
+            }
+          : null,
+      );
+      setHydrated(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [draftId]);
 
-  const computed = useMemo(() => {
-    if (!snap) return null;
-    return computeQuoteBreakdown(snap.config, snap.assumptions, catalog);
-  }, [snap, catalog]);
+  const quote = useMemo(
+    () => (snap ? buildPublicQuote(snap.draft, computeTotals(snap.draft.config), [], 0) : null),
+    [snap],
+  );
 
   if (!hydrated) return null;
 
-  if (!snap) {
+  if (!snap || !quote) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-8">
         <div className="max-w-md text-center">
           <h1 className="font-squarepeg text-4xl mb-2">Quote not found</h1>
           <p className="text-sm text-muted-foreground mb-6 normal-case tracking-normal">
-            That quote isn&apos;t saved on this device. Saved drafts live in your browser&apos;s storage,
-            open it from the same computer where you saved it.
+            That quote couldn&apos;t be loaded from the Sheet, and it isn&apos;t saved in this browser either.
           </p>
           <button
             type="button"
@@ -138,73 +138,9 @@ export function PrintQuote() {
     );
   }
 
-  const { client, config, assumptions, generatedAt, shortId } = snap;
-
-  if (!computed) return null;
-
-  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines, anyPhysical, itemsList } = computed;
-
-  interface DisplayItem {
-    rowKey: string;
-    label: string;
-    countLabel: string;
-  }
-
-  // One view per quote line (bundle or single item): its included pieces, price,
-  // and copy.
-  const lineViews = config.lines.map((line, idx) => {
-    const lr = priced[idx];
-
-    if (line.kind === "item") {
-      const cat = catalog.find((i) => i.key === line.itemKey);
-      const isDigital = line.digital ?? false;
-      const includedItems: DisplayItem[] = cat
-        ? [{ rowKey: cat.key, label: cat.label, countLabel: isDigital ? "design" : `${line.qty} pcs` }]
-        : [];
-      return {
-        line,
-        title: cat?.label ?? line.itemKey ?? "Item",
-        tagline: "Individual item",
-        lr,
-        isDigital,
-        includedItems,
-        kindCopy: "Selected item",
-        deliveryCopy: isDigital
-          ? "Delivered as print-ready PDF files via email."
-          : `Printed and shipped — ${line.qty} piece${line.qty === 1 ? "" : "s"}.`,
-        isItem: true,
-      };
-    }
-
-    const def = line.pkg ? PACKAGES[line.pkg] : undefined;
-    const isDigital = def?.isDigital ?? false;
-    const includedItems: DisplayItem[] = (def?.items ?? []).map((it, i) => {
-      const k = typeof it === "string" ? it : it.key;
-      const label = (typeof it !== "string" && it.displayLabel) || catalog.find((c) => c.key === k)?.label || k;
-      const cat = catalog.find((c) => c.key === k);
-      const countLabel =
-        cat?.fixed !== undefined ? `${cat.fixed} pcs` : isDigital ? "design" : `${(cat?.qty ?? 0) * line.qty} pcs`;
-      return { rowKey: `${k}-${i}`, label, countLabel };
-    });
-    const kindCopy = def?.type === "events" ? "Selected event package" : "Selected wedding suite";
-    const deliveryCopy = isDigital
-      ? "Delivered as print-ready PDF files via email."
-      : def?.type === "events"
-      ? `Printed and shipped — quantities sized for ${line.qty} guest${line.qty === 1 ? "" : "s"}.`
-      : `Printed and shipped — quantities sized for ${line.qty} household${line.qty === 1 ? "" : "s"}.`;
-
-    return {
-      line,
-      title: def?.name ?? line.pkg ?? "Package",
-      tagline: def?.tagline ?? "",
-      lr,
-      isDigital,
-      includedItems,
-      kindCopy,
-      deliveryCopy,
-      isItem: false,
-    };
-  });
+  const { draft, generatedAt, shortId } = snap;
+  const client = draft.client;
+  const money = (n: number) => formatMoney(n, { wholeDollars: quote.wholeDollars });
 
   return (
     <div className="min-h-screen bg-background">
@@ -238,7 +174,7 @@ export function PrintQuote() {
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xs uppercase tracking-widest text-muted-foreground normal-case">Print preview</span>
-            <span className="text-sm font-medium truncate normal-case tracking-normal">· {snap.name}</span>
+            <span className="text-sm font-medium truncate normal-case tracking-normal">· {draft.name}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -290,114 +226,31 @@ export function PrintQuote() {
             </div>
           </section>
 
-          {/* Summary — one block per quote line */}
-          {lineViews.map((v) => (
-            <section key={v.line.id} className="mx-10 my-2 rounded-xl border border-border bg-muted/30 p-6 normal-case tracking-normal">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{v.kindCopy}</p>
-              <h2 className="font-squarepeg text-3xl leading-tight">{v.title}</h2>
-              {v.tagline && <p className="text-sm text-muted-foreground mt-1">{v.tagline}</p>}
-              <div className="mt-4">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Included pieces</p>
-                <ul className="text-sm space-y-0.5">
-                  {v.includedItems.map((ci) => (
-                    <li key={ci.rowKey} className="flex items-baseline justify-between gap-3">
-                      <span>{ci.label}</span>
-                      <span className="text-xs text-muted-foreground font-mono tabular-nums">
-                        {ci.countLabel}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground mt-3">
-                  {v.deliveryCopy}
-                </p>
-              </div>
-            </section>
-          ))}
-
-          {/* Investment table */}
-          <section className="px-10 pt-6 pb-2 normal-case tracking-normal">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Investment</p>
-            <dl className="space-y-2 text-sm">
-              {lineViews.map((v) => (
-                <div key={v.line.id}>
-                  <PrintRow
-                    label={v.isItem ? v.title : `${v.title} package`}
-                    detail={config.mode === "reuse" ? "Adapted from an existing design" : "Original artwork"}
-                    value={fmt$2(v.lr.list)}
-                  />
-                  {v.lr.bundleDiscountPtg > 0 && (
-                    <PrintRow
-                      label={`Suite savings (${fmtEffectivePct(v.lr.bundleDiscountAmount, v.lr.list)})`}
-                      value={`-${fmt$2(v.lr.bundleDiscountAmount)}`}
-                      dim
-                    />
-                  )}
-                </div>
-              ))}
-
-              {miscLines.length > 0 && (
-                <>
-                  <PrintDivider label="Custom add-ons" />
-                  {miscLines.map((m) => (
-                    <PrintRow
-                      key={m.id}
-                      label={m.label}
-                      detail={`${m.qty} × ${fmt$2(m.unitPrice)}`}
-                      value={fmt$2(m.total)}
-                    />
-                  ))}
-                </>
-              )}
-
-              {services.servicesList > 0 && (
-                <PrintRow
-                  label="Project services"
-                  detail={[
-                    services.revisionCost > 0 ? "extra revisions" : null,
-                    services.licenseVar > 0 ? "digital file license" : null,
-                    services.packaging > 0 ? "materials & handling" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  value={`+${fmt$2(services.servicesList)}`}
-                />
-              )}
-
-              {relationshipDiscountLines.map((d) => (
-                <PrintRow
-                  key={d.label}
-                  label={`${d.label} (${fmtEffectivePct(d.amount, itemsList)})`}
-                  value={`-${fmt$2(d.amount)}`}
-                  dim
-                />
-              ))}
-
-              {rushAmount > 0 && (
-                <PrintRow
-                  label={`Rush production (+${assumptions.rushFeePtg}%)`}
-                  detail="Turnaround under 7 days"
-                  value={`+${fmt$2(rushAmount)}`}
-                />
-              )}
-            </dl>
+          {/* Investment */}
+          <section className="px-10 pt-4 pb-2 normal-case tracking-normal">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Your quote</p>
+            <h2 className="font-squarepeg text-3xl leading-tight mb-4">{quote.title}</h2>
+            <InvestmentList quote={quote} />
           </section>
 
           {/* Total */}
           <section className="mx-10 my-6 rounded-xl border border-accent bg-accent/15 px-6 py-5 flex items-baseline justify-between gap-4">
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Total investment</span>
-            <span className="font-squarepeg text-4xl tabular-nums">{fmt$(Math.round(finalPrice))}</span>
+            <span className="font-squarepeg text-4xl tabular-nums">{money(quote.total)}</span>
           </section>
 
           {/* Fine print */}
           <section className="px-10 pb-2 normal-case tracking-normal text-xs text-muted-foreground space-y-1.5 leading-relaxed">
             <p>· Quote valid through <strong className="text-foreground">{quoteExpiry(generatedAt)}</strong>.</p>
-            {anyPhysical && (
+            {quote.shipping === null && quote.anyPhysical && (
               <p>· Shipping is added based on carrier quote at the time of production.</p>
             )}
             <p>· One round of revisions is included. Additional rounds are billed at our standard design rate.</p>
             <p>· Final investment may shift based on design complexity discovered during sketching.</p>
-            <p>· A 50% deposit confirms your spot; balance due before production begins.</p>
+            <p>
+              · {quote.depositExpected > 0 ? `A ${money(quote.depositExpected)} deposit` : "A deposit"} confirms your
+              spot; the balance is due before production begins.
+            </p>
           </section>
 
           {/* Footer */}
@@ -418,36 +271,6 @@ export function PrintQuote() {
         </article>
       </div>
     </div>
-  );
-}
-
-function PrintRow({
-  label,
-  detail,
-  value,
-  dim,
-}: {
-  label: string;
-  detail?: string;
-  value: string;
-  dim?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1 border-b border-border/40 last:border-0">
-      <div className="flex-1 min-w-0">
-        <span className={cn("text-sm", dim ? "text-muted-foreground" : "text-foreground")}>{label}</span>
-        {detail && <span className="ml-2 text-xs text-muted-foreground">{detail}</span>}
-      </div>
-      <span className={cn("font-mono tabular-nums text-sm shrink-0", dim ? "text-muted-foreground" : "text-foreground")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function PrintDivider({ label }: { label: string }) {
-  return (
-    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-4 mb-1">{label}</p>
   );
 }
 

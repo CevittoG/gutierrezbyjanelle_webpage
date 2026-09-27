@@ -4,7 +4,7 @@
 // can decide whether to surface "offline · saved locally", "sheet unavailable",
 // or just shrug and keep going.
 
-import type { Draft } from "./quote-calc-drafts";
+import type { LegacyDraft as Draft } from "./quote-calc-drafts";
 import { normalizeIncomingDraft } from "./quote-calc-drafts";
 
 export type RemoteFailure =

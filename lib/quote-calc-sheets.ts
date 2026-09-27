@@ -10,17 +10,25 @@
 import "server-only";
 import { timingSafeEqual } from "crypto";
 import { JWT } from "google-auth-library";
-import type { Draft } from "./quote-calc-drafts";
-import { normalizeIncomingDraft } from "./quote-calc-drafts";
-import type {
-  ConfigWarning,
-  RemoteConfig,
-  RemoteItem,
-  RemoteSetting,
+import {
+  normalizeStoredDraft,
+  toV5Draft,
+  type Draft,
+  type StoredDraft,
+} from "./quote-calc-drafts";
+import {
+  mergeRemoteConfig,
+  type ConfigWarning,
+  type RemoteConfig,
+  type RemoteItem,
+  type RemoteSetting,
 } from "./quote-calc-config";
+import { ITEM_CATALOG, type CatalogItem } from "./legacy/logic";
+import { computeTotals } from "./quote-engine";
+import { planFreeze, type FreezeReport } from "./quote-freeze";
 import type { LinkStatus, PortalMeta, ProjectStage } from "./quote-calc-portal";
 import { nextStage } from "./quote-calc-portal";
-import { quoteDisplayName, summarizeLineItems } from "./quote-calc-summary";
+import { quoteDisplayName, summarizeLinesV5 } from "./quote-calc-summary";
 import {
   OPTIONS_TAB,
   PACKAGES_TAB,
@@ -73,8 +81,8 @@ const NEW_HEADER_ROW: Row = [
   "Event type",
   "Event date",
   "Quote name",
-  "Package",
-  "Quantity",
+  "Summary",
+  "Households",
   "Line items",
   "Total",
   "Hidden notes",
@@ -281,18 +289,34 @@ export interface DraftRecord {
   status: DraftStatus;
 }
 
+/** A record as stored: v5, or a pre-v5 payload not yet frozen. */
+export interface StoredDraftRecord {
+  draft: StoredDraft;
+  status: DraftStatus;
+}
+
+// The catalog pre-v5 quotes are converted with: the live Items tab, so a
+// converted total equals what the client link showed; bundled on failure.
+async function liveCatalog(): Promise<CatalogItem[]> {
+  try {
+    return mergeRemoteConfig(await listConfig()).catalog;
+  } catch {
+    return ITEM_CATALOG;
+  }
+}
+
 function normalizeStatus(cell: unknown): DraftStatus {
   return String(cell ?? "").trim().toLowerCase() === "archived" ? "archived" : "active";
 }
 
 // --- Legacy format (pre-Phase 2) ---
 
-function rowToRecordLegacy(row: Row): DraftRecord | null {
+function rowToRecordLegacy(row: Row): StoredDraftRecord | null {
   const payload = row[LEGACY_COL.payload];
   if (typeof payload !== "string" || !payload) return null;
-  let draft: Draft | null;
+  let draft: StoredDraft | null;
   try {
-    draft = normalizeIncomingDraft(JSON.parse(payload));
+    draft = normalizeStoredDraft(JSON.parse(payload));
   } catch {
     return null;
   }
@@ -302,10 +326,15 @@ function rowToRecordLegacy(row: Row): DraftRecord | null {
 
 // --- New format (Phase 2) ---
 
+// The readable A–M row, always from the v5 view (G = summary, H = households,
+// I = priced lines, J = the v5 engine's total).
 function draftToReadableRow(
-  d: Draft,
-  status: "active" | "archived" = "active",
+  stored: StoredDraft,
+  status: "active" | "archived",
+  catalog: CatalogItem[],
 ): Row {
+  const d = toV5Draft(stored, catalog);
+  const totals = computeTotals(d.config);
   return [
     d.id,
     status,
@@ -314,16 +343,16 @@ function draftToReadableRow(
     d.client.eventDate,
     d.name,
     quoteDisplayName(d.config),
-    d.config.lines.map((l) => l.qty).join(", "),
-    summarizeLineItems(d),
-    Math.round(d.cachedTotal),
+    d.config.households,
+    summarizeLinesV5(d.config, totals),
+    Math.round(totals.total),
     d.client.notes,
     d.createdAt,
     d.updatedAt,
   ];
 }
 
-function draftToPayloadRow(d: Draft): Row {
+function draftToPayloadRow(d: StoredDraft): Row {
   return [d.id, JSON.stringify(d)];
 }
 
@@ -334,7 +363,7 @@ function draftToPayloadRow(d: Draft): Row {
 async function readRecordsNewSchema(
   docId: string,
   rows: Row[],
-): Promise<DraftRecord[]> {
+): Promise<StoredDraftRecord[]> {
   const dataRows = await readRange(docId, DATA_RANGE);
   const payloadById = new Map<string, string>();
   for (const r of dataRows) {
@@ -343,7 +372,7 @@ async function readRecordsNewSchema(
     if (id && typeof payload === "string") payloadById.set(id, payload);
   }
 
-  const out: DraftRecord[] = [];
+  const out: StoredDraftRecord[] = [];
   for (const row of rows) {
     const id = String(row[NEW_COL.id] ?? "").trim();
     if (!id) continue;
@@ -354,7 +383,7 @@ async function readRecordsNewSchema(
       continue;
     }
     try {
-      const draft = normalizeIncomingDraft(JSON.parse(payload));
+      const draft = normalizeStoredDraft(JSON.parse(payload));
       if (draft) out.push({ draft, status });
     } catch {
       console.warn(`[sheets] Quote ${id}: payload is not valid JSON — skipping.`);
@@ -428,14 +457,14 @@ async function migrateLegacyQuotesTab(
   legacyRows: Row[],
 ): Promise<void> {
   // Recover the full Draft from each legacy row's JSON; preserve status.
-  const recovered: { draft: Draft; status: "active" | "archived" }[] = [];
+  const recovered: { draft: StoredDraft; status: "active" | "archived" }[] = [];
   for (const row of legacyRows) {
     const status: "active" | "archived" =
       String(row[LEGACY_COL.status] ?? "") === "archived" ? "archived" : "active";
     const payload = row[LEGACY_COL.payload];
     if (typeof payload !== "string" || !payload) continue;
     try {
-      const draft = normalizeIncomingDraft(JSON.parse(payload));
+      const draft = normalizeStoredDraft(JSON.parse(payload));
       if (draft) recovered.push({ draft, status });
     } catch {
       // Drop unparseable rows — they were already broken.
@@ -452,8 +481,9 @@ async function migrateLegacyQuotesTab(
   await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
 
   if (recovered.length > 0) {
+    const catalog = await liveCatalog();
     const readable = recovered.map(({ draft, status }) =>
-      draftToReadableRow(draft, status),
+      draftToReadableRow(draft, status, catalog),
     );
     const payloads = recovered.map(({ draft }) => draftToPayloadRow(draft));
     await writeRange(docId, `${SHEET_TAB}!A2:M${1 + recovered.length}`, readable);
@@ -470,7 +500,8 @@ async function ensureNewSchema(
   if (view.schema === "new") {
     // Backfill the wider A–R header on a sheet that was migrated before Phase 3
     // added the portal columns. One-time; idempotent once the header is full.
-    if (view.header.length < NEW_HEADER_ROW.length) {
+    // Also renames G/H to Summary/Households for the v5 readable row.
+    if (view.header.length < NEW_HEADER_ROW.length || String(view.header[7] ?? "") !== "Households") {
       await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
     }
     return { rows: view.rows };
@@ -494,13 +525,15 @@ async function ensureNewSchema(
 // Every quote in the sheet, archived ones included, each tagged with its status.
 // Only the studio dashboard needs this — it renders archived quotes behind a
 // filter and must exclude them from its ledger totals.
-export async function listDraftRecords(): Promise<DraftRecord[]> {
+// Every stored payload as-is (v5 or pre-v5). The freeze, notes and duplicate
+// paths use this so they never rewrite a quote they weren't asked to convert.
+export async function listStoredDraftRecords(): Promise<StoredDraftRecord[]> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const { schema, rows } = await readQuotesTab(cfg.docId);
   if (schema === "empty") return [];
   if (schema === "legacy") {
-    const out: DraftRecord[] = [];
+    const out: StoredDraftRecord[] = [];
     for (const row of rows) {
       const rec = rowToRecordLegacy(row);
       if (rec) out.push(rec);
@@ -510,18 +543,26 @@ export async function listDraftRecords(): Promise<DraftRecord[]> {
   return readRecordsNewSchema(cfg.docId, rows);
 }
 
-// Live quotes only — the default everywhere except the dashboard.
-export async function listDrafts(): Promise<Draft[]> {
-  const records = await listDraftRecords();
+// Every quote as v5 (pre-v5 payloads converted in memory with the live Items
+// catalog, so each total equals what its client link shows). Archived quotes
+// included, tagged — the dashboard decides what to show.
+export async function listDraftRecords(): Promise<DraftRecord[]> {
+  const [stored, catalog] = await Promise.all([listStoredDraftRecords(), liveCatalog()]);
+  return stored.map((r) => ({ draft: toV5Draft(r.draft, catalog), status: r.status }));
+}
+
+// Live quotes as stored — what the calculator syncs with.
+export async function listDrafts(): Promise<StoredDraft[]> {
+  const records = await listStoredDraftRecords();
   return records.filter((r) => r.status === "active").map((r) => r.draft);
 }
 
-export async function upsertDraftRow(draft: Draft): Promise<void> {
+export async function upsertDraftRow(draft: StoredDraft): Promise<void> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
-  const { rows } = await ensureNewSchema(cfg.docId);
+  const [{ rows }, catalog] = await Promise.all([ensureNewSchema(cfg.docId), liveCatalog()]);
   const idx = rows.findIndex((row) => String(row[NEW_COL.id] ?? "") === draft.id);
-  const readable = [draftToReadableRow(draft, "active")];
+  const readable = [draftToReadableRow(draft, "active", catalog)];
   const payload = [draftToPayloadRow(draft)];
 
   if (idx >= 0) {
@@ -600,7 +641,7 @@ export async function restoreDraftRow(id: string): Promise<boolean> {
 // Read a single Draft by id straight from the _data payload tab, regardless of
 // archive status. Used by the public portal (token → id → payload) so it never
 // has to load the whole draft list.
-export async function getDraftById(id: string): Promise<Draft | null> {
+export async function getStoredDraftById(id: string): Promise<StoredDraft | null> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const dataRows = await readRange(cfg.docId, DATA_RANGE);
@@ -609,10 +650,19 @@ export async function getDraftById(id: string): Promise<Draft | null> {
   const payload = row[1];
   if (typeof payload !== "string" || !payload) return null;
   try {
-    return normalizeIncomingDraft(JSON.parse(payload));
+    return normalizeStoredDraft(JSON.parse(payload));
   } catch {
     return null;
   }
+}
+
+// The v5 view of one quote (converted in memory with the live Items catalog
+// when it predates v5). Every read surface — /q, Profile Overview, print —
+// goes through here, so they all show the same total.
+export async function getDraftById(id: string): Promise<Draft | null> {
+  const stored = await getStoredDraftById(id);
+  if (!stored) return null;
+  return toV5Draft(stored, stored.schemaVersion === 5 ? ITEM_CATALOG : await liveCatalog());
 }
 
 // --- Phase 3: portal metadata (columns N–R) ---
@@ -786,9 +836,9 @@ export async function setDepositPaid(id: string, amount: number): Promise<boolea
 export async function updateHiddenNotes(id: string, notes: string): Promise<boolean> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
-  const draft = await getDraftById(id);
+  const draft = await getStoredDraftById(id);
   if (!draft) return false;
-  const updated: Draft = {
+  const updated: StoredDraft = {
     ...draft,
     client: { ...draft.client, notes },
     updatedAt: new Date().toISOString(),
@@ -1136,3 +1186,52 @@ export async function seedPriceBookTabs(): Promise<SeedReport> {
 }
 
 export { SheetsUnconfiguredError, NUM_COLS, getAccessToken as getGoogleAccessToken };
+
+// --- Freeze (§8.5, run once by Janelle after deploy) ---
+//
+// Rewrites every pre-v5 `_data` payload as v5 JSON (converted with the live
+// Items catalog, updatedAt kept) and refreshes its readable G–J cells. A quote
+// whose converted total isn't within half a cent of the old engine's is left
+// untouched and reported. Idempotent.
+export async function freezeLegacyDrafts(): Promise<FreezeReport> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const [dataRows, catalog, view] = await Promise.all([
+    readRange(cfg.docId, DATA_RANGE),
+    liveCatalog(),
+    ensureNewSchema(cfg.docId),
+  ]);
+  const input = dataRows
+    .map((r, i) => ({ rowNumber: 2 + i, id: String(r[0] ?? "").trim(), payload: typeof r[1] === "string" ? r[1] : "" }))
+    .filter((r) => r.id && r.payload);
+  const { updates, report } = planFreeze(input, catalog, new Date().toISOString());
+  if (updates.length === 0) return report;
+
+  const statusById = new Map<string, { rowNumber: number; status: DraftStatus }>();
+  view.rows.forEach((row, i) => {
+    const id = String(row[NEW_COL.id] ?? "").trim();
+    if (id) statusById.set(id, { rowNumber: FIRST_DATA_ROW + i, status: normalizeStatus(row[NEW_COL.status]) });
+  });
+
+  const data: { range: string; values: Row[] }[] = [];
+  for (const u of updates) {
+    data.push({ range: `${DATA_TAB}!A${u.rowNumber}:B${u.rowNumber}`, values: [draftToPayloadRow(u.draft)] });
+    const q = statusById.get(u.draft.id);
+    if (q) {
+      const readable = draftToReadableRow(u.draft, q.status, catalog);
+      data.push({ range: `${SHEET_TAB}!G${q.rowNumber}:J${q.rowNumber}`, values: [readable.slice(6, 10)] });
+    }
+  }
+  // Chunked so one request stays well under the API's payload limits.
+  for (let i = 0; i < data.length; i += 100) {
+    const res = await sheetsFetch(`${cfg.docId}/values:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "RAW", data: data.slice(i, i + 100) }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Sheets freeze write failed: ${res.status} ${body.slice(0, 200)}`);
+    }
+  }
+  return report;
+}

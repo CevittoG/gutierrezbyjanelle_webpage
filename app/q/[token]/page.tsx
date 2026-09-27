@@ -2,20 +2,14 @@
 // route lives outside /quote-calc so the gate cookie is never even sent.
 //
 // Dynamic SSR so a revoked/expired link stops resolving promptly (token-meta is
-// cached ~30s in the sheets module). The full Draft (incl. secret rates) is read
-// server-side here and projected to a PublicQuote — only that crosses to the client.
+// cached ~30s in the sheets module). The full Draft (incl. admin-only estimates)
+// is read server-side here and projected to a PublicQuote — only that crosses to
+// the client. Totals come from computeTotals(config) alone.
 
 import { notFound } from "next/navigation";
 import { siteConfig } from "@/config/site";
-import {
-  findByPublicToken,
-  getDraftById,
-  isSheetsConfigured,
-  listConfig,
-} from "@/lib/quote-calc-sheets";
-import { mergeRemoteConfig } from "@/lib/quote-calc-config";
-import { ITEM_CATALOG } from "@/lib/quote-calc-logic";
-import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
+import { findByPublicToken, getDraftById, isSheetsConfigured } from "@/lib/quote-calc-sheets";
+import { computeTotals } from "@/lib/quote-engine";
 import {
   buildPublicProgress,
   buildPublicQuote,
@@ -49,15 +43,7 @@ export default async function PublicQuotePage({
   const draft = await getDraftById(meta.id);
   if (!draft) notFound();
 
-  // Live catalog (so labels/qty match what Janelle quoted); bundled fallback.
-  let catalog = ITEM_CATALOG;
-  try {
-    catalog = mergeRemoteConfig(await listConfig()).catalog;
-  } catch {
-    // keep bundled catalog
-  }
-
-  const breakdown = computeQuoteBreakdown(draft.config, draft.assumptionsSnapshot, catalog);
+  const totals = computeTotals(draft.config);
 
   // Proofs — images + PDF, each behind the same-origin streaming proxy.
   let files: PublicQuoteFile[] = [];
@@ -81,7 +67,7 @@ export default async function PublicQuotePage({
   }
 
   const type = projectTypeOf(draft.config);
-  const quote = buildPublicQuote(draft, breakdown, files, catalog, meta.depositPaid);
+  const quote = buildPublicQuote(draft, totals, files, meta.depositPaid);
   const progress = buildPublicProgress(meta, type);
   return <PublicQuoteView quote={quote} progress={progress} token={token} />;
 }

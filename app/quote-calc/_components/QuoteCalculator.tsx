@@ -25,7 +25,7 @@ import { mergeRemoteConfig } from "@/lib/quote-calc-config";
 import { fetchRemoteConfig } from "@/lib/quote-calc-config-remote";
 import {
   DEFAULT_CONFIG,
-  Draft,
+  LegacyDraft as Draft,
   DraftClientInfo,
   DraftConfig,
   EMPTY_CLIENT_INFO,

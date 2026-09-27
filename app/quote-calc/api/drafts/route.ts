@@ -1,5 +1,6 @@
 // API: GET /quote-calc/api/drafts  → list active drafts
-// API: POST /quote-calc/api/drafts → upsert a single draft
+// API: POST /quote-calc/api/drafts → upsert a single draft (v5, or a pre-v5 draft
+//                                     from the old calculator)
 //
 // Mounted under /quote-calc so the auth cookie (Path=/quote-calc) is sent.
 
@@ -10,7 +11,7 @@ import {
   upsertDraftRow,
 } from "@/lib/quote-calc-sheets";
 import { ensureQuoteFolder } from "@/lib/quote-calc-drive";
-import { normalizeIncomingDraft } from "@/lib/quote-calc-drafts";
+import { normalizeStoredDraft } from "@/lib/quote-calc-drafts";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
 export const runtime = "nodejs";
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
-  const draft = normalizeIncomingDraft(body);
+  const draft = normalizeStoredDraft(body);
   if (!draft) {
     return NextResponse.json({ ok: false, error: "invalid_draft" }, { status: 400 });
   }

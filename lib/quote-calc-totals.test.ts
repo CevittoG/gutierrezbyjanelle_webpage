@@ -4,7 +4,8 @@
 // was built to enforce.
 
 import { DEFAULTS, ITEM_CATALOG, QuoteState, fmtEffectivePct, getItemQty, targetMarginPct } from "./quote-calc-logic";
-import { DraftConfig, QuoteLine, Draft, EMPTY_CLIENT_INFO, normalizeIncomingDraft } from "./quote-calc-drafts";
+import { DraftConfig, QuoteLine, LegacyDraft, EMPTY_CLIENT_INFO, normalizeIncomingDraft, toV5Draft } from "./quote-calc-drafts";
+import { computeTotals } from "./quote-engine";
 import { CUSTOM_ITEM_FALLBACK_LABEL, computeQuoteBreakdown } from "./quote-calc-totals";
 import { buildPublicQuote, isDigitalQuote } from "./quote-calc-portal";
 
@@ -143,7 +144,7 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
     familyFriendsPtg: 8,
   });
   const breakdown = computeQuoteBreakdown(config, S);
-  const draft: Draft = {
+  const draft: LegacyDraft = {
     id: "t1",
     name: "Test",
     createdAt: "",
@@ -154,8 +155,10 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
     cachedTotal: breakdown.finalPrice,
     schemaVersion: 4,
   };
-  const q = buildPublicQuote(draft, breakdown, [], ITEM_CATALOG, 0);
-  check("public: subtotal − savings + rush == total", approx(q.subtotal - q.savings + q.rush, q.total));
+  // The portal now projects the v5 conversion of a legacy quote.
+  const v5 = toV5Draft(draft, ITEM_CATALOG);
+  const q = buildPublicQuote(v5, computeTotals(v5.config), [], 0);
+  check("public: subtotal − savings + rush == total", approx(q.subtotal - q.savings + (q.rush?.amount ?? 0), q.total));
   check("public total == engine finalPrice", approx(q.total, breakdown.finalPrice));
 }
 
@@ -266,9 +269,11 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   const twoPhys = computeQuoteBreakdown(cfg2({ lines: [pkg("sweet", 50)], miscAddOns: [phys, { ...phys, id: "m3" }] }), S);
   check("packaging still once with physical lines + add-ons", approx(twoPhys.services.packaging, S.packagingCost));
 
-  check("isDigitalQuote: digital line + physical add-on ⇒ physical", !isDigitalQuote(cfg2({ lines: [item("iInvite", 1, true)], miscAddOns: [phys] })));
-  check("isDigitalQuote: digital add-on only ⇒ digital", isDigitalQuote(cfg2({ miscAddOns: [dig] })));
-  check("isDigitalQuote: empty quote ⇒ physical", !isDigitalQuote(cfg2({})));
+  const typeOf = (c: DraftConfig) =>
+    isDigitalQuote(toV5Draft({ id: "d", name: "", createdAt: "", updatedAt: "", client: { ...EMPTY_CLIENT_INFO }, config: c, assumptionsSnapshot: S, cachedTotal: 0, schemaVersion: 4 }).config);
+  check("isDigitalQuote: digital line + physical add-on ⇒ physical", !typeOf(cfg2({ lines: [item("iInvite", 1, true)], miscAddOns: [phys] })));
+  check("isDigitalQuote: digital add-on only ⇒ digital", typeOf(cfg2({ miscAddOns: [dig] })));
+  check("isDigitalQuote: empty quote ⇒ physical", !typeOf(cfg2({})));
 }
 
 // 13. Loading saved quotes: zero lines survive; add-on flags backfill price-neutrally.
