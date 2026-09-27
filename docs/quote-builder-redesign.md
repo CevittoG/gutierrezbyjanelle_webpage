@@ -13,6 +13,7 @@ and a file-by-file change inventory).
 | 2 | Discount semantics | **Discounts come off the price.** "10% off" means 10% off. A visible health check (not the discount base) protects margin. |
 | 3 | Packages | **Editable templates.** A package adds a grouped block of its pieces, quantities pre-filled from the guest count, every piece editable/removable, optional bundle % shown as "Suite savings". |
 | 4 | Where complexity lives | **The Sheet holds the data** (price book), **the engine holds the rules**, **the UI handles composition** (guest count → quantities, templates, overrides). No price-book editing UI in the app. |
+| 5 | Open business questions | **Resolved with Janelle on 2026-09-27** (§14): suites follow the website, true bundle % of 10 / 12 / 15 for weddings *and* events, a $30/hr target with a $25/hr floor, 6% fees, 2 guests per household, 2 envelopes per household, optional shipping line, digital prices kept at $16 for now. |
 
 ---
 
@@ -42,9 +43,12 @@ and a file-by-file change inventory).
   - A **health check** ("this quote pays you ≈ $X/hr") as the guardrail.
   - The cost-plus math survives as a **floor price** on a read-only Price book page, next to
     Janelle's price and the competitor range.
-- **Day one changes nothing.** The seed price book is derived from today's engine and lands within
-  ±1% of today's list prices (Appendix B). Janelle then moves prices toward the market at her own
-  pace.
+- **Day one is close to today, and the health check will ask for more.**
+  - Per-product prices are seeded from today's engine at ±1% (Appendix B).
+  - Suite totals come out about 5–6% lower, because the bundle % Janelle already advertises
+    (10 / 12 / 15) now really come off the price.
+  - With 6% fees, an undiscounted Sweet Spot quote at seed prices pays ≈ $28/hr, below her $30
+    target (§6.5). The first job after P1 is moving prices toward the market.
 - **Five shippable phases** (§12): P0 quick fixes → P1 price book → P2 engine + data model →
   P3 read surfaces → P4 new builder → P5 cleanup.
 
@@ -189,6 +193,8 @@ Results:
 **A6. The site promises savings the calculator never applies.**
 - The event collections show ✦ / ✦✦ / ✦✦✦ savings on `/events` (`config/site.ts:301-352`).
 - Every event bundle discount is 0% (`lib/quote-calc-logic.ts:68`).
+- *Resolved:* event collections get real bundle % of 10 / 12 / 15, the same as weddings (§14). The
+  ✦ badges stay and become honest; no site change is needed.
 
 ### B. Data and the Sheet
 
@@ -411,7 +417,7 @@ Validation:
 
 | Key | Seed | Meaning | Replaces |
 |---|---|---|---|
-| `guestsPerHousehold` | 2 | Guests default = households × this (editable per quote) | catalog "~2 per household" |
+| `guestsPerHousehold` | 2 ✔ | Guests default = households × this (editable per quote) | catalog "~2 per household" |
 | `rushPct` | 30 | Rush surcharge % | `rushFeePtg` |
 | `revisionRoundPrice` | 16 | $ per extra revision round | `revisionMin` × `hourly` × markup |
 | `revisionHours` | 0.5 | Health only: hours per extra round | `revisionMin` |
@@ -420,9 +426,11 @@ Validation:
 | `depositAmount` | *(keep current)* | Default deposit, editable per quote | same key |
 | `reuseDesignPct` | 25 | % of the design fee charged when reusing an existing design | `reuseFactor` |
 | `vendorReferralPct` | 10 | Preset for the "Vendor referral" discount reason | `vendorIncentivePtg` |
-| `feesPct` | 3 | Health only: payment/platform/software fees as % of revenue | `adminPtg` (as a cost, not a markup) |
-| `hourlyTarget` | 30 | Health only: the $/hr you want a quote to pay you | `hourly` + `targetProfitPtg` |
-| `hourlyFloor` | 25 | Health only: the $/hr you won't go below | — |
+| `feesPct` | 6 ✔ | Health only: payment/platform/software fees as % of revenue | `adminPtg` (as a cost, not a markup) |
+| `hourlyTarget` | 30 ✔ | Health only: the $/hr you want a quote to pay you | `hourly` + `targetProfitPtg` |
+| `hourlyFloor` | 25 ✔ | Health only: the $/hr you won't go below | — |
+
+✔ = confirmed by Janelle (§14).
 
 **Transition rules:**
 - Legacy keys (`hourly`, `adminPtg`, `targetProfitPtg`, `errorMarginPtg`, `fullColorFactor`,
@@ -452,9 +460,11 @@ Validation:
 3. For the ten best-selling products, fill in `marketLow` / `marketHigh` from competitor research.
    The Price book page then shows where each price sits against the floor and the market.
 4. Price the to-do rows (wax seal, liners, pocket/band/clip, envelope printing, extra card design,
-   AI render) and set them `active`.
-5. Confirm package contents in `Packages` (see Open questions §14).
-6. Set `hourlyTarget` / `hourlyFloor` to the numbers you actually want to earn.
+   AI render) and set them `active`. Until then, a package that includes one adds it at $0 with a
+   "set price" badge.
+5. Set the real upcharges for the `Options` rows (the seeded amounts are parity placeholders).
+6. Open a few typical quotes and check the health card. Where it reads *below target*, raise
+   prices in `Products` (package contents, bundle %, $/hr goals and fees are already set per §14).
 
 ---
 
@@ -540,34 +550,44 @@ Order of operations, and why:
 
 ### 6.5 Worked example
 
-Figures below are illustrative. The unit prices are the seed prices; the options, discount and
-target are made up.
+What's real and what's illustrative:
+- **Real:** the unit prices are the seed prices, and the settings are Janelle's confirmed ones (12%
+  Sweet Spot bundle, 6% fees, $30/hr target, $25/hr floor).
+- **Made up:** the textured-paper upcharge, the discount and the target total.
 
-Sweet Spot Suite for 80 households, textured paper on invite + detail card (+$0.25/pc), plus a
-welcome sign, 1 extra revision, family & friends 10%, and Janelle types a target total of $590.
+The quote: a Sweet Spot Suite for 80 households, with textured paper on the invite and detail card
+(+$0.25/pc), plus a welcome sign, 1 extra revision and family & friends 10%. Janelle types a target
+total of $570.
+
+Envelope printing is part of the suite but has no price yet, so it shows at $0 with a "set price"
+badge and is left out below.
 
 | Line | Math | Total |
 |---|---|---|
 | Invitation | 80 × ($1.95 + $0.25) + $16 design | $192.00 |
 | Detail card | 80 × ($1.95 + $0.25) + $16 design | $192.00 |
 | RSVP | 80 × $2.30 + $16 design | $200.00 |
-| Envelope | 160 × $0.40 | $64.00 |
+| Envelope (invite + RSVP reply) | 160 × $0.40 | $64.00 |
 | *Suite subtotal* | | *$648.00* |
-| Suite savings (8%) | 8% × $648.00 | −$51.84 |
+| Suite savings (12%) | 12% × $648.00 | −$77.76 |
 | Welcome sign | 1 × $29.75 + $16 design | $45.75 |
 | Extra revision round | 1 × $16 | $16.00 |
 | Packaging & handling | once | $3.00 |
-| Family & friends (10%) | 10% × $660.91 | −$66.09 |
-| Courtesy adjustment | set total → $590 | −$4.82 |
-| **Total** | | **$590.00** |
+| Family & friends (10%) | 10% × $634.99 | −$63.50 |
+| Courtesy adjustment | set total → $570 | −$1.49 |
+| **Total** | | **$570.00** |
 
 Health (admin only):
-- ≈ 15.9 h of work (2 h design + 13.4 h production + 0.5 h revision).
-- ≈ $149 materials and ≈ $17.70 fees.
-- Pays about **$26.52/hr**: *below the $30 target, above the $25 floor.*
-- Without the family discount and adjustment, the same quote pays about $30.86/hr.
+- ≈ 15.9 h of work: 2 h design, 13.4 h production, 0.5 h revision.
+- ≈ $149 materials and ≈ $34.20 fees (6%).
+- Pays about **$24.21/hr**: *under the $25 floor.*
+- The same quote without the family discount and adjustment ($634.99) pays about **$28.07/hr**:
+  *below the $30 target.*
 
-Janelle sees exactly what the discount costs her before she sends the quote.
+What this tells Janelle:
+- She sees exactly what the discount costs her before she sends the quote.
+- The seed prices, now that the bundle % are real and fees are 6%, sit below her own target. That
+  is the signal to raise prices toward the market.
 
 ---
 
@@ -753,19 +773,19 @@ conversion.
 ```
 ┌──────────────────────────────────────────────┬───────────────────────────┐
 │ ① Client & event                              │  SUMMARY (sticky)         │
-│   Name · Event type · Date* · Households 80   │  Sweet Spot Suite  $596.16│
+│   Name · Event type · Date* · Households 80   │  Sweet Spot Suite  $570.24│
 │   Guests 160 (auto)                           │  Welcome sign       $45.75│
 │                                               │  Services           $19.00│
-│ ② Start from   [Short and Suite] [Sweet Spot] │  Family & friends −$66.09 │
-│   [Signature] · Events ▸ · [Blank]            │  Adjustment         −$4.82│
+│ ② Start from   [Short and Suite] [Sweet Spot] │  Family & friends −$63.50 │
+│   [Signature] · Events ▸ · [Blank]            │  Adjustment         −$1.49│
 │                                               │  ─────────────────────────│
-│ ③ Lines                                       │  Total            $590.00 │
-│  ┌ Sweet Spot Suite · 80 households  −8% ───┐ │  Deposit $150 · Bal $440  │
+│ ③ Lines                                       │  Total            $570.00 │
+│  ┌ Sweet Spot Suite · 80 households −12% ───┐ │  Deposit $150 · Bal $420  │
 │  │ Invitation  🔗80  $1.95  +Textured  $192 │ │  [ Set total… ]           │
 │  │ Detail card 🔗80  $1.95  +Textured  $192 │ │  ─────────────────────────│
-│  │ RSVP        🔗80  $2.30             $200 │ │  HEALTH  ~ Below target   │
-│  │ Envelope    🔗160 $0.40              $64 │ │  ≈ $26.52/hr (target $30) │
-│  │ + add piece      ≈ $7.45 / household     │ │  ≈ 15.9 h · costs ≈ $167  │
+│  │ RSVP        🔗80  $2.30             $200 │ │  HEALTH  ! Under floor    │
+│  │ Envelope    🔗160 $0.40              $64 │ │  ≈ $24.21/hr (floor $25)  │
+│  │ + add piece      ≈ $7.13 / household     │ │  ≈ 15.9 h · costs ≈ $183  │
 │  └──────────────────────────────────────────┘ │  ▸ Show math              │
 │  Welcome sign   1   $29.75 +$16 design $45.75 │                           │
 │  [ + Add from price book ]  [ + Custom line ] │  [ Save ]  [ Duplicate ]  │
@@ -776,7 +796,7 @@ conversion.
 │ ⑤ Discount   [Family & friends ▾]  10 [%|$]   │                           │
 │ ⑥ Notes      Client note · Hidden note        │                           │
 └──────────────────────────────────────────────┴───────────────────────────┘
-Mobile: single column; sticky bottom bar "Total $590 · ~ $26.52/hr" opens the summary sheet.
+Mobile: single column; sticky bottom bar "Total $570 · ! $24.21/hr" opens the summary sheet.
 ```
 
 ### 9.2 Behaviour by section
@@ -925,14 +945,14 @@ interface PublicQuoteV2 {
 
 - **Never** includes: `listUnitPrice`, `est`, health, `productId`, options' `estCost`, `legacy`,
   hidden notes.
-- The view renders suites as a list of pieces with quantities, then "Suite savings (8%) −$51.84",
+- The view renders suites as a list of pieces with quantities, then "Suite savings (12%) −$77.76",
   then extras, services, discount, rush, adjustment and total.
 - The existing deposit/balance and shipping footnote stay.
 
 ### 10.3 Print (`app/quote-calc/print/_components/PrintQuote.tsx`)
 
 - Same projector. Remove `assumptions`/`catalog` loading.
-- "Suite savings (8%)" and "Family & friends (10%)" are now truthful.
+- "Suite savings (12%)" and "Family & friends (10%)" are now truthful.
 - Unsaved working quotes print from the builder's in-memory v5 config. `loadSavedDefaults()` goes
   away.
 
@@ -1171,29 +1191,44 @@ manual comparison list captured before deploy (§13.3).
    quantity in `Items` and confirm nothing moves.
 3. P1: seed a copy of the Sheet; add a product row, Reload, and confirm it appears. Break a cell
    and confirm the banner.
-4. P4: build the §6.5 example and confirm $590.00 and ≈ $26.52/hr. Open `/q/<token>` and print,
+4. P4: build the §6.5 example and confirm $570.00 and ≈ $24.21/hr. Open `/q/<token>` and print,
    and confirm the same numbers, truthful %s, and no health or cost data.
 5. Private window: `/q/<token>` still shows no cost internals. The page source contains no
    `est`, `listUnitPrice` or `legacy`.
 
 ---
 
-## 14. Open questions for Janelle
+## 14. Decisions from Janelle (resolved 2026-09-27)
 
-1. **Canonical package contents.** The seed follows the **website** (§3-B3, Appendix B), which
-   differs from what the calculator has been quoting. Confirm or edit the `Packages` tab.
-2. **Is "Short and Suite" digital-only?** The calculator's equivalent was digital (the site id is
-   `diy-digital`). The seed marks it `digital`.
-3. **Event collections show ✦ savings but have 0% bundle discounts.** Set real `bundlePct`s, or
-   drop the ✦ from `/events`.
-4. **What $/hr do you want to earn** (`hourlyTarget`), and what's your floor (`hourlyFloor`)? The
-   seed uses 30 and 25.
-5. **Guests per household:** is 2 right for most clients?
-6. **Envelopes at 2 per household:** outer + inner, or invite + reply?
-7. **Shipping:** keep "added later", or sometimes include it on the quote?
-8. **`feesPct`:** what do payment processing and platforms cost you, as a % of revenue?
-9. **Digital prices:** the seed reproduces today's digital prices ($16 per design), far below
-   typical custom-design pricing. Set real `digitalPrice`s before the new builder ships.
+| # | Question | Decision | Where it lands |
+|---|---|---|---|
+| 1 | Which contents do the suites have? | **The website's** (`config/site.ts`). The calculator's extra pieces (save the date, guest settings, welcome sign, seating chart) become standalone add-on products. | `Packages` seed (B.4) |
+| 2 | Is "Short and Suite" digital-only? | **No, printed by default.** Any line can still be switched to digital in the builder. | `Packages.delivery = physical` |
+| 3 | Event ✦ savings with 0% discounts | **Real bundle %, the same as weddings:** The Basics 10%, Add Some Fun 12%, Give Me the Works 15%. The ✦ badges on `/events` stay and are now honest. | `Packages.bundlePct` |
+| 4 | Wedding bundle % | **True 10 / 12 / 15%** off the suite price (Short and Suite / Sweet Spot / Signature). Suite totals come out about 5–6% lower than today's labor-only discounts gave (Appendix B.1). | `Packages.bundlePct` |
+| 5 | $/hr goals | **Target $30/hr, floor $25/hr.** | `Settings.hourlyTarget` / `hourlyFloor` |
+| 6 | Fees | **6%** of revenue (card processing plus some Etsy / Zola orders). | `Settings.feesPct` |
+| 7 | Guests per household | **2.** | `Settings.guestsPerHousehold` |
+| 8 | Envelopes | **Keep it simple: 2 per household**, one for the invite and one for the RSVP reply, as a single `envelope` product. Envelope printing (addressing) is a separate product at 1 per household, priced later. | `Products` seed (B.2) |
+| 9 | Shipping | **Optional line.** Default "added later" with today's footnote; when the carrier cost is known she can type it in, and it is never discounted or rushed. | §6.3, §9.2 ④ |
+| 10 | Digital prices | **Keep today's $16 per design for now** and raise later in `Products.digitalPrice`. | `Products` seed (B.2) |
+
+### Remaining follow-ups (Janelle, in the Sheet; no code needed)
+
+1. Price the six to-do products: envelope printing, envelope liner, suite pocket/band/clip, wax
+   seal, extra card design, AI render.
+2. Set real upcharges for the `Options` rows (textured paper, full color, gold foil).
+3. Fill `marketLow` / `marketHigh` for the best sellers.
+4. Raise prices where the health check reads below target. At seed prices, a plain Sweet Spot
+   quote pays ≈ $28/hr (§6.5).
+5. Raise digital prices when ready. They are still $16 per design.
+
+### Optional website follow-up
+
+Save the date, welcome sign, seating chart and personalized guest settings are now sold only as
+add-ons, but the "Individual Items and Enhancements" ticker on `/weddings` and `/events`
+(`config/site.ts`, the `add-ons` tier) doesn't list them. Add them there so clients know they can
+order them.
 
 ---
 
@@ -1234,11 +1269,17 @@ Checked against the current engine, using the calculator's current package conte
 - The Signature Suite @75 is $1,355.25 vs $1,352.64.
 - Both are within 1% list for list.
 
-Bundle %s are seeded at the **effective** rates of today's labor-only discounts (8 / 8 / 10), so
-suite totals also stay within 1% (Sweet net $659.18 vs $661.79).
+Bundle %s are Janelle's advertised **10 / 12 / 15%**, now applied to the whole suite price (§14).
+Today's labor-only rule only ever gave clients about 8 / 8 / 10%, so suite totals come out lower
+(same contents, 75 households):
 
-Parity is per product. Where the seeded `Packages` follow the website's contents rather than the
-calculator's (B.4, Open question 1), a suite's total changes by exactly the pieces added or
+| Suite | Today (net) | Seed price book | Change |
+|---|---|---|---|
+| Sweet Suite | $661.79 | $630.52 ($716.50 − 12%) | −4.7% |
+| Signature Suite | $1,222.20 | $1,151.96 ($1,355.25 − 15%) | −5.7% |
+
+Parity is per product. The seeded `Packages` follow the website's contents rather than the
+calculator's (§14, decision 1), so a suite's total also changes by exactly the pieces added or
 removed.
 
 ### B.2 `Products`
@@ -1285,6 +1326,10 @@ Seed notes:
   - Signs and the dessert/bar menus are `fixed 1` (they were 8 signs, or 2 menus per household).
   - Per-person items (menu, place card, guest setting, favor tags, charms, toppers) follow `guest`
     instead of "2 per household"; with `guestsPerHousehold = 2` this gives the same count.
+- **Envelope** stays one product at 2 per household: one for the invite, one for the RSVP reply
+  (§14, decision 8). Envelope printing (addressing) is separate, at 1 per household.
+- **Digital prices** stay at today's $16 per design (the `designFee`) until Janelle raises them
+  (§14, decision 10).
 - **The last six rows** are the to-do list of products sold on the site with no price yet.
 - **Welcome sign and seating chart** show how thin today's large-format pricing is ($29.75 against
   $23.10 of board). Worth checking against the market first.
@@ -1297,21 +1342,21 @@ Seed notes:
 | full-color | Full color design | percent | 10 | | | Parity with today's ×1.5 ink factor (≈ +10%) |
 | gold-foil | Gold foil | per-piece | *(set)* | Invitations | | Inactive until priced |
 
-### B.4 `Packages` (contents from `config/site.ts`, see Open questions 1–3)
+### B.4 `Packages` (contents from `config/site.ts`; bundle % and delivery per §14)
 
 | id | name | type | items | bundlePct | delivery |
 |---|---|---|---|---|---|
-| short-and-suite | Short and Suite | wedding | detail-card, invite | 8 | digital |
-| sweet-spot-suite | Sweet Spot Suite | wedding | detail-card, invite, rsvp, envelope, envelope-printing | 8 | physical |
-| signature-suite | Signature Suite | wedding | rsvp, detail-card, invite, envelope, envelope-printing, suite-accessory, ceremony-card, table-sign, ai-render | 10 | physical |
-| the-basics | The Basics | event | invite, thank-you | 0 | physical |
-| add-some-fun | Add Some Fun | event | invite, thank-you, menu, event-sign, dessert-sign | 0 | physical |
-| give-me-the-works | Give Me the Works | event | invite, thank-you, menu, dessert-menu, bar-menu, welcome-sign, event-sign, dessert-sign, drink-sign | 0 | physical |
+| short-and-suite | Short and Suite | wedding | detail-card, invite | 10 | physical |
+| sweet-spot-suite | Sweet Spot Suite | wedding | detail-card, invite, rsvp, envelope, envelope-printing | 12 | physical |
+| signature-suite | Signature Suite | wedding | rsvp, detail-card, invite, envelope, envelope-printing, suite-accessory, ceremony-card, table-sign, ai-render | 15 | physical |
+| the-basics | The Basics | event | invite, thank-you | 10 | physical |
+| add-some-fun | Add Some Fun | event | invite, thank-you, menu, event-sign, dessert-sign | 12 | physical |
+| give-me-the-works | Give Me the Works | event | invite, thank-you, menu, dessert-menu, bar-menu, welcome-sign, event-sign, dessert-sign, drink-sign | 15 | physical |
 
 ### B.5 `Settings` (new keys)
 
 `guestsPerHousehold 2 · rushPct 30 · revisionRoundPrice 16 · revisionHours 0.5 · licenseFee 20 ·
-packagingFee 3 · depositAmount (current) · reuseDesignPct 25 · vendorReferralPct 10 · feesPct 3 ·
+packagingFee 3 · depositAmount (current) · reuseDesignPct 25 · vendorReferralPct 10 · feesPct 6 ·
 hourlyTarget 30 · hourlyFloor 25`
 
 ## Appendix C: Old → new settings map
