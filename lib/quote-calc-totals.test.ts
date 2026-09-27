@@ -3,7 +3,7 @@
 // command in CLAUDE.md). Asserts the consistency guarantees the Phase-5 redesign
 // was built to enforce.
 
-import { DEFAULTS, ITEM_CATALOG, QuoteState, getItemQty } from "./quote-calc-logic";
+import { DEFAULTS, ITEM_CATALOG, QuoteState, fmtEffectivePct, getItemQty, targetMarginPct } from "./quote-calc-logic";
 import { DraftConfig, QuoteLine, Draft, EMPTY_CLIENT_INFO, normalizeIncomingDraft } from "./quote-calc-drafts";
 import { CUSTOM_ITEM_FALLBACK_LABEL, computeQuoteBreakdown } from "./quote-calc-totals";
 import { buildPublicQuote, isDigitalQuote } from "./quote-calc-portal";
@@ -298,6 +298,17 @@ const pkg = (p: DraftConfig["lines"][number]["pkg"], qty: number): QuoteLine => 
   // A pre-v4 quote with no packages still gets its historical Sweet Suite fallback.
   const legacyEmpty = normalizeIncomingDraft({ ...base, id: "l", schemaVersion: 3, config: { packages: [], mode: "fresh", miscAddOns: [] } });
   check("load: legacy quote with no packages keeps Sweet Suite fallback", !!legacyEmpty && legacyEmpty.config.lines.length === 1 && legacyEmpty.config.lines[0].pkg === "sweet");
+}
+
+// 14. P0: margin after overhead reads "on target" for an undiscounted quote; the
+// effective % printed for a discount equals amount ÷ base.
+{
+  const b = computeQuoteBreakdown(cfg({ lines: [item("iInvite", 100)] }), S);
+  const costs = b.lines.reduce((s, l) => s + l.cost.totalVariable + l.admin, 0) + b.services.servicesVar + b.services.adminAmount;
+  const margin = ((b.finalPrice - costs) / b.finalPrice) * 100;
+  check("undiscounted quote margin == target margin (13.04%)", approx(margin, targetMarginPct(S.targetProfitPtg), 1e-9));
+  const sig = computeQuoteBreakdown(cfg({ lines: [pkg("signature", 75)] }), S).lines[0];
+  check("effective suite % = amount ÷ list (9.6%)", fmtEffectivePct(sig.bundleDiscountAmount, sig.list) === "9.6%");
 }
 
 console.log("");

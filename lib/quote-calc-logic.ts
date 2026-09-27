@@ -519,6 +519,21 @@ export function fmtPct(n: number): string {
   return Math.round(n) + "%";
 }
 
+// The percentage a dollar amount really is of its base, for client-facing
+// labels ("Suite savings (9.6%)"). One decimal, trailing ".0" dropped, so the
+// printed % always equals amount ÷ base.
+export function fmtEffectivePct(amount: number, base: number): string {
+  if (!(base > 0) || !(amount > 0)) return "0%";
+  const pct = Math.round((amount / base) * 1000) / 10;
+  return (Number.isInteger(pct) ? String(pct) : pct.toFixed(1)) + "%";
+}
+
+// Net margin a quote needs to be "on target": target profit is a markup on
+// cost + admin overhead, so as a share of price it is profit / (1 + profit).
+export function targetMarginPct(targetProfitPtg: number): number {
+  return (targetProfitPtg / (100 + targetProfitPtg)) * 100;
+}
+
 // --- Persistence ---
 
 const STORAGE_KEY = "quote-calc-defaults";

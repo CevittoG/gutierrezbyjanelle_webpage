@@ -13,10 +13,12 @@ import {
   calcPackageCost,
   clampPtg,
   fmt$,
+  fmtEffectivePct,
   getDiscountPtg,
   getItemQty,
   loadSavedDefaults,
   markupVariable,
+  targetMarginPct,
 } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
 import { mergeRemoteConfig } from "@/lib/quote-calc-config";
@@ -96,6 +98,11 @@ export function QuoteCalculator() {
   const [catalog, setCatalog] = useState<CatalogItem[]>(ITEM_CATALOG);
   const [bannerState, setBannerState] = useState<ConfigBannerState>({ kind: "hidden" });
   const [configRetrying, setConfigRetrying] = useState(false);
+  // The latest Sheet rates. Applied to `assumptions` only while no saved quote
+  // is open: an opened quote keeps the snapshot it was priced under (the same
+  // one its client link uses) until Janelle explicitly re-prices it.
+  const [sheetAssumptions, setSheetAssumptions] = useState<QuoteState | null>(null);
+  const draftLoadedRef = useRef(false);
 
   // --- Drafts ---
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -152,6 +159,7 @@ export function QuoteCalculator() {
   // and by the Open selector). Marks the form clean after applying.
   const loadDraftIntoState = useCallback(
     (draft: Draft) => {
+      draftLoadedRef.current = true;
       setClient(draft.client);
       setAssumptions(draft.assumptionsSnapshot);
       applyConfig(draft.config);
@@ -203,10 +211,11 @@ export function QuoteCalculator() {
         }
         const merged = mergeRemoteConfig(result.value);
         setCatalog(merged.catalog);
-        // Sheet is the source of truth — its values win over the locally-saved
-        // defaults so editing the Sheet + Retry actually re-prices the quote.
-        // Per-draft snapshots are preserved separately on Load (draft.assumptionsSnapshot).
-        setAssumptions((prev) => ({ ...prev, ...merged.assumptions }));
+        setSheetAssumptions(merged.assumptions);
+        // Sheet is the source of truth for a *new* quote, so editing the Sheet +
+        // Retry re-prices it. An opened quote keeps its own snapshot (see
+        // repriceWithSheetRates for the explicit opt-in).
+        if (!draftLoadedRef.current) setAssumptions({ ...merged.assumptions });
         setBannerState(
           merged.warnings.length > 0
             ? { kind: "ok", warnings: merged.warnings }
@@ -291,6 +300,20 @@ export function QuoteCalculator() {
     if (client.eventDate) setDateError(false);
   }, [client.eventDate]);
 
+  // True when an opened quote's snapshot differs from the current Sheet rates.
+  const sheetRatesDiffer = useMemo(() => {
+    if (!currentDraftId || !sheetAssumptions) return false;
+    return (Object.keys(sheetAssumptions) as (keyof QuoteState)[]).some(
+      (k) => sheetAssumptions[k] !== assumptions[k],
+    );
+  }, [currentDraftId, sheetAssumptions, assumptions]);
+
+  function repriceWithSheetRates() {
+    if (!sheetAssumptions) return;
+    setAssumptions({ ...sheetAssumptions });
+    setDraftDirty(true);
+  }
+
   function updateAssumption(key: keyof QuoteState, value: number) {
     setAssumptions((prev) => ({ ...prev, [key]: value }));
     if (hydratedRef.current) setDraftDirty(true);
@@ -303,31 +326,35 @@ export function QuoteCalculator() {
     [config, assumptions, catalog],
   );
 
-  // Rough per-package preview price (list minus the bundle discount, which comes
-  // off raw labor only) for the picker cards — the real number is the line's
-  // `net` once it's on the quote.
+  // Rough per-package preview (at the default qty) for the picker cards: the
+  // list price and the bundle discount, which comes off raw labor only. The
+  // real number is the line's `net` once it's on the quote.
   const pkgPreview = useCallback(
-    (key: PkgKey): number => {
+    (key: PkgKey): { net: number; list: number; discount: number } => {
       const cost = calcPackageCost(key, DEFAULT_LINE_QTY, mode, assumptions, fullColor, customPaper, catalog);
       const { list } = markupVariable(cost.totalVariable, assumptions);
       const laborBase = cost.totalDesignLabor + cost.totalProductionLabor;
       const disc = clampPtg(getDiscountPtg(key, assumptions));
-      return list - laborBase * (disc / 100);
+      const discount = laborBase * (disc / 100);
+      return { net: list - discount, list, discount };
     },
     [mode, assumptions, fullColor, customPaper, catalog],
   );
 
   // Final total + net margin for the mobile bar, derived from the breakdown.
+  // Same rule as the breakdown panel: admin overhead is a cost, and the target
+  // is profit expressed as a margin on price.
   const totals = useMemo(() => {
     const finalPrice = breakdown.finalPrice;
     const lineCosts = breakdown.lines.reduce(
-      (s, l) => s + l.cost.totalMaterials + l.cost.totalDesignLabor + l.cost.totalProductionLabor,
+      (s, l) => s + l.cost.totalMaterials + l.cost.totalDesignLabor + l.cost.totalProductionLabor + l.admin,
       0,
     );
-    const yourCosts = lineCosts + breakdown.services.servicesVar;
+    const yourCosts = lineCosts + breakdown.services.servicesVar + breakdown.services.adminAmount;
     const netProfit = finalPrice - yourCosts;
     const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
-    const marginDiff = netMargin - assumptions.targetProfitPtg;
+    const rawDiff = netMargin - targetMarginPct(assumptions.targetProfitPtg);
+    const marginDiff = Math.abs(rawDiff) < 0.05 ? 0 : rawDiff;
     return { finalPrice, netMargin, marginDiff, miscTotal: breakdown.miscTotal };
   }, [breakdown, assumptions.targetProfitPtg]);
 
@@ -416,6 +443,22 @@ export function QuoteCalculator() {
         retrying={configRetrying}
       />
 
+      {sheetRatesDiffer && (
+        <div className="mb-5 rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
+          <p className="flex-1 min-w-[16rem] text-sm text-muted-foreground leading-snug">
+            This quote keeps the rates it was priced with, so it matches the client link. The Sheet
+            has newer rates.
+          </p>
+          <button
+            type="button"
+            onClick={repriceWithSheetRates}
+            className="h-11 px-4 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+          >
+            Re-price with current Sheet rates
+          </button>
+        </div>
+      )}
+
       <div className="mb-5">
         <DraftsBar
           currentDraftId={currentDraftId}
@@ -465,7 +508,8 @@ export function QuoteCalculator() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {(pkgType === "wedding" ? WEDDING_PKG_KEYS : EVENT_PKG_KEYS).map((key) => {
                 const def = PACKAGES[key];
-                const previewPrice = pkgPreview(key);
+                const preview = pkgPreview(key);
+                const previewPrice = preview.net;
                 const discount = getDiscountPtg(key, assumptions);
                 return (
                   <div key={key} className="relative group">
@@ -481,9 +525,12 @@ export function QuoteCalculator() {
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <span className="font-squarepeg text-xl leading-tight">{def.name}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {discount > 0 && (
-                            <span className="text-xs rounded-full bg-accent text-accent-foreground px-2 py-0.5 font-medium">
-                              -{discount}%
+                          {preview.discount > 0 && (
+                            <span
+                              className="text-xs rounded-full bg-accent text-accent-foreground px-2 py-0.5 font-medium"
+                              title={`Effective saving at ${DEFAULT_LINE_QTY}: the bundle discount comes off labor only`}
+                            >
+                              -{fmtEffectivePct(preview.discount, preview.list)}
                             </span>
                           )}
                           <span className="text-xs rounded-full bg-foreground text-background px-2 py-0.5 font-medium">

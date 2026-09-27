@@ -8,8 +8,10 @@ import {
   ITEM_CATALOG,
   fmt$,
   fmt$2,
+  fmtEffectivePct,
   fmtPct,
   fmtTime,
+  targetMarginPct,
 } from "@/lib/quote-calc-logic";
 import type { LineResult, QuoteBreakdown } from "@/lib/quote-calc-totals";
 import { cn } from "@/utils";
@@ -216,12 +218,17 @@ export function BreakdownPanel({
   const aggMaterials = sumL((l) => l.cost.totalMaterials);
 
   const finalPrice = breakdown.finalPrice;
-  const yourCosts = aggDesignLabor + aggProductionLabor + aggMaterials + svc.servicesVar;
+  // Admin overhead is a real cost, not profit: count it in "Your costs" and
+  // compare the margin against the target's margin-on-price equivalent, so an
+  // undiscounted quote reads exactly "on target".
+  const aggAdmin = sumL((l) => l.admin) + svc.adminAmount;
+  const yourCosts = aggDesignLabor + aggProductionLabor + aggMaterials + svc.servicesVar + aggAdmin;
   const netProfit = finalPrice - yourCosts;
   const netMargin = finalPrice > 0 ? (netProfit / finalPrice) * 100 : 0;
 
-  const marginTarget = assumptions.targetProfitPtg;
-  const marginDiff = netMargin - marginTarget;
+  const marginTarget = targetMarginPct(assumptions.targetProfitPtg);
+  const rawDiff = netMargin - marginTarget;
+  const marginDiff = Math.abs(rawDiff) < 0.05 ? 0 : rawDiff;
   const marginBadge =
     marginDiff >= 0
       ? "bg-green-100 text-green-800 border border-green-200"
@@ -229,7 +236,10 @@ export function BreakdownPanel({
       ? "bg-amber-100 text-amber-800 border border-amber-200"
       : "bg-red-100 text-red-800 border border-red-200";
   const marginIcon = marginDiff >= 0 ? "+" : marginDiff >= -5 ? "~" : "-";
-  const marginLabel = `${Math.abs(Math.round(marginDiff))} pts ${marginDiff >= 0 ? "above" : "below"} target`;
+  const marginLabel =
+    marginDiff === 0
+      ? "on target"
+      : `${Math.abs(Math.round(marginDiff * 10) / 10)} pts ${marginDiff > 0 ? "above" : "below"} target`;
 
   function copyQuoteSummary() {
     const lineLabels = lines.map((l) => `${l.label} (${l.qty})`).join(", ");
@@ -242,7 +252,7 @@ export function BreakdownPanel({
       .join(", ");
     const discountNames = [
       breakdown.bundleDiscountTotal > 0 ? "Bundle savings" : null,
-      ...breakdown.relationshipDiscountLines.map((d) => `${d.label} ${d.ptg}%`),
+      ...breakdown.relationshipDiscountLines.map((d) => `${d.label} ${fmtEffectivePct(d.amount, breakdown.itemsList)}`),
     ]
       .filter(Boolean)
       .join(", ");
@@ -404,6 +414,7 @@ export function BreakdownPanel({
         {aggProductionLabor > 0 && <Row indent label="Production labor" value={fmt$2(aggProductionLabor)} dim />}
         {aggMaterials > 0 && <Row indent label="Materials" value={fmt$2(aggMaterials)} dim />}
         {svc.servicesVar > 0 && <Row indent label="Project services" value={fmt$2(svc.servicesVar)} dim />}
+        {aggAdmin > 0 && <Row indent label="Admin overhead" value={fmt$2(aggAdmin)} dim />}
 
         <Divider />
         <Row label="Total your costs" value={fmt$2(yourCosts)} dim />
@@ -421,7 +432,7 @@ export function BreakdownPanel({
             marginDiff >= 0 ? "text-green-700" : marginDiff >= -5 ? "text-amber-700" : "text-red-700"
           )}
         >
-          {fmtPct(netMargin)} net margin (target {fmtPct(marginTarget)})
+          {fmtPct(netMargin)} net margin after overhead (target {marginTarget.toFixed(1)}%)
         </p>
       </div>
 

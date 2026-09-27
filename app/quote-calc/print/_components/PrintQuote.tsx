@@ -8,6 +8,7 @@ import {
   PACKAGES,
   fmt$,
   fmt$2,
+  fmtEffectivePct,
   loadSavedDefaults,
 } from "@/lib/quote-calc-logic";
 import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
@@ -122,7 +123,7 @@ export function PrintQuote() {
         <div className="max-w-md text-center">
           <h1 className="font-squarepeg text-4xl mb-2">Quote not found</h1>
           <p className="text-sm text-muted-foreground mb-6 normal-case tracking-normal">
-            That quote isn't saved on this device. Saved drafts live in your browser's storage —
+            That quote isn&apos;t saved on this device. Saved drafts live in your browser&apos;s storage,
             open it from the same computer where you saved it.
           </p>
           <button
@@ -141,7 +142,7 @@ export function PrintQuote() {
 
   if (!computed) return null;
 
-  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines, anyPhysical } = computed;
+  const { lines: priced, miscLines, rushAmount, finalPrice, services, relationshipDiscountLines, anyPhysical, itemsList } = computed;
 
   interface DisplayItem {
     rowKey: string;
@@ -327,7 +328,7 @@ export function PrintQuote() {
                   />
                   {v.lr.bundleDiscountPtg > 0 && (
                     <PrintRow
-                      label={`Suite savings (${v.lr.bundleDiscountPtg}%)`}
+                      label={`Suite savings (${fmtEffectivePct(v.lr.bundleDiscountAmount, v.lr.list)})`}
                       value={`-${fmt$2(v.lr.bundleDiscountAmount)}`}
                       dim
                     />
@@ -366,7 +367,7 @@ export function PrintQuote() {
               {relationshipDiscountLines.map((d) => (
                 <PrintRow
                   key={d.label}
-                  label={`${d.label} (${d.ptg}%)`}
+                  label={`${d.label} (${fmtEffectivePct(d.amount, itemsList)})`}
                   value={`-${fmt$2(d.amount)}`}
                   dim
                 />
