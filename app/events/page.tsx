@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { EventsContent } from "./_content";
 
-const pageDescription = `Custom stationery and signage for graduations, showers, birthdays, quinceañeras, and corporate events by ${siteConfig.name}.`;
+const pageDescription = `Custom stationery and signage for dinner parties, graduations, showers, birthdays, quinceañeras, and corporate events by ${siteConfig.name}.`;
 const pageTitle = `Events & Corporate | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/events`;
 

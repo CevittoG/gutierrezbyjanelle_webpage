@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { FounderPortrait } from "@/components/ui/founder-portrait";
 import { siteConfig } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
 import { pick } from "@/lib/i18n";
@@ -17,6 +18,8 @@ export function AboutContent() {
       </section>
 
       <section className="container max-w-2xl mx-auto px-4 md:px-8 pb-20">
+        <FounderPortrait className="mx-auto mb-12" />
+
         <div className="font-anybody-prose space-y-8 text-foreground text-lg leading-relaxed">
           {siteConfig.about.sections.map((section, i) => (
             <div key={i} className="space-y-4">

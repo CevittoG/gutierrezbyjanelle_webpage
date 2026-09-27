@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { PriceCard } from "@/components/ui/price-card";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { MarqueeTicker } from "@/components/ui/marquee-ticker";
@@ -11,8 +10,7 @@ import { pick } from "@/lib/i18n";
 export function EventsContent() {
   const { locale, t } = useLocale();
 
-  const individualTier = siteConfig.investments.find((p) => p.id === "individual")!;
-  const addOnsTier = siteConfig.investments.find((p) => p.id === "add-ons")!;
+  const itemsTier = siteConfig.investments.find((p) => p.id === "add-ons")!;
 
   return (
     <>
@@ -20,19 +18,6 @@ export function EventsContent() {
         <h1 className="font-squarepeg text-5xl leading-tight sm:text-6xl md:text-7xl text-balance">
           {t("events.h1")}
         </h1>
-      </section>
-
-      <section className="container max-w-3xl mx-auto px-4 md:px-8 pb-16">
-        <figure className="relative aspect-[4/3] w-full overflow-hidden rounded-sm border border-border shadow-sm">
-          <Image
-            src="/gallery/welcome-sign-3.jpeg"
-            alt="A welcome sign designed by Janelle for a baby shower"
-            fill
-            sizes="(min-width: 768px) 720px, 100vw"
-            className="object-cover"
-            priority
-          />
-        </figure>
       </section>
 
       <section className="bg-muted/50 border-t border-border">
@@ -56,11 +41,22 @@ export function EventsContent() {
             </p>
           </div>
 
-          <div id="individual" className="max-w-5xl mx-auto mb-20 scroll-mt-20">
-            <PriceCard plan={individualTier} className="max-w-xl mx-auto" />
+          <div id="individual-items" className="scroll-mt-20 max-w-5xl mx-auto mb-20">
+            <div className="text-center mb-8">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                {t("investment.addons.eyebrow")}
+              </p>
+              <h2 className="font-squarepeg text-3xl sm:text-4xl">
+                {pick(itemsTier.name, locale)}
+              </h2>
+              <p className="mt-3 text-sm text-muted-foreground max-w-lg mx-auto">
+                {pick(itemsTier.description, locale)}
+              </p>
+            </div>
+            <MarqueeTicker items={itemsTier.features.map((f) => pick(f, locale))} />
           </div>
 
-          <div id="event-suites" className="scroll-mt-20 max-w-5xl mx-auto mb-20">
+          <div id="event-suites" className="scroll-mt-20 max-w-5xl mx-auto">
             <div className="text-center mb-8">
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
                 {t("investment.events.eyebrow")}
@@ -77,21 +73,6 @@ export function EventsContent() {
                 <PriceCard key={plan.id} plan={plan} />
               ))}
             </div>
-          </div>
-
-          <div id="add-ons" className="scroll-mt-20 max-w-5xl mx-auto">
-            <div className="text-center mb-8">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                {t("investment.addons.eyebrow")}
-              </p>
-              <h2 className="font-squarepeg text-3xl sm:text-4xl">
-                {pick(addOnsTier.name, locale)}
-              </h2>
-              <p className="mt-3 text-sm text-muted-foreground max-w-lg mx-auto">
-                {pick(addOnsTier.description, locale)}
-              </p>
-            </div>
-            <MarqueeTicker items={addOnsTier.features.map((f) => pick(f, locale))} />
           </div>
         </div>
       </section>

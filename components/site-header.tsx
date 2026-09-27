@@ -15,8 +15,9 @@ import { cn } from "@/utils";
 
 // Gated quote tools (/quotes, /quote/new, /quote-calc/*) and the client portal
 // (/q/*) render their own chrome (AppShell / standalone presentation), so the
-// public marketing header is suppressed there.
-const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q)(\/|$)/;
+// public marketing header is suppressed there. The hidden design concepts
+// (/v1, /v2, /v3) carry their own header too.
+const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q|v1|v2|v3)(\/|$)/;
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);

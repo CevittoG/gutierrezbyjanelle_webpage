@@ -88,25 +88,50 @@ To retheme the entire site, only the `:root` block in `app/globals.css` needs to
 // config/site.ts
 export type NavItem        = { title: string; href: string };
 export type Hero           = { headline: string; subheadline: string; cta?: { label: string; href: string } };
-export type InvestmentTier = { id: string; name: string; description: string; features: string[]; discount?: number };
+export type InvestmentTier = { id: string; name: Bilingual; description: Bilingual; features: Bilingual[]; image?: { src: string; alt: Bilingual }; savingsLabel?: string };
+export type Founder        = { photo?: string; alt: Bilingual };
 export type Review         = { id: string; text: string; author: string; role: string };
 export type GalleryTag     = "ceremony-programs" | "welcome-signs" | "drink-toppers" | "bar-signs" | "note-cards" | "shower-games" | "invitations" | "menus" | "place-cards";
 export type GalleryTagDef  = { id: GalleryTag; title: Bilingual; description: Bilingual };
 export type GalleryItem    = { id: string; src: string; alt: string; tags?: GalleryTag[]; orientation?: GalleryOrientation };
 
 export const siteConfig = {
-  name: "GutierrezByJanelle",
+  name: "Gutiérrez by Janelle",   // brand name in prose — the single source of truth
   url: "https://www.gutierrezbyjanelle.com",
-  mainNav: NavItem[],
-  investments: InvestmentTier[],  // 5 tiers: individual, design-suite, sweet-suite, signature-suite, add-ons
+  mainNav: NavItem[],             // Home → About → Weddings → Events → Gallery → Reviews
+  investments: InvestmentTier[],  // 4 tiers: diy-digital, sweet-suite, signature-suite, add-ons
+  eventInvestments: InvestmentTier[], // 3 event collections
+  founder: Founder,               // headshot shared by the home scroll + About page
   reviews: Review[],
   galleryTags: GalleryTagDef[],   // 9 tags: 6 with photos, 3 coming-soon (invitations, menus, place-cards)
   gallery: GalleryItem[],         // 18 photos across 7 populated tags
-  // ... hero, about, weddings, etsyStore, instagram
+  // ... hero, about, weddings, events, etsyStore, instagram
 };
 ```
 
 Components import `siteConfig` and nothing else — never hardcode display strings inside components.
+
+### Brand name
+
+`siteConfig.name` is the **only** place the brand is spelled, as **"Gutiérrez by Janelle"** — accented and spaced. Every surface reads it (page titles, footer, OG image, printed quote, client portal, the home scroll's `aria-label`); never retype it in a component.
+
+Deliberately **not** accented, because they are real-world identifiers or someone else's words:
+the domain, the Etsy URL **and `etsyStore.name`** (mirrors the actual shop), the Zola slug, the
+Instagram handle, `contactEmail`, package/Docker identifiers, and the client testimonials in
+`reviews` (quoted verbatim).
+
+### Photos that don't exist yet
+
+Two optional config fields let a photo be wired up before the file exists, without ever showing an
+empty "coming soon" frame. Both follow the same **drop one file + uncomment one line** procedure,
+and the component renders *no image area at all* while the line stays commented:
+
+| Field | Enable by | Rendered by |
+|---|---|---|
+| `founder.photo` | drop `public/founder/janelle.jpg`, uncomment `photo:` | `FounderPortrait` → home scroll + `/about` |
+| `InvestmentTier.image` | drop `public/suites/<tier>.jpeg`, uncomment that tier's `// image:` line | `PriceCard` → `/weddings` + `/events` |
+
+All six tiers already carry their intended `// image:` line commented out.
 
 ---
 
@@ -149,7 +174,7 @@ app/
   layout.tsx              ← shared shell (SiteHeader + SiteFooter), root metadata
   page.tsx                ← /  (Home)
   investment/
-    page.tsx              ← redirects to /weddings#wedding-investment (back-compat; content moved into weddings/events)
+    page.tsx              ← redirects to /weddings#wedding-investment (back-compat only; nothing on the site links here — the home hero now links straight to the two pricing sections)
   reviews/
     page.tsx              ← /reviews
   gallery/
@@ -190,10 +215,12 @@ app/
 | `components/ui/badge.tsx` | shadcn Badge — 4 variants |
 | `components/ui/sheet.tsx` | Radix Dialog-based slide-in sheet (used by mobile nav) |
 | `components/ui/dialog.tsx` | Radix Dialog-based centred modal (used by the dashboard's delete confirmation). Warm `bg-foreground/30` scrim — never `bg-black/80` |
-| `components/ui/price-card.tsx` | Accepts `InvestmentTier`; displays name/features/discount badge (Save X% shown when `discount` is set) |
+| `components/ui/price-card.tsx` | Accepts `InvestmentTier`; renders name/description/features, the relative `savingsLabel` badge (✦ / ✦✦ / ✦✦✦ — **never a percentage**), and the optional `plan.image` showcase photo. No image field ⇒ no image area |
 | `components/ui/review-card.tsx` | Accepts `Review`; blockquote style |
 | `components/ui/gallery-grid.tsx` | Tag-filtered flat grid; `activeFilter` prop; `AnimatePresence` tile transitions; lightbox with keyboard nav; `GalleryEmptyState` for tags with no photos |
-| `components/ui/stationery-hero.tsx` | Two portrait cards in a flex row with framer-motion entrance stagger and per-card hover lift/rotate; text column right-aligned on desktop |
+| `components/ui/stationery-hero.tsx` | Two portrait cards in a flex row with framer-motion entrance stagger and per-card hover lift/rotate; text column right-aligned on desktop. Takes an `actions: HeroAction[]` array (one button per entry, wraps on mobile) — the home hero passes Wedding pricing + Event pricing |
+| `components/ui/founder-portrait.tsx` | Janelle's headshot from `siteConfig.founder`. Returns `null` while `photo` is unset, so callers must lay out for its absence (the home founder scene collapses to one centred column) |
+| `components/ui/marquee-ticker.tsx` | Slow CSS horizontal ticker, duplicated track for a seamless loop, pauses on hover, reduced-motion aware. Renders the à-la-carte item list on `/weddings` + `/events` |
 
 ---
 
@@ -404,12 +431,30 @@ Each quote moves through a 9-stage pipeline that drives the client portal and th
 
 ---
 
+## Design Concepts — `/v1`, `/v2`, `/v3` (hidden, throwaway)
+
+Three redesign mock-ups of all six public pages, built to compare directions side by side. Same content (everything reads `siteConfig` + the i18n dictionary, EN/ES works), different look. **They deliberately break the brand rules above** (new palettes and fonts) — they are experiments, not the system.
+
+| Route | Concept | Look |
+|---|---|---|
+| `/v1/*` | **Linen, Re-inked** | Current fonts (Square Peg + Anybody), Sage Garden palette, terracotta wax seal. Envelope-opening hero, fanned suite, stitched envelope cards, sticky mobile Email/Instagram bar |
+| `/v2/*` | **Editorial Atelier** | Fraunces + Manrope, ivory/oxblood/champagne. Magazine chapters, word-rise headlines, scroll-driven parallax, lookbook strip, table-of-contents collections, full-screen menu |
+| `/v3/*` | **Stationery Table** | Bricolage Grotesque + Instrument Serif, butter/chocolate/cherry/blush. Draggable desk of real pieces (framer-motion), spinning stickers, flip-card collections, bento grid, à-la-carte **wish list → pre-written email** |
+
+- Hidden: `robots` noindex in each `app/vN/layout.tsx`, disallowed in `app/robots.ts`, not in the sitemap or `mainNav`. The live header/footer self-hide on these routes (`HIDE_CHROME`).
+- Floating **Concept switcher** (bottom-left) jumps to the same page in Live / V1 / V2 / V3.
+- Shared helpers in `components/concepts/` (`Reveal`, `Marquee`, `Lightbox`, `ConceptSwitcher`, `use-concept.ts`, `use-gallery.ts`, `concepts.css`); concept-only copy in `config/concepts.ts`. Tokens are re-scoped per concept by redefining the shadcn CSS variables on `.v1-root` / `.v2-root` / `.v3-root`.
+- No new dependencies. Motion is CSS-first (IntersectionObserver reveals, keyframes, `animation-timeline: view()` behind `@supports`), and everything honours `prefers-reduced-motion`. Concept fonts load only inside their own layout.
+- To remove a concept: delete `app/vN/`, drop it from `HIDE_CHROME` and `robots.ts`. Deleting all three also frees `components/concepts/`, `config/concepts.ts`, and the four concept font families in `tailwind.config.ts`.
+
+---
+
 ## Current Status
 
 All public routes render with brand styling and full SEO metadata. Quote calculator fully functional with cost-plus pricing model.
 
 **Complete:**
-- 7 public routes: Home, Weddings, Events & Corporate, About, Reviews, Gallery, Quote Calculator. `/investment` is now a back-compat redirect to `/weddings#wedding-investment` — investment pricing (Individual Item, suites/collections, Add-Ons) lives at the bottom of the Weddings and Events pages instead of a standalone page
+- 7 public routes: Home, About, Weddings, Events & Corporate, Gallery, Reviews, Quote Calculator (nav order: Home → About → Weddings → Events → Gallery → Reviews; `app/sitemap.ts` mirrors it). `/investment` is a back-compat redirect to `/weddings#wedding-investment` that nothing on the site links to any more — investment pricing lives inside the Weddings and Events pages
 - Per-page SEO metadata on all routes
 - Root layout metadata with `metadataBase`, OG, Twitter card, and icons
 - `app/opengraph-image.tsx` — JSX-based 1200×630 OG image
@@ -428,7 +473,9 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Misc add-on section for one-off client requests (selling price, no markup applied)
 - Custom-only quotes: lines can all be removed (new quotes start blank), unnamed add-ons count as "Custom item", add-ons carry a Physical/Digital flag, and rush covers add-ons — the latter two money rules gated behind `pricingVersion` 2 so saved quotes keep their totals
 - Wedding/Events package toggle with event-specific discount controls
-- Investment content split by audience: Individual item card, suites/collections grid, and Add-Ons live at the bottom of `/weddings` (wedding suites) and `/events` (event collections) rather than a standalone Investment page; discount badges, pill-shaped Etsy/Instagram buttons with icons
+- Investment content split by audience and shaped identically on both pages: a single **"Individual Items and Enhancements"** ticker (the `add-ons` tier — standalone pieces and suite enhancements merged into one de-duplicated 20-item list) sits at the **top** of the Investment section, above the suites/collections grid. Both grids use the same `sm:grid-cols-2 lg:grid-cols-3 gap-6` shape and the same ✦ savings badges. Anchors: `#individual-items`, `#wedding-suites` / `#event-suites`. The standalone Individual Item card and the `individual` tier are retired
+- Savings are expressed **only** as ✦ / ✦✦ / ✦✦✦ (`savingsLabel`) while pricing is still being set — there is no percentage anywhere on the marketing site, and `InvestmentTier` carries no `discount` field. Both pages' body copy explains what the ✦ means
+- Home story scroll (4 scenes): hero (two pricing buttons straight to `/weddings#wedding-investment` and `/events#event-investment`) → **Meet the Founder** (portrait + Janelle's own opening line from `siteConfig.about`, buttons to `/about` + `/gallery`) → featured review → inquiry CTA + Etsy
 - Real gallery photos — 18 JPEGs in `public/gallery/`; tag-based filter bar with animated transitions; `GalleryEmptyState` for coming-soon tags (`menus`, `place-cards` remain coming-soon)
 - Homepage redesigned: fixed logo watermark (20% opacity), `StationeryHero` with two real invitation card images, frosted-glass About/CTA sections
 - A11y: skip-to-content link, active nav underline, focus-visible rings, `prefers-reduced-motion` global CSS rule

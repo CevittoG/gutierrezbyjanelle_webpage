@@ -263,9 +263,9 @@ export function PrintQuote() {
           {/* Header band */}
           <header className="px-10 pt-10 pb-6 text-center">
             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
-              GutierrezByJanelle · Custom stationery
+              {siteConfig.name} · Custom stationery
             </p>
-            <h1 className="font-squarepeg text-6xl leading-none">Gutierrez by Janelle</h1>
+            <h1 className="font-squarepeg text-6xl leading-none">{siteConfig.name}</h1>
             <hr className="mt-6 border-0 h-px bg-accent" />
           </header>
 
@@ -395,7 +395,7 @@ export function PrintQuote() {
               <p>· Shipping is added based on carrier quote at the time of production.</p>
             )}
             <p>· One round of revisions is included. Additional rounds are billed at our standard design rate.</p>
-            <p>· Final pricing may shift based on design complexity discovered during sketching.</p>
+            <p>· Final investment may shift based on design complexity discovered during sketching.</p>
             <p>· A 50% deposit confirms your spot; balance due before production begins.</p>
           </section>
 
