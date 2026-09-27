@@ -10,6 +10,7 @@ import { ReviewCard } from "@/components/ui/review-card";
 import { EtsyStoreCard } from "@/components/ui/etsy-store-card";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/config/site";
+import { mailtoHref } from "@/lib/mailto";
 import { useLocale } from "@/lib/locale-context";
 import { pick } from "@/lib/i18n";
 
@@ -172,7 +173,7 @@ export function HomeContent() {
               </a>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <a href={`mailto:${siteConfig.contactEmail ?? ""}`}>
+              <a href={mailtoHref(t("cta.emailSubject"))}>
                 <Mail className="w-4 h-4" aria-hidden="true" />
                 {t("cta.email")}
               </a>

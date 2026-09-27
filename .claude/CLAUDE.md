@@ -120,6 +120,12 @@ the domain, the Etsy URL **and `etsyStore.name`** (mirrors the actual shop), the
 Instagram handle, `contactEmail`, package/Docker identifiers, and the client testimonials in
 `reviews` (quoted verbatim).
 
+### Email links
+
+Build every `mailto:` with `mailtoHref(subject, body?)` from `lib/mailto.ts` — it reads
+`siteConfig.contactEmail` and URL-encodes the subject/body. Live-site buttons pass the bilingual
+`t("cta.emailSubject")` so the inquiry lands with a subject line.
+
 ### Photos that don't exist yet
 
 Two optional config fields let a photo be wired up before the file exists, without ever showing an
