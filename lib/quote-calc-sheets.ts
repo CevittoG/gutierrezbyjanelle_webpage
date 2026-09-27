@@ -551,12 +551,6 @@ export async function listDraftRecords(): Promise<DraftRecord[]> {
   return stored.map((r) => ({ draft: toV5Draft(r.draft, catalog), status: r.status }));
 }
 
-// Live quotes as stored — what the calculator syncs with.
-export async function listDrafts(): Promise<StoredDraft[]> {
-  const records = await listStoredDraftRecords();
-  return records.filter((r) => r.status === "active").map((r) => r.draft);
-}
-
 export async function upsertDraftRow(draft: StoredDraft): Promise<void> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();

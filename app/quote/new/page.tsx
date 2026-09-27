@@ -1,5 +1,5 @@
 import { PasswordGate } from "@/app/quote-calc/_components/PasswordGate";
-import { QuoteCalculator } from "@/app/quote-calc/_components/QuoteCalculator";
+import { QuoteBuilder } from "./_components/QuoteBuilder";
 import { AppShell } from "@/components/quote-app/AppShell";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
@@ -15,7 +15,7 @@ export default function NewQuotePage() {
 
   return (
     <AppShell>
-      <QuoteCalculator />
+      <QuoteBuilder />
     </AppShell>
   );
 }

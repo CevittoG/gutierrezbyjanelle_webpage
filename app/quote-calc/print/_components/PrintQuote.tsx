@@ -7,15 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { loadSavedDefaults } from "@/lib/quote-calc-logic";
-import {
-  isV5Draft,
-  loadDrafts,
-  loadLastSession,
-  normalizeDraftV5,
-  toV5Draft,
-  type Draft,
-} from "@/lib/quote-calc-drafts";
+import { loadDrafts, loadLastSession, normalizeDraftV5, type Draft } from "@/lib/quote-calc-drafts";
 import { computeTotals } from "@/lib/quote-engine";
 import { buildPublicQuote } from "@/lib/quote-calc-portal";
 import { formatMoney } from "@/lib/money";
@@ -33,19 +25,20 @@ function workingQuote(): Draft | null {
   const last = loadLastSession();
   if (!last) return null;
   const now = new Date().toISOString();
-  const base = { id: "draft", name: "Working quote", createdAt: now, updatedAt: now, client: last.client };
-  const cfg = last.config as unknown as { schema?: number };
-  if (cfg && cfg.schema === 5) {
-    return normalizeDraftV5({ ...base, config: last.config, cachedTotal: 0, schemaVersion: 5 });
-  }
-  // The old calculator's session has no snapshot: it priced with the live defaults.
-  return toV5Draft({ ...base, config: last.config, assumptionsSnapshot: loadSavedDefaults(), cachedTotal: 0, schemaVersion: 4 });
+  return {
+    id: "draft",
+    name: last.name || "Working quote",
+    createdAt: now,
+    updatedAt: now,
+    client: last.client,
+    config: last.config,
+    cachedTotal: computeTotals(last.config).total,
+    schemaVersion: 5,
+  };
 }
 
 function localDraft(draftId: string): Draft | null {
-  const found = loadDrafts().find((d) => d.id === draftId);
-  if (!found) return null;
-  return isV5Draft(found as never) ? (found as unknown as Draft) : toV5Draft(found);
+  return loadDrafts().find((d) => d.id === draftId) ?? null;
 }
 
 async function remoteDraft(draftId: string): Promise<Draft | null> {

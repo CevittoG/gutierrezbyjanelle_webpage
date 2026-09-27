@@ -1,6 +1,7 @@
 import { ITEM_CATALOG, type CatalogItem, type QuoteState } from "./legacy/logic";
 import type { DraftConfig } from "./legacy/types";
 import { migrateConfig, withSnapshotDefaults } from "./legacy/migrate";
+// (DraftConfig above is the pre-v5 config, carried only by LegacyDraft.)
 import { computeTotals } from "./quote-engine";
 import { convertLegacyDraft } from "./quote-legacy";
 import { DEFAULT_SETTINGS } from "./quote-pricebook";
@@ -28,7 +29,6 @@ export type {
 
 // The v1–v4 config shape and its migration are frozen in lib/legacy/.
 export * from "./legacy/types";
-export { withSnapshotDefaults } from "./legacy/migrate";
 
 export interface DraftClientInfo {
   name: string;
@@ -95,53 +95,41 @@ export function newId(): string {
   return "id-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function migrateDraft(d: LegacyDraft): LegacyDraft {
-  return {
-    ...d,
-    client: { ...EMPTY_CLIENT_INFO, ...d.client },
-    config: migrateConfig(d.config),
-    schemaVersion: LEGACY_SCHEMA_VERSION,
-  };
-}
+// --- Local cache (localStorage) ---
+//
+// v5 drafts only. A cache written by the old calculator is converted on load
+// (bundled catalog); the server copy, converted with the live catalog, wins on
+// reconcile (equal updatedAt ⇒ remote).
 
-export function loadDrafts(): LegacyDraft[] {
+export function loadDrafts(): Draft[] {
   if (!isBrowser()) return [];
   try {
     const raw = localStorage.getItem(DRAFTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((d): d is LegacyDraft => {
-        return (
-          d &&
-          typeof d === "object" &&
-          (d.schemaVersion === 1 ||
-            d.schemaVersion === 2 ||
-            d.schemaVersion === 3 ||
-            d.schemaVersion === 4) &&
-          typeof d.id === "string"
-        );
-      })
-      .map(migrateDraft);
+    const out: Draft[] = [];
+    for (const d of parsed) {
+      const stored = normalizeStoredDraft(d);
+      if (stored) out.push(toV5Draft(stored));
+    }
+    return out;
   } catch (err) {
     console.warn("Failed to load drafts; resetting.", err);
     return [];
   }
 }
 
-export function saveDrafts(drafts: LegacyDraft[]): void {
+export function saveDrafts(drafts: Draft[]): void {
   if (!isBrowser()) return;
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  } catch (err) {
+    console.warn("Failed to cache drafts locally.", err);
+  }
 }
 
-export function createDraft(
-  name: string,
-  client: DraftClientInfo,
-  config: DraftConfig,
-  assumptions: QuoteState,
-  cachedTotal: number,
-): LegacyDraft {
+export function createDraft(name: string, client: DraftClientInfo, config: DraftConfigV5): Draft {
   const now = new Date().toISOString();
   return {
     id: newId(),
@@ -150,43 +138,32 @@ export function createDraft(
     updatedAt: now,
     client,
     config,
-    assumptionsSnapshot: { ...assumptions },
-    cachedTotal,
-    schemaVersion: LEGACY_SCHEMA_VERSION,
+    cachedTotal: computeTotals(config).total,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
   };
 }
 
-export function upsertDraft(draft: LegacyDraft): LegacyDraft[] {
+/** Save to the local cache, stamping updatedAt and recomputing cachedTotal. */
+export function upsertDraft(draft: Draft): Draft[] {
   const drafts = loadDrafts();
   const idx = drafts.findIndex((d) => d.id === draft.id);
-  const next: LegacyDraft = { ...draft, updatedAt: new Date().toISOString() };
-  if (idx >= 0) {
-    drafts[idx] = next;
-  } else {
-    drafts.unshift(next);
-  }
+  const next: Draft = { ...draft, updatedAt: new Date().toISOString(), cachedTotal: computeTotals(draft.config).total };
+  if (idx >= 0) drafts[idx] = next;
+  else drafts.unshift(next);
   saveDrafts(drafts);
   return drafts;
 }
 
-export function deleteDraft(id: string): LegacyDraft[] {
+export function deleteDraft(id: string): Draft[] {
   const drafts = loadDrafts().filter((d) => d.id !== id);
-  saveDrafts(drafts);
-  return drafts;
-}
-
-export function renameDraft(id: string, name: string): LegacyDraft[] {
-  const drafts = loadDrafts();
-  const idx = drafts.findIndex((d) => d.id === id);
-  if (idx < 0) return drafts;
-  drafts[idx] = { ...drafts[idx], name: name.trim() || drafts[idx].name, updatedAt: new Date().toISOString() };
   saveDrafts(drafts);
   return drafts;
 }
 
 export interface LastSession {
   client: DraftClientInfo;
-  config: DraftConfig;
+  config: DraftConfigV5;
+  name: string;
   currentDraftId: string | null;
 }
 
@@ -196,10 +173,12 @@ export function loadLastSession(): LastSession | null {
     const raw = localStorage.getItem(LAST_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LastSession>;
-    if (!parsed.config || !parsed.client) return null;
+    const config = sanitizeConfigV5(parsed.config);
+    if (!config || !parsed.client) return null;
     return {
       client: { ...EMPTY_CLIENT_INFO, ...parsed.client },
-      config: migrateConfig(parsed.config),
+      config,
+      name: typeof parsed.name === "string" ? parsed.name : "",
       currentDraftId: parsed.currentDraftId ?? null,
     };
   } catch {
@@ -209,7 +188,11 @@ export function loadLastSession(): LastSession | null {
 
 export function saveLastSession(session: LastSession): void {
   if (!isBrowser()) return;
-  localStorage.setItem(LAST_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(LAST_KEY, JSON.stringify(session));
+  } catch {
+    // storage full or blocked
+  }
 }
 
 export function clearLastSession(): void {
@@ -240,8 +223,8 @@ export function normalizeIncomingDraft(raw: unknown): LegacyDraft | null {
 }
 
 // Reconcile a remote list with the local cache. Remote wins on equal-or-newer updatedAt.
-export function reconcileDrafts(local: LegacyDraft[], remote: LegacyDraft[]): LegacyDraft[] {
-  const byId = new Map<string, LegacyDraft>();
+export function reconcileDrafts(local: Draft[], remote: Draft[]): Draft[] {
+  const byId = new Map<string, Draft>();
   for (const d of local) byId.set(d.id, d);
   for (const r of remote) {
     const existing = byId.get(r.id);

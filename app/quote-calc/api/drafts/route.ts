@@ -1,4 +1,4 @@
-// API: GET /quote-calc/api/drafts  → list active drafts
+// API: GET /quote-calc/api/drafts  → list active drafts (v5)
 // API: POST /quote-calc/api/drafts → upsert a single draft (v5, or a pre-v5 draft
 //                                     from the old calculator)
 //
@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   isSheetsConfigured,
-  listDrafts,
+  listDraftRecords,
   upsertDraftRow,
 } from "@/lib/quote-calc-sheets";
 import { ensureQuoteFolder } from "@/lib/quote-calc-drive";
@@ -36,7 +36,8 @@ export async function GET() {
   if (fail) return fail;
   if (!isSheetsConfigured()) return unconfigured();
   try {
-    const drafts = await listDrafts();
+    // v5 view: pre-v5 quotes arrive converted with the live Items catalog.
+    const drafts = (await listDraftRecords()).filter((r) => r.status === "active").map((r) => r.draft);
     return NextResponse.json({ ok: true, drafts });
   } catch (err) {
     console.warn("[/quote-calc/api/drafts GET] failed", err);
