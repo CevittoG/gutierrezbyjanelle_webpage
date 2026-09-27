@@ -246,6 +246,8 @@ The Dockerfile has four named stages: `base → deps → development → builder
 
 Password-gated internal pricing tool at `/quote-calc`. Not in the sitemap or public nav.
 
+> **Approved redesign (not yet implemented):** [docs/quote-builder-redesign.md](../docs/quote-builder-redesign.md) — price book in the Sheet (`Products`/`Options`/`Packages`), resolved-price quote lines (schema v5), discounts off the price, a $/hr health check, and a new builder, delivered in phases P0–P5. Everything below describes the **current** system; read the redesign doc before changing the quote engine or builder.
+
 ### Pricing Formula (cost-plus model, three-tier — Phase 5 redesign)
 
 A quote is a list of **lines** (each a bundle *or* a single item) priced through one
