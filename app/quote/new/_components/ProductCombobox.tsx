@@ -68,10 +68,7 @@ export function ProductCombobox({
     return (
       <button
         type="button"
-        onClick={() => {
-          setOpen(true);
-          requestAnimationFrame(() => inputRef.current?.focus());
-        }}
+        onClick={() => setOpen(true)}
         className={cn(
           "h-11 px-4 inline-flex items-center gap-2 rounded-md border border-border bg-card text-sm hover:bg-muted transition-colors",
           compact && "px-3 text-muted-foreground",
@@ -89,6 +86,7 @@ export function ProductCombobox({
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <input
           ref={inputRef}
+          autoFocus
           role="combobox"
           aria-expanded
           aria-controls={listId}

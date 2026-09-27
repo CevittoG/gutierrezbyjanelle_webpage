@@ -53,7 +53,7 @@ export function HealthCard({ health, className }: { health: QuoteHealth; classNa
       )}
       <details className="mt-2 group">
         <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground min-h-[44px] flex items-center">
-          Show the math
+          How this is estimated
         </summary>
         <dl className="mt-1 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-xs">
           <dt className="text-muted-foreground">Design</dt>

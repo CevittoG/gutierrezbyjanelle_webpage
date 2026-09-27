@@ -329,8 +329,8 @@ export function QuoteBuilder() {
             className="mt-1 h-14 w-full rounded-md border border-transparent bg-transparent px-2 -mx-2 font-squarepeg text-4xl md:text-5xl leading-none placeholder:text-foreground/40 hover:border-border focus:border-border focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <p className="text-xs text-muted-foreground" aria-live="polite">
-            {syncLabel(syncStatus)}
-            {dirty && " · unsaved changes"}
+            {currentDraftId ? syncLabel(syncStatus) : "Not saved yet"}
+            {dirty && currentDraftId && " · unsaved changes"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

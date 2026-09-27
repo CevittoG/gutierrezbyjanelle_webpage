@@ -1301,6 +1301,21 @@ on an existing quote.
   dashboard only; `/q`, Profile Overview and print do not move.
 - Dashboard rows wrap their actions under the name on phones so every action is a 44 px target.
 
+**P4 (builder)**
+- `/quote/new` renders `QuoteBuilder`; the old calculator UI (`QuoteCalculator`,
+  `AssumptionsPanel`, `ItemAssumptionRow`, `BreakdownPanel`, `MiscAddOnSection`, `DraftsBar`) was
+  removed in P4 rather than P5: once local drafts became v5 it could no longer load them, and
+  nothing routed to it.
+- `GET /quote-calc/api/drafts` returns v5 drafts converted server-side with the live `Items`
+  catalog, so the builder never converts a remote quote with the bundled catalog.
+- No "Blank" chip: a new quote starts blank, and the Start-from section says so.
+- "Set total…" is an inline panel, not a modal (DESIGN.md), and previews the health change.
+- The quote name is an inline title defaulting to "<client> · <event type>" (no em dash).
+  Duplicate in the builder saves a copy with a fresh id; Print uses the saved quote when clean and
+  the working copy (`__current`) otherwise. Leaving with unsaved edits asks first.
+- The health card's own details are "How this is estimated"; "Show math" is the per-line formula
+  view that replaced `BreakdownPanel`.
+
 ## Appendix A: Current-engine numbers (default settings, fresh design, no toggles)
 
 | Quote | List | Discount (stated → actual) | Total | $/household | Design h | Production h | Materials |

@@ -60,7 +60,7 @@ export function NumberField({
         className,
       )}
     >
-      {prefix && <span className="pl-2.5 text-sm text-muted-foreground" aria-hidden>{prefix}</span>}
+      {prefix && <span className="pl-2.5 text-sm text-muted-foreground whitespace-nowrap" aria-hidden>{prefix}</span>}
       <input
         id={id}
         type="text"
@@ -86,7 +86,7 @@ export function NumberField({
           inputClassName,
         )}
       />
-      {suffix && <span className="pr-2.5 text-sm text-muted-foreground" aria-hidden>{suffix}</span>}
+      {suffix && <span className="pr-2.5 text-sm text-muted-foreground whitespace-nowrap" aria-hidden>{suffix}</span>}
     </span>
   );
 }
