@@ -1232,6 +1232,29 @@ order them.
 
 ---
 
+## 15. Implementation notes (decisions made while building)
+
+Details the plan left open, resolved in the direction of §4. None of them changes the money
+on an existing quote.
+
+**P1 (price book)**
+- The seed rows in `lib/quote-pricebook.ts` are the single source for both the bundled fallback
+  (`DEFAULT_PRICE_BOOK` is parsed from them) and the seed endpoint, so the two cannot drift.
+- A product or option without a price is a **to-do**, not an error: it raises a `needs-price`
+  warning that the Price book page lists under "Still to price", and the builder banner hides.
+  The product stays in the book (packages add it at $0 with a "set price" badge) but is left out
+  of the picker. Inactive rows are also left out of the picker.
+- Each tab falls back to the seed on its own: a missing or empty `Products` tab uses the bundled
+  products even if `Options` is filled in. Settings that are missing or not numbers keep their
+  seed value and name the row.
+- The seed writes with `USER_ENTERED` so Janelle gets real numbers and TRUE/FALSE cells. A Settings
+  tab that exists only gets the missing keys appended; `depositAmount` is never overwritten.
+- The Price book page shows floor · target per piece and, for design fees, flags *below floor*
+  when the fee is under `estDesignHours × hourlyFloor`. The position bar's dot uses Powder Rose
+  only when the price reaches the target (state only).
+- App shell on phones: the logo hides and Sign out becomes an icon button so the three nav items
+  fit at 375 px; `ConfigBanner` lost its 4 px side stripe (forbidden by DESIGN.md) and wraps.
+
 ## Appendix A: Current-engine numbers (default settings, fresh design, no toggles)
 
 | Quote | List | Discount (stated → actual) | Total | $/household | Design h | Production h | Materials |

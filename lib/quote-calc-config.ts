@@ -18,6 +18,9 @@ import {
   ITEM_CATALOG,
   QuoteState,
 } from "./quote-calc-logic";
+import { isPriceSettingKey, type ConfigWarning } from "./quote-pricebook";
+
+export type { ConfigWarning, ConfigWarningKind } from "./quote-pricebook";
 
 // --- Wire shapes ---
 
@@ -48,20 +51,6 @@ export interface RemoteConfig {
   settings: RemoteSetting[];
   items: RemoteItem[];
   warnings: ConfigWarning[];
-}
-
-export type ConfigWarningKind =
-  | "fetch-failed"
-  | "tab-missing"
-  | "empty"
-  | "invalid-row"
-  | "unknown-key";
-
-export interface ConfigWarning {
-  kind: ConfigWarningKind;
-  tab: "Settings" | "Items" | null;
-  sheetRow: number | null;
-  detail: string;
 }
 
 // --- Whitelist: only these QuoteState keys are accepted from the Settings tab.
@@ -121,6 +110,9 @@ export function mergeRemoteConfig(remote: RemoteConfig | null): MergedConfig {
 
   // Settings overlay scalar QuoteState fields.
   for (const s of remote.settings) {
+    // Price-book keys (docs/quote-builder-redesign.md §5.5) share the tab during
+    // the transition; this reader skips them without a warning.
+    if (isPriceSettingKey(s.key) && !isWhitelistedSetting(s.key)) continue;
     if (!isWhitelistedSetting(s.key)) {
       warnings.push({
         kind: "unknown-key",

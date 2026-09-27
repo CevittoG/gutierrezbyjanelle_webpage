@@ -21,6 +21,18 @@ import type {
 import type { LinkStatus, PortalMeta, ProjectStage } from "./quote-calc-portal";
 import { nextStage } from "./quote-calc-portal";
 import { quoteDisplayName, summarizeLineItems } from "./quote-calc-summary";
+import {
+  OPTIONS_TAB,
+  PACKAGES_TAB,
+  PRODUCTS_TAB,
+  SETTINGS_TAB as PRICE_SETTINGS_TAB,
+  parseSheetNumber,
+  planSeed,
+  type RemotePriceBook,
+  type SeedAction,
+  type SheetRow,
+  type TabRead,
+} from "./quote-pricebook";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
@@ -797,14 +809,7 @@ let cachedConfig: ConfigCacheEntry | null = null;
 let inflightConfig: Promise<RemoteConfig> | null = null;
 
 function parseNumber(raw: unknown): number | null {
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (trimmed === "") return null;
-  // Tolerate "$1.50", "10%", "1,250" — Janelle is editing this in Sheets.
-  const cleaned = trimmed.replace(/[$,%\s]/g, "");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return parseSheetNumber(raw);
 }
 
 async function fetchSheetRange(docId: string, range: string): Promise<Row[] | "tab-missing"> {
@@ -969,6 +974,165 @@ export async function listConfig(options?: { force?: boolean }): Promise<RemoteC
 
 export function invalidateConfigCache(): void {
   cachedConfig = null;
+}
+
+// --- Price book (Products / Options / Packages / Settings) ---
+//
+// docs/quote-builder-redesign.md §5. Read-only except for the one-time seed
+// below. Same 60s module cache + in-flight dedupe as listConfig; parsing and
+// validation live in the pure lib/quote-pricebook.ts.
+
+const PRICEBOOK_RANGES = {
+  products: `${PRODUCTS_TAB}!A2:O`,
+  options: `${OPTIONS_TAB}!A2:H`,
+  packages: `${PACKAGES_TAB}!A2:H`,
+  settings: `${PRICE_SETTINGS_TAB}!A2:B`,
+} as const;
+
+interface PriceBookCacheEntry {
+  remote: RemotePriceBook;
+  expiresAt: number;
+}
+let cachedPriceBook: PriceBookCacheEntry | null = null;
+let inflightPriceBook: Promise<RemotePriceBook> | null = null;
+
+async function readTab(docId: string, range: string): Promise<TabRead> {
+  try {
+    const res = await fetchSheetRange(docId, range);
+    if (res === "tab-missing") return { status: "missing" };
+    return { status: "ok", rows: res as SheetRow[] };
+  } catch (err) {
+    return { status: "failed", detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function listPriceBook(options?: { force?: boolean }): Promise<RemotePriceBook> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+
+  const now = Date.now();
+  if (!options?.force && cachedPriceBook && cachedPriceBook.expiresAt > now) {
+    return cachedPriceBook.remote;
+  }
+  if (inflightPriceBook) return inflightPriceBook;
+
+  inflightPriceBook = (async () => {
+    const [products, opts, packages, settings] = await Promise.all([
+      readTab(cfg.docId, PRICEBOOK_RANGES.products),
+      readTab(cfg.docId, PRICEBOOK_RANGES.options),
+      readTab(cfg.docId, PRICEBOOK_RANGES.packages),
+      readTab(cfg.docId, PRICEBOOK_RANGES.settings),
+    ]);
+    const remote: RemotePriceBook = { products, options: opts, packages, settings };
+    cachedPriceBook = { remote, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
+    return remote;
+  })().finally(() => {
+    inflightPriceBook = null;
+  });
+
+  return inflightPriceBook;
+}
+
+export function priceBookSheetUrl(): string | null {
+  const cfg = getConfig();
+  return cfg ? `https://docs.google.com/spreadsheets/d/${cfg.docId}/edit` : null;
+}
+
+async function writeUserEntered(docId: string, range: string, values: Row[]): Promise<void> {
+  const res = await sheetsFetch(
+    `${docId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    { method: "PUT", body: JSON.stringify({ range, majorDimension: "ROWS", values }) },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets write failed (${range}): ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
+async function appendUserEntered(docId: string, range: string, values: Row[]): Promise<void> {
+  const res = await sheetsFetch(
+    `${docId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    { method: "POST", body: JSON.stringify({ range, majorDimension: "ROWS", values }) },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets append failed (${range}): ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
+function cellsOf(rows: SheetRow[]): Row[] {
+  return rows.map((r) => r.map((c) => (c === null || c === undefined ? "" : typeof c === "boolean" ? String(c).toUpperCase() : c)));
+}
+
+export interface SeedReport {
+  created: string[];
+  seeded: string[];
+  settingsAppended: string[];
+  skipped: string[];
+}
+
+// One-time seed of the price-book tabs (§5.1). Writes only tabs that are
+// missing or empty and appends only missing Settings keys, so it never touches
+// a row Janelle has edited and a second run changes nothing.
+export async function seedPriceBookTabs(): Promise<SeedReport> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const meta = await fetchSpreadsheetMeta(cfg.docId);
+  const titles = new Set(meta.sheets.map((t) => t.title));
+
+  async function firstColumn(tab: string): Promise<string[]> {
+    if (!titles.has(tab)) return [];
+    const rows = await readRange(cfg!.docId, `${tab}!A2:A`);
+    return rows.map((r) => String(r[0] ?? "").trim()).filter(Boolean);
+  }
+  const [p, o, k, st] = await Promise.all([
+    firstColumn(PRODUCTS_TAB),
+    firstColumn(OPTIONS_TAB),
+    firstColumn(PACKAGES_TAB),
+    firstColumn(PRICE_SETTINGS_TAB),
+  ]);
+  const actions: SeedAction[] = planSeed({
+    products: { exists: titles.has(PRODUCTS_TAB), dataRows: p.length },
+    options: { exists: titles.has(OPTIONS_TAB), dataRows: o.length },
+    packages: { exists: titles.has(PACKAGES_TAB), dataRows: k.length },
+    settings: { exists: titles.has(PRICE_SETTINGS_TAB), dataRows: st.length, keys: st },
+  });
+
+  const report: SeedReport = { created: [], seeded: [], settingsAppended: [], skipped: [] };
+  const touched = new Set(actions.map((a) => a.tab));
+  for (const tab of [PRODUCTS_TAB, OPTIONS_TAB, PACKAGES_TAB, PRICE_SETTINGS_TAB]) {
+    if (!touched.has(tab)) report.skipped.push(tab);
+  }
+
+  const toCreate = actions.filter((a) => a.create).map((a) => a.tab);
+  if (toCreate.length > 0) {
+    const res = await sheetsFetch(`${cfg.docId}:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ requests: toCreate.map((title) => ({ addSheet: { properties: { title } } })) }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Sheets create-tab failed: ${res.status} ${body.slice(0, 200)}`);
+    }
+    report.created.push(...toCreate);
+  }
+
+  for (const a of actions) {
+    const values = cellsOf(a.rows);
+    if (a.mode === "write") {
+      const lastCol = colLetter(Math.max(...values.map((r) => r.length)) - 1);
+      await writeUserEntered(cfg.docId, `${a.tab}!A1:${lastCol}${values.length}`, values);
+      if (a.tab === PRICE_SETTINGS_TAB) report.settingsAppended.push(...values.slice(1).map((r) => String(r[0])));
+      else report.seeded.push(a.tab);
+    } else {
+      await appendUserEntered(cfg.docId, `${a.tab}!A:B`, values);
+      report.settingsAppended.push(...values.map((r) => String(r[0])));
+    }
+  }
+
+  cachedPriceBook = null;
+  cachedConfig = null;
+  return report;
 }
 
 export { SheetsUnconfiguredError, NUM_COLS, getAccessToken as getGoogleAccessToken };
