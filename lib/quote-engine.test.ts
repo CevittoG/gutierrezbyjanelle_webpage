@@ -328,7 +328,7 @@ function parity(name: string, config: unknown, snapshot: Partial<QuoteState> = S
   }
 }
 
-// Every scenario from lib/quote-calc-totals.test.ts.
+// Every scenario from the retired lib/quote-calc-totals.test.ts (pre-v5 engine tests).
 parity("two identical items + revisions", legacy({ lines: [item("iGames", 60), item("iGames", 60)], extraRevisions: 2 }));
 parity("sweet + revisions", legacy({ lines: [pkg("sweet", 75)], extraRevisions: 2 }));
 parity("sweet + signature + revisions", legacy({ lines: [pkg("sweet", 75), pkg("signature", 75)], extraRevisions: 2 }));

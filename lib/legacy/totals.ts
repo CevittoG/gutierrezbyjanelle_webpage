@@ -7,7 +7,7 @@
 // *same* engine path.
 //
 // This is the single source of truth for the quote money math. The engine
-// (quote-calc-logic) only computes per-line *variable cost*; everything else —
+// (./logic) only computes per-line *variable cost*; everything else —
 // markup, discounts, the once-per-quote project services (revisions, packaging,
 // digital license), rush, and misc — is layered on here, in one place.
 //

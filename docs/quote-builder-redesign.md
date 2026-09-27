@@ -1,9 +1,9 @@
 # Quote Builder — Analysis & Redesign Hand-off
 
-**Status:** approved direction, **not implemented**. This document is the hand-off for the
-implementation. It describes today's system, what is wrong with it, the target design, and the
-phased plan (Google Sheet, formula, data model, builder UI, Profile Overview / portal / print,
-and a file-by-file change inventory).
+**Status:** **implemented** (P0–P5, 2026-09-27) on branch `claude/quote-builder-analysis-qntqdg`.
+The plan below is kept as written; what was decided while building, and every deviation, is in
+§15. Two steps remain for after deploy and are Janelle's to run: the price book seed and the
+one-time legacy freeze (§15, "After deploy").
 
 **Decisions already made** (from the review with the product owner):
 
@@ -1315,6 +1315,45 @@ on an existing quote.
   the working copy (`__current`) otherwise. Leaving with unsaved edits asks first.
 - The health card's own details are "How this is estimated"; "Show math" is the per-line formula
   view that replaced `BreakdownPanel`.
+
+**P5 (cleanup and docs)**
+- Deleted: the old calculator UI (in P4), `lib/quote-calc-logic.ts` (browser defaults, JSON
+  import/export and the re-export shim), `lib/quote-calc-totals.ts` and its test (superseded by
+  `lib/quote-engine.test.ts`, whose parity matrix includes every one of its scenarios),
+  `lib/quote-calc-config-remote.ts` and `GET /quote-calc/api/config`.
+- **Kept on purpose, until the freeze has run:** `lib/legacy/*`, `lib/quote-legacy.ts`,
+  `lib/quote-calc-config.ts` and `listConfig()` (the `Items` reader). §11.3 schedules them for P5
+  "after the freeze has run", but the freeze runs against the live Sheet after deploy. Deleting the
+  `Items` reader first would convert un-frozen quotes with the bundled catalog and could move a
+  total a client has already seen. The post-freeze deletions are listed in `.claude/CLAUDE.md`.
+- The optional `Quotes` V/W columns (est. $/hr, est. costs) were not added; health is on Profile
+  Overview and in the builder.
+- `.claude/CLAUDE.md` (Quote Builder section) and `docs/QUOTE_CALC_MODEL.md` were rewritten for
+  the new system.
+
+### Deviations from the plan, in one list
+
+1. Converted quotes keep the old engine's unrounded arithmetic and whole-dollar display (P2).
+2. The dashboard now shows each quote's client-link total; quotes whose old `cachedTotal` was
+   stale change on the dashboard only, and the freeze lists them (P3).
+3. The old calculator UI was removed in P4, not P5 (P4).
+4. The `Items` reader and the legacy engine stay until the freeze has run (P5).
+5. Small model additions: `reuseDesignPct`, `listDesignFee`, `system` (P2); `PublicQuote`
+   `wholeDollars`, `anyPhysical`, `extras[].includes` (P3).
+6. No "Blank" chip; converted line names put counts in `detail`; no em dashes in new copy.
+
+### After deploy (Janelle / Seba)
+
+1. Price book page → **Create price book tabs** (fills `Products`, `Options`, `Packages`, appends
+   the new `Settings` keys). Check the page: prices, packages, the "Still to price" list.
+2. Write down the totals of 5 client links (`/q/<token>`), then call
+   `POST /quote-calc/api/drafts/freeze` once while signed in (for example from the browser console:
+   `fetch('/quote-calc/api/drafts/freeze',{method:'POST'}).then(r=>r.json())`). Confirm
+   `parityFailures` is empty, then confirm the 5 totals are unchanged.
+3. After a clean freeze: the code cleanup in `.claude/CLAUDE.md`, and rename `Items` to
+   `_legacy_Items`.
+4. §14 follow-ups in the Sheet: price the six to-do products, set real `Options` upcharges, fill
+   `marketLow`/`marketHigh` for the best sellers, and raise prices where health reads below target.
 
 ## Appendix A: Current-engine numbers (default settings, fresh design, no toggles)
 

@@ -2,7 +2,7 @@
 // engine tests (docs/quote-builder-redesign.md §13.1). Fixtures only: nothing
 // here talks to the real Google Sheet.
 
-import { DEFAULTS } from "./quote-calc-logic";
+import { DEFAULTS } from "./legacy/logic";
 import { mergeRemoteConfig } from "./quote-calc-config";
 import {
   DEFAULT_PRICE_BOOK,

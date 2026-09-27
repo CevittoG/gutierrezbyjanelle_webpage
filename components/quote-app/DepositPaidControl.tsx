@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { fmt$ } from "@/lib/quote-calc-logic";
+import { formatMoney } from "@/lib/money";
 
 export function DepositPaidControl({
   id,
@@ -83,9 +83,9 @@ export function DepositPaidControl({
         </button>
       </div>
       <p className="text-xs text-muted-foreground normal-case tracking-normal leading-snug">
-        {expected > 0 ? <>Expected deposit {fmt$(Math.round(expected))}. </> : null}
+        {expected > 0 ? <>Expected deposit {formatMoney(expected)}. </> : null}
         Shown to the client as paid; the remaining balance updates to{" "}
-        {fmt$(Math.round(Math.max(total - parsed, 0)))}.
+        {formatMoney(Math.max(total - parsed, 0))}.
         {error && <span className="text-foreground"> Couldn&apos;t save — try again.</span>}
       </p>
     </div>

@@ -1,4 +1,10 @@
-// Runtime config layer for /quote-calc.
+// LEGACY reader, kept only until the one-time freeze has run
+// (docs/quote-builder-redesign.md §8.5, §15 "After the freeze"). Pre-v5 quotes
+// are converted with the live Items catalog this module merges, so their totals
+// equal what clients saw. After the freeze nothing needs it; delete it together
+// with listConfig() in quote-calc-sheets.ts and the Items tab.
+//
+// Original purpose (runtime config layer for the old calculator):
 //
 // Phase 1 of docs/quote-calc-roadmap.md: pull pricing data (global settings
 // + per-item rates) out of the TS bundle and into two Google Sheet tabs:
@@ -17,7 +23,7 @@ import {
   DEFAULTS,
   ITEM_CATALOG,
   QuoteState,
-} from "./quote-calc-logic";
+} from "./legacy/logic";
 import { isPriceSettingKey, type ConfigWarning } from "./quote-pricebook";
 
 export type { ConfigWarning, ConfigWarningKind } from "./quote-pricebook";

@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CloudOff, RefreshCw } from "lucide-react";
 import { cn } from "@/utils";
-import type { ConfigWarning } from "@/lib/quote-calc-config";
+import type { ConfigWarning } from "@/lib/quote-pricebook";
 
 export type ConfigBannerState =
   | { kind: "ok"; warnings: ConfigWarning[] }
