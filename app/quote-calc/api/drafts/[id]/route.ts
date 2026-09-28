@@ -1,5 +1,5 @@
 // API: GET    /quote-calc/api/drafts/[id]  → one quote, as v5 (pre-v5 payloads
-//                                            converted with the live Items catalog)
+//                                            converted in memory)
 // API: DELETE /quote-calc/api/drafts/[id]  → soft-archive a draft (sets status=archived)
 //
 // Mounted under /quote-calc so the auth cookie (Path=/quote-calc) is sent.

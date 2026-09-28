@@ -1,5 +1,6 @@
 // The one-time freeze (docs/quote-builder-redesign.md §8.5): every non-v5
-// `_data` payload is converted with the live catalog and rewritten as v5 JSON,
+// `_data` payload is converted and rewritten as v5 JSON (it ran on 2026-09-27
+// with the live Items catalog; that reader is now removed),
 // keeping its updatedAt. Pure planning here; lib/quote-calc-sheets.ts writes.
 // Idempotent: a second run finds only v5 payloads and skips them all.
 

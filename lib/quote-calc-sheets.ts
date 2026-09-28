@@ -16,13 +16,6 @@ import {
   type Draft,
   type StoredDraft,
 } from "./quote-calc-drafts";
-import {
-  mergeRemoteConfig,
-  type ConfigWarning,
-  type RemoteConfig,
-  type RemoteItem,
-  type RemoteSetting,
-} from "./quote-calc-config";
 import { ITEM_CATALOG, type CatalogItem } from "./legacy/logic";
 import { computeTotals } from "./quote-engine";
 import { planFreeze, type FreezeReport } from "./quote-freeze";
@@ -148,12 +141,7 @@ function colLetter(index: number): string {
   return String.fromCharCode("A".charCodeAt(0) + index);
 }
 
-// --- Phase 1: config tabs ---
-const SETTINGS_TAB = "Settings";
-const SETTINGS_RANGE = `${SETTINGS_TAB}!A2:B`;
-const ITEMS_TAB = "Items";
-// A: key, B: label, C: designMin, D: prodMin, E: sheetCost, F: yield, G: qty, H: fixed
-const ITEMS_RANGE = `${ITEMS_TAB}!A2:H`;
+// Price book tabs are cached for a minute (lib/quote-pricebook.ts parses them).
 const CONFIG_CACHE_TTL_MS = 60_000;
 
 type Row = (string | number)[];
@@ -295,15 +283,10 @@ export interface StoredDraftRecord {
   status: DraftStatus;
 }
 
-// The catalog pre-v5 quotes are converted with: the live Items tab, so a
-// converted total equals what the client link showed; bundled on failure.
-async function liveCatalog(): Promise<CatalogItem[]> {
-  try {
-    return mergeRemoteConfig(await listConfig()).catalog;
-  } catch {
-    return ITEM_CATALOG;
-  }
-}
+// Every stored quote was frozen to v5 (2026-09-27), so the legacy Items reader
+// is gone. A pre-v5 payload that still turns up (e.g. pushed from an old local
+// cache) converts with the bundled catalog.
+const LEGACY_CATALOG: CatalogItem[] = ITEM_CATALOG;
 
 function normalizeStatus(cell: unknown): DraftStatus {
   return String(cell ?? "").trim().toLowerCase() === "archived" ? "archived" : "active";
@@ -481,7 +464,7 @@ async function migrateLegacyQuotesTab(
   await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
 
   if (recovered.length > 0) {
-    const catalog = await liveCatalog();
+    const catalog = LEGACY_CATALOG;
     const readable = recovered.map(({ draft, status }) =>
       draftToReadableRow(draft, status, catalog),
     );
@@ -543,18 +526,20 @@ export async function listStoredDraftRecords(): Promise<StoredDraftRecord[]> {
   return readRecordsNewSchema(cfg.docId, rows);
 }
 
-// Every quote as v5 (pre-v5 payloads converted in memory with the live Items
+// Every quote as v5 (a stray pre-v5 payload is converted in memory with the bundled
 // catalog, so each total equals what its client link shows). Archived quotes
 // included, tagged — the dashboard decides what to show.
 export async function listDraftRecords(): Promise<DraftRecord[]> {
-  const [stored, catalog] = await Promise.all([listStoredDraftRecords(), liveCatalog()]);
+  const stored = await listStoredDraftRecords();
+  const catalog = LEGACY_CATALOG;
   return stored.map((r) => ({ draft: toV5Draft(r.draft, catalog), status: r.status }));
 }
 
 export async function upsertDraftRow(draft: StoredDraft): Promise<void> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
-  const [{ rows }, catalog] = await Promise.all([ensureNewSchema(cfg.docId), liveCatalog()]);
+  const { rows } = await ensureNewSchema(cfg.docId);
+  const catalog = LEGACY_CATALOG;
   const idx = rows.findIndex((row) => String(row[NEW_COL.id] ?? "") === draft.id);
   const readable = [draftToReadableRow(draft, "active", catalog)];
   const payload = [draftToPayloadRow(draft)];
@@ -650,13 +635,13 @@ export async function getStoredDraftById(id: string): Promise<StoredDraft | null
   }
 }
 
-// The v5 view of one quote (converted in memory with the live Items catalog
+// The v5 view of one quote (a stray pre-v5 payload converts with the bundled catalog
 // when it predates v5). Every read surface — /q, Profile Overview, print —
 // goes through here, so they all show the same total.
 export async function getDraftById(id: string): Promise<Draft | null> {
   const stored = await getStoredDraftById(id);
   if (!stored) return null;
-  return toV5Draft(stored, stored.schemaVersion === 5 ? ITEM_CATALOG : await liveCatalog());
+  return toV5Draft(stored, LEGACY_CATALOG);
 }
 
 // --- Phase 3: portal metadata (columns N–R) ---
@@ -843,14 +828,7 @@ export async function updateHiddenNotes(id: string, notes: string): Promise<bool
   return writePortalCells(id, NEW_COL.notes, [notes]);
 }
 
-// --- Config (Items + Settings) reader ---
-
-interface ConfigCacheEntry {
-  config: RemoteConfig;
-  expiresAt: number;
-}
-let cachedConfig: ConfigCacheEntry | null = null;
-let inflightConfig: Promise<RemoteConfig> | null = null;
+// --- Sheet cell/range helpers ---
 
 function parseNumber(raw: unknown): number | null {
   return parseSheetNumber(raw);
@@ -872,158 +850,10 @@ async function fetchSheetRange(docId: string, range: string): Promise<Row[] | "t
   return data.values ?? [];
 }
 
-async function readConfigFromSheet(cfg: SheetsConfig): Promise<RemoteConfig> {
-  const warnings: ConfigWarning[] = [];
-  const settings: RemoteSetting[] = [];
-  const items: RemoteItem[] = [];
-
-  const [settingsRes, itemsRes] = await Promise.all([
-    fetchSheetRange(cfg.docId, SETTINGS_RANGE).catch((err): "fetch-failed" => {
-      warnings.push({
-        kind: "fetch-failed",
-        tab: "Settings",
-        sheetRow: null,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return "fetch-failed";
-    }),
-    fetchSheetRange(cfg.docId, ITEMS_RANGE).catch((err): "fetch-failed" => {
-      warnings.push({
-        kind: "fetch-failed",
-        tab: "Items",
-        sheetRow: null,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return "fetch-failed";
-    }),
-  ]);
-
-  if (settingsRes === "tab-missing") {
-    warnings.push({
-      kind: "tab-missing",
-      tab: "Settings",
-      sheetRow: null,
-      detail: 'No tab named "Settings" found in the Sheet.',
-    });
-  } else if (Array.isArray(settingsRes)) {
-    if (settingsRes.length === 0) {
-      warnings.push({
-        kind: "empty",
-        tab: "Settings",
-        sheetRow: null,
-        detail: 'The "Settings" tab has no data rows.',
-      });
-    }
-    settingsRes.forEach((row, i) => {
-      const sheetRow = i + 2; // skip header row
-      const key = String(row[0] ?? "").trim();
-      if (!key) return; // silent skip on blank rows
-      const value = parseNumber(row[1]);
-      if (value === null) {
-        warnings.push({
-          kind: "invalid-row",
-          tab: "Settings",
-          sheetRow,
-          detail: `Row ${sheetRow} (${key}): value "${row[1] ?? ""}" is not a number.`,
-        });
-        return;
-      }
-      settings.push({ key, value, sheetRow });
-    });
-  }
-
-  if (itemsRes === "tab-missing") {
-    warnings.push({
-      kind: "tab-missing",
-      tab: "Items",
-      sheetRow: null,
-      detail: 'No tab named "Items" found in the Sheet.',
-    });
-  } else if (Array.isArray(itemsRes)) {
-    if (itemsRes.length === 0) {
-      warnings.push({
-        kind: "empty",
-        tab: "Items",
-        sheetRow: null,
-        detail: 'The "Items" tab has no data rows.',
-      });
-    }
-    itemsRes.forEach((row, i) => {
-      const sheetRow = i + 2;
-      const key = String(row[0] ?? "").trim();
-      if (!key) return;
-      const label = String(row[1] ?? "").trim();
-      const designMin = parseNumber(row[2]);
-      const prodMin = parseNumber(row[3]);
-      const sheetCost = parseNumber(row[4]);
-      const yieldVal = parseNumber(row[5]);
-      const qty = parseNumber(row[6]);
-      const fixedRaw = row[7];
-      const fixed =
-        fixedRaw === undefined || fixedRaw === null || String(fixedRaw).trim() === ""
-          ? null
-          : parseNumber(fixedRaw);
-      if (
-        designMin === null ||
-        prodMin === null ||
-        sheetCost === null ||
-        yieldVal === null ||
-        qty === null
-      ) {
-        warnings.push({
-          kind: "invalid-row",
-          tab: "Items",
-          sheetRow,
-          detail: `Row ${sheetRow} (${key}): one or more numeric columns are blank or non-numeric.`,
-        });
-        return;
-      }
-      items.push({
-        key,
-        label,
-        designMin,
-        prodMin,
-        sheetCost,
-        yield: yieldVal,
-        qty,
-        fixed: fixed ?? null,
-        sheetRow,
-      });
-    });
-  }
-
-  return { settings, items, warnings };
-}
-
-export async function listConfig(options?: { force?: boolean }): Promise<RemoteConfig> {
-  const cfg = getConfig();
-  if (!cfg) throw new SheetsUnconfiguredError();
-
-  const now = Date.now();
-  if (!options?.force && cachedConfig && cachedConfig.expiresAt > now) {
-    return cachedConfig.config;
-  }
-  if (inflightConfig) return inflightConfig;
-
-  inflightConfig = (async () => {
-    const result = await readConfigFromSheet(cfg);
-    cachedConfig = { config: result, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
-    return result;
-  })().finally(() => {
-    inflightConfig = null;
-  });
-
-  return inflightConfig;
-}
-
-export function invalidateConfigCache(): void {
-  cachedConfig = null;
-}
-
 // --- Price book (Products / Options / Packages / Settings) ---
 //
 // docs/quote-builder-redesign.md §5. Read-only except for the one-time seed
-// below. Same 60s module cache + in-flight dedupe as listConfig; parsing and
+// below. 60s module cache + in-flight dedupe; parsing and
 // validation live in the pure lib/quote-pricebook.ts.
 
 const PRICEBOOK_RANGES = {
@@ -1175,7 +1005,6 @@ export async function seedPriceBookTabs(): Promise<SeedReport> {
   }
 
   cachedPriceBook = null;
-  cachedConfig = null;
   return report;
 }
 
@@ -1192,7 +1021,7 @@ export async function freezeLegacyDrafts(): Promise<FreezeReport> {
   if (!cfg) throw new SheetsUnconfiguredError();
   const [dataRows, catalog, view] = await Promise.all([
     readRange(cfg.docId, DATA_RANGE),
-    liveCatalog(),
+    Promise.resolve(LEGACY_CATALOG),
     ensureNewSchema(cfg.docId),
   ]);
   const input = dataRows

@@ -57,7 +57,7 @@ export interface ConversionResult {
 
 /**
  * Convert a pre-v5 quote. `catalog` must be the catalog its client link used
- * (the live Items tab on the server; the bundled catalog as a fallback).
+ * (the freeze used the live Items tab; since it ran, the bundled catalog).
  */
 export function convertLegacyDraft(
   draft: LegacyDraftLike,

@@ -3,7 +3,6 @@
 // here talks to the real Google Sheet.
 
 import { DEFAULTS } from "./legacy/logic";
-import { mergeRemoteConfig } from "./quote-calc-config";
 import {
   DEFAULT_PRICE_BOOK,
   DEFAULT_SETTINGS,
@@ -159,16 +158,6 @@ const seeded: RemotePriceBook = {
   check("second run: no actions", planSeed(after).length === 0);
   const emptyTab = planSeed({ ...after, options: { exists: true, dataRows: 0 } });
   check("existing-but-empty tab is filled, not created", emptyTab.length === 1 && emptyTab[0].tab === "Options" && !emptyTab[0].create);
-}
-
-// 7. The old calculator's reader shows no new warnings for the new keys.
-{
-  const legacy = mergeRemoteConfig({
-    settings: settingsSeedRows().map((r, i) => ({ key: String(r[0]), value: Number(r[1]), sheetRow: i + 2 })),
-    items: [],
-    warnings: [],
-  });
-  check("old reader tolerates price-book Settings keys", legacy.warnings.length === 0);
 }
 
 // 8. Floor/target and package samples.

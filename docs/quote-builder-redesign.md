@@ -1331,6 +1331,13 @@ on an existing quote.
 - `.claude/CLAUDE.md` (Quote Builder section) and `docs/QUOTE_CALC_MODEL.md` were rewritten for
   the new system.
 
+**Post-freeze (2026-09-27)**
+- The freeze reported 20 converted, 0 skipped, 0 unreadable, `parityFailures: []`, and 8
+  `dashboardCorrections` (four quotes at $183.95 on the dashboard vs $678.87 on the client link,
+  consistent with the C2 bug). `Items` was renamed `_legacy_Items`.
+- The legacy `Items` reader was then deleted (`lib/quote-calc-config.ts`, `listConfig()`); any
+  stray pre-v5 payload converts with the bundled catalog.
+
 ### Deviations from the plan, in one list
 
 1. Converted quotes keep the old engine's unrounded arithmetic and whole-dollar display (P2).

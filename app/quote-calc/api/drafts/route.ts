@@ -36,7 +36,7 @@ export async function GET() {
   if (fail) return fail;
   if (!isSheetsConfigured()) return unconfigured();
   try {
-    // v5 view: pre-v5 quotes arrive converted with the live Items catalog.
+    // v5 view (any stray pre-v5 payload is converted in memory).
     const drafts = (await listDraftRecords()).filter((r) => r.status === "active").map((r) => r.draft);
     return NextResponse.json({ ok: true, drafts });
   } catch (err) {

@@ -309,7 +309,8 @@ snapshots), `reuseDesignPct`, `discount`, `adjustment`, `shipping` (null = "adde
 `StoredDraft = Draft | LegacyDraft` is what a `_data` cell may hold until the freeze has run.
 `toV5Draft(stored, catalog)` is the one conversion (`lib/quote-legacy.ts` replays the frozen old
 engine in `lib/legacy/` and stores each priced piece as a fixed-$ line). Server reads convert with
-the **live `Items` catalog** so totals equal what clients saw.
+the bundled catalog: every Sheet quote was frozen to v5, so only an old local browser cache can
+still hold a pre-v5 quote.
 
 ### The Sheet
 
@@ -317,7 +318,7 @@ the **live `Items` catalog** so totals equal what clients saw.
 |---|---|---|
 | `Products`, `Options`, `Packages` | Janelle (seeded once) | Read by `listPriceBook()` (60s cache); validated in `mergePriceBook()` with warnings naming tab + row; each tab falls back to the bundled seed (`DEFAULT_PRICE_BOOK`, Appendix B) on its own. A product without a price is a to-do (`needs-price`), hidden from the picker |
 | `Settings` | Janelle | New keys: `guestsPerHousehold rushPct revisionRoundPrice revisionHours licenseFee packagingFee depositAmount reuseDesignPct vendorReferralPct feesPct hourlyTarget hourlyFloor`. Legacy keys are ignored silently |
-| `Items` + legacy Settings keys | — | **Legacy.** Still read (via `quote-calc-config.ts` / `listConfig()`) only to convert pre-v5 quotes until the freeze has run. Then retire them (see below) |
+| `_legacy_Items` + legacy Settings keys | — | **Retired.** The freeze ran on 2026-09-27 (20 converted, 0 parity failures); nothing reads `Items` any more (renamed `_legacy_Items`). Legacy Settings rows are ignored silently and can be deleted |
 | `Quotes` | App | A–M readable row: ID · Status · Client · Event type · Event date · Quote name · **Summary** · **Households** · **Priced lines** · Total · Hidden notes · Created · Updated. N–U portal/lifecycle (unchanged) |
 | `_data` | App | Full Draft JSON by id (v5, or pre-v5 until frozen) |
 
@@ -326,10 +327,9 @@ missing/empty tabs and missing Settings keys; `POST /quote-calc/api/drafts/freez
 pre-v5 payload as v5 (idempotent; reports `converted`, `skipped`, `parityFailures`, `unreadable`,
 `dashboardCorrections`). Both are run by Janelle after deploy, never from code or tests.
 
-**After the freeze has run** (and `parityFailures` was 0), delete: `lib/quote-calc-config.ts`,
-`listConfig()` + Items parsing in `lib/quote-calc-sheets.ts`, `liveCatalog()` (use the bundled
-catalog), and rename the `Items` tab `_legacy_Items`. Keep `lib/legacy/` + `lib/quote-legacy.ts`
-only while un-frozen local caches could exist.
+The freeze has run and the legacy `Items` reader (`quote-calc-config.ts`, `listConfig()`) is
+deleted. `lib/legacy/` + `lib/quote-legacy.ts` stay while un-frozen local caches could exist;
+delete them (and `LegacyDraft`) once that no longer matters.
 
 ### Files
 
@@ -343,7 +343,7 @@ only while un-frozen local caches could exist.
 | `lib/quote-legacy.ts`, `lib/legacy/*` | Frozen old engine + `convertLegacyDraft` (do not edit the money math) |
 | `lib/quote-freeze.ts` | Pure freeze plan (`planFreeze`) |
 | `lib/quote-calc-drafts.ts` | `Draft`/`LegacyDraft`/`StoredDraft`, `normalizeStoredDraft`, `toV5Draft`, local cache (v5), last session, `reconcileDrafts` |
-| `lib/quote-calc-sheets.ts` | Server-only Sheets REST: drafts (`listDraftRecords`/`getDraftById` = v5 view; `listStoredDraftRecords`/`getStoredDraftById` = as stored, for write-back paths), portal columns, `listPriceBook`, `seedPriceBookTabs`, `freezeLegacyDrafts`, legacy `listConfig` |
+| `lib/quote-calc-sheets.ts` | Server-only Sheets REST: drafts (`listDraftRecords`/`getDraftById` = v5 view; `listStoredDraftRecords`/`getStoredDraftById` = as stored, for write-back paths), portal columns, `listPriceBook`, `seedPriceBookTabs`, `freezeLegacyDrafts` (already run) |
 | `lib/quote-calc-portal.ts` | Portal meta, stages, `PublicQuote` v2 + `buildPublicQuote(draft, totals, files, depositPaid)` — the only client-safe projector |
 | `lib/quote-calc-summary.ts` | `summarizeLinesV5` (Quotes column I) |
 | `lib/money.ts` | `round2`, `formatMoney`, `formatMoney2`, `formatPct` |
@@ -428,7 +428,7 @@ All public routes render with brand styling and full SEO metadata. The quote bui
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers
 
 **Still remaining:**
-- After deploy: run the price book seed, then the legacy freeze, then the post-freeze cleanup listed in the Quote Builder section
+- Review the 8 quotes the freeze listed under `dashboardCorrections` (their old dashboard figure differed from the client link)
 - Docker prod build verification (`docker build --target runner`)
 - Lighthouse audit (target 90+ on all categories)
 

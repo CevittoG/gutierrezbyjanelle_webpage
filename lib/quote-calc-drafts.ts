@@ -98,7 +98,7 @@ export function newId(): string {
 // --- Local cache (localStorage) ---
 //
 // v5 drafts only. A cache written by the old calculator is converted on load
-// (bundled catalog); the server copy, converted with the live catalog, wins on
+// (bundled catalog); the server copy wins on
 // reconcile (equal updatedAt ⇒ remote).
 
 export function loadDrafts(): Draft[] {
@@ -368,9 +368,9 @@ export function normalizeStoredDraft(raw: unknown): StoredDraft | null {
 }
 
 /**
- * The v5 view of a stored quote. Legacy quotes are converted in memory with
- * `catalog` (the live Items tab on the server, so the result equals what the
- * client link showed; the bundled catalog elsewhere). v5 drafts pass through.
+ * The v5 view of a stored quote. A pre-v5 quote is converted in memory with
+ * `catalog` (the bundled catalog: every Sheet quote was frozen to v5 on
+ * 2026-09-27, so only old local caches still need this). v5 drafts pass through.
  */
 export function toV5Draft(d: StoredDraft, catalog: CatalogItem[] = ITEM_CATALOG): Draft {
   if (isV5Draft(d)) return d;

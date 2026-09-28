@@ -187,7 +187,7 @@ export function QuoteBuilder() {
         setSyncStatus({ kind: "synced", at: new Date().toISOString() });
         const want = pendingDraftId.current ?? param;
         const found = want ? merged.find((d) => d.id === want) : undefined;
-        // The server copy (converted with the live catalog) wins over a local cache.
+        // The server copy wins over a local cache.
         if (found) loadDraftIntoState(found);
         pendingDraftId.current = null;
       } else {
