@@ -5,6 +5,7 @@ import { siteConfig } from "@/config/site";
 import { conceptCopy, type ConceptVersion } from "@/config/concepts";
 import { useLocale } from "@/lib/locale-context";
 import { pick, type Bilingual, type TranslationKey } from "@/lib/i18n";
+import { mailtoHref } from "@/lib/mailto";
 
 /** Map a live-site href ("/weddings") into a concept ("/v2/weddings"). */
 export function conceptHref(version: ConceptVersion, href: string): string {
@@ -19,11 +20,7 @@ export function stripConcept(pathname: string | null): string {
   return rest === "" ? "/" : rest;
 }
 
-export function mailtoHref(subject: string, body?: string): string {
-  const params = [`subject=${encodeURIComponent(subject)}`];
-  if (body) params.push(`body=${encodeURIComponent(body)}`);
-  return `mailto:${siteConfig.contactEmail}?${params.join("&")}`;
-}
+export { mailtoHref };
 
 /** Nav items for a concept, with active state resolved against the current path. */
 export function useConceptNav(version: ConceptVersion) {
