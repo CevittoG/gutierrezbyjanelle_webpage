@@ -1,15 +1,11 @@
-// API: GET /quote-calc/api/config  → returns the merged Settings + Items
-// payload from the Google Sheet (Phase 1 of docs/quote-calc-roadmap.md).
-//
-// `?refresh=1` bypasses the module-level cache so a manual reload picks up
-// edits Janelle just made in the Sheet without waiting for the TTL.
+// API: GET /quote-calc/api/pricebook → the merged price book (Products,
+// Options, Packages, Settings) + warnings naming the tab and row.
+// `?refresh=1` bypasses the 60s module cache after a Sheet edit.
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  isSheetsConfigured,
-  listConfig,
-} from "@/lib/quote-calc-sheets";
+import { isSheetsConfigured, listPriceBook } from "@/lib/quote-calc-sheets";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
+import { mergePriceBook } from "@/lib/quote-pricebook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,10 +22,10 @@ export async function GET(req: NextRequest) {
   }
   const force = req.nextUrl.searchParams.get("refresh") === "1";
   try {
-    const config = await listConfig({ force });
-    return NextResponse.json({ ok: true, config });
+    const merged = mergePriceBook(await listPriceBook({ force }));
+    return NextResponse.json({ ok: true, merged, loadedAt: new Date().toISOString() });
   } catch (err) {
-    console.warn("[/quote-calc/api/config GET] failed", err);
+    console.warn("[/quote-calc/api/pricebook GET] failed", err);
     return NextResponse.json({ ok: false, error: "server" }, { status: 500 });
   }
 }

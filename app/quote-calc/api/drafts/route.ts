@@ -1,16 +1,17 @@
-// API: GET /quote-calc/api/drafts  → list active drafts
-// API: POST /quote-calc/api/drafts → upsert a single draft
+// API: GET /quote-calc/api/drafts  → list active drafts (v5)
+// API: POST /quote-calc/api/drafts → upsert a single draft (v5, or a pre-v5 draft
+//                                     from the old calculator)
 //
 // Mounted under /quote-calc so the auth cookie (Path=/quote-calc) is sent.
 
 import { NextRequest, NextResponse } from "next/server";
 import {
   isSheetsConfigured,
-  listDrafts,
+  listDraftRecords,
   upsertDraftRow,
 } from "@/lib/quote-calc-sheets";
 import { ensureQuoteFolder } from "@/lib/quote-calc-drive";
-import { normalizeIncomingDraft } from "@/lib/quote-calc-drafts";
+import { normalizeStoredDraft } from "@/lib/quote-calc-drafts";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 
 export const runtime = "nodejs";
@@ -35,7 +36,8 @@ export async function GET() {
   if (fail) return fail;
   if (!isSheetsConfigured()) return unconfigured();
   try {
-    const drafts = await listDrafts();
+    // v5 view (any stray pre-v5 payload is converted in memory).
+    const drafts = (await listDraftRecords()).filter((r) => r.status === "active").map((r) => r.draft);
     return NextResponse.json({ ok: true, drafts });
   } catch (err) {
     console.warn("[/quote-calc/api/drafts GET] failed", err);
@@ -53,7 +55,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
-  const draft = normalizeIncomingDraft(body);
+  const draft = normalizeStoredDraft(body);
   if (!draft) {
     return NextResponse.json({ ok: false, error: "invalid_draft" }, { status: 400 });
   }

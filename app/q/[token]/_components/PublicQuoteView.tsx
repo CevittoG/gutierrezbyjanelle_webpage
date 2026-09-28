@@ -8,16 +8,13 @@
 import { useEffect, useRef } from "react";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { Mail } from "lucide-react";
-import { fmt$ } from "@/lib/quote-calc-logic";
+import { formatMoney } from "@/lib/money";
 import type { PublicProgress, PublicQuote } from "@/lib/quote-calc-portal";
+import { InvestmentList } from "@/components/quote-app/InvestmentList";
 import { siteConfig } from "@/config/site";
 import { ProofGallery } from "@/components/ui/proof-gallery";
 import { cn } from "@/utils";
 import { ApproveProofs } from "./ApproveProofs";
-
-function money(n: number): string {
-  return fmt$(Math.round(n));
-}
 
 function formatApprovedAt(iso: string): string {
   const raw = (iso ?? "").trim();
@@ -56,7 +53,7 @@ export function PublicQuoteView({
   token: string;
 }) {
   const reduce = useReducedMotion();
-  const savings = Math.round(quote.savings);
+  const money = (n: number) => formatMoney(n, { wholeDollars: quote.wholeDollars });
   const hasProofs = quote.proofs.images.length > 0 || quote.proofs.pdfs.length > 0;
   const initial = reduce ? "show" : "hidden";
   const approvedOn = formatApprovedAt(progress.approvedAt);
@@ -108,7 +105,7 @@ export function PublicQuoteView({
             <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
               <p className="font-squarepeg text-2xl mb-1">Your proofs are on the way</p>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                As soon as the first designs are ready, they'll appear right here for you to look over.
+                As soon as the first designs are ready, they&apos;ll appear right here for you to look over.
               </p>
             </div>
           </motion.section>
@@ -126,7 +123,7 @@ export function PublicQuoteView({
               <span className="text-accent text-lg leading-none" aria-hidden>✓</span>
               <p className="text-sm leading-snug">
                 You approved your proofs{approvedOn ? <> on {approvedOn}</> : null} — thank you,{" "}
-                <span className="font-medium">{progress.approvedBy}</span>! I'm moving ahead and will keep
+                <span className="font-medium">{progress.approvedBy}</span>! I&apos;m moving ahead and will keep
                 this page updated.
               </p>
             </div>
@@ -136,27 +133,8 @@ export function PublicQuoteView({
         {/* Your suite + investment — merged to avoid duplicating the item list */}
         <motion.section variants={item} className="mt-14" aria-labelledby="suite-heading">
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Your suite</p>
-          <h2 id="suite-heading" className="font-squarepeg text-4xl leading-tight mt-1 mb-6">{quote.packageName}</h2>
-          <dl className="space-y-2 text-sm">
-            {quote.lineItems.map((li, i) => {
-              const prevKind = i > 0 ? quote.lineItems[i - 1].kind : li.kind;
-              const isFirstExtra = li.kind !== "package" && prevKind === "package";
-              return (
-                <div key={i}>
-                  {isFirstExtra && (
-                    <div className="flex items-center gap-2 pt-1 pb-0.5">
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Add-ons</span>
-                      <span className="flex-1 h-px bg-border/50" />
-                    </div>
-                  )}
-                  <Row label={li.label} value={money(li.price)} />
-                </div>
-              );
-            })}
-            <Row label="Subtotal" value={money(quote.subtotal)} dim />
-            {savings > 0 && <Row label="Your savings" value={`-${money(savings)}`} accent />}
-            {quote.rush > 0 && <Row label="Rush" value={`+${money(quote.rush)}`} dim />}
-          </dl>
+          <h2 id="suite-heading" className="font-squarepeg text-4xl leading-tight mt-1 mb-6">{quote.title}</h2>
+          <InvestmentList quote={quote} />
           <div className="mt-4 rounded-2xl border border-accent bg-accent/15 px-6 py-6 flex items-baseline justify-between gap-4">
             <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Total investment</span>
             <span className="font-squarepeg text-5xl leading-none tabular-nums">{money(quote.total)}</span>
@@ -179,7 +157,9 @@ export function PublicQuoteView({
             </dl>
           )}
           <div className="text-xs text-muted-foreground space-y-1.5 leading-relaxed mt-5">
-            <p>· Shipping, when applicable, is added based on the carrier quote at production time.</p>
+            {quote.shipping === null && quote.anyPhysical && (
+              <p>· Shipping is added based on the carrier quote at production time.</p>
+            )}
             {quote.depositPaid > 0 && quote.balanceRemaining > 0 && (
               <p>· The remaining balance is due before your order is finished.</p>
             )}
@@ -205,7 +185,7 @@ export function PublicQuoteView({
         <motion.section variants={item} className="mt-16 text-center border-t border-border pt-12">
           <p className="font-squarepeg text-4xl leading-tight">Talk soon, Janelle</p>
           <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto leading-relaxed">
-            Love what you see, or want to change a thing or two? Just reply and we'll make it yours.
+            Love what you see, or want to change a thing or two? Just reply and we&apos;ll make it yours.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <a
@@ -230,32 +210,6 @@ export function PublicQuoteView({
           </p>
         </motion.section>
       </motion.article>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  dim,
-  accent,
-}: {
-  label: string;
-  value: string;
-  dim?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-1 border-b border-border/40 last:border-0">
-      <span className={"min-w-0 break-words " + (dim ? "text-muted-foreground" : "text-foreground")}>{label}</span>
-      <span
-        className={
-          "font-mono tabular-nums shrink-0 " +
-          (accent ? "text-foreground" : dim ? "text-muted-foreground" : "text-foreground")
-        }
-      >
-        {value}
-      </span>
     </div>
   );
 }

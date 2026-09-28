@@ -12,7 +12,7 @@
 // drive.readonly for listing/reading Janelle-owned proofs.
 
 import "server-only";
-import type { Draft } from "./quote-calc-drafts";
+import type { StoredDraft as Draft } from "./quote-calc-drafts";
 import {
   getGoogleAccessToken,
   getPortalMetaById,

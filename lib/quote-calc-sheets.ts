@@ -10,17 +10,30 @@
 import "server-only";
 import { timingSafeEqual } from "crypto";
 import { JWT } from "google-auth-library";
-import type { Draft } from "./quote-calc-drafts";
-import { normalizeIncomingDraft } from "./quote-calc-drafts";
-import type {
-  ConfigWarning,
-  RemoteConfig,
-  RemoteItem,
-  RemoteSetting,
-} from "./quote-calc-config";
+import {
+  normalizeStoredDraft,
+  toV5Draft,
+  type Draft,
+  type StoredDraft,
+} from "./quote-calc-drafts";
+import { ITEM_CATALOG, type CatalogItem } from "./legacy/logic";
+import { computeTotals } from "./quote-engine";
+import { planFreeze, type FreezeReport } from "./quote-freeze";
 import type { LinkStatus, PortalMeta, ProjectStage } from "./quote-calc-portal";
 import { nextStage } from "./quote-calc-portal";
-import { quoteDisplayName, summarizeLineItems } from "./quote-calc-summary";
+import { quoteDisplayName, summarizeLinesV5 } from "./quote-calc-summary";
+import {
+  OPTIONS_TAB,
+  PACKAGES_TAB,
+  PRODUCTS_TAB,
+  SETTINGS_TAB as PRICE_SETTINGS_TAB,
+  parseSheetNumber,
+  planSeed,
+  type RemotePriceBook,
+  type SeedAction,
+  type SheetRow,
+  type TabRead,
+} from "./quote-pricebook";
 
 const SHEET_TAB = "Quotes";
 const FIRST_DATA_ROW = 2; // row 1 = headers
@@ -61,8 +74,8 @@ const NEW_HEADER_ROW: Row = [
   "Event type",
   "Event date",
   "Quote name",
-  "Package",
-  "Quantity",
+  "Summary",
+  "Households",
   "Line items",
   "Total",
   "Hidden notes",
@@ -128,12 +141,7 @@ function colLetter(index: number): string {
   return String.fromCharCode("A".charCodeAt(0) + index);
 }
 
-// --- Phase 1: config tabs ---
-const SETTINGS_TAB = "Settings";
-const SETTINGS_RANGE = `${SETTINGS_TAB}!A2:B`;
-const ITEMS_TAB = "Items";
-// A: key, B: label, C: designMin, D: prodMin, E: sheetCost, F: yield, G: qty, H: fixed
-const ITEMS_RANGE = `${ITEMS_TAB}!A2:H`;
+// Price book tabs are cached for a minute (lib/quote-pricebook.ts parses them).
 const CONFIG_CACHE_TTL_MS = 60_000;
 
 type Row = (string | number)[];
@@ -269,18 +277,29 @@ export interface DraftRecord {
   status: DraftStatus;
 }
 
+/** A record as stored: v5, or a pre-v5 payload not yet frozen. */
+export interface StoredDraftRecord {
+  draft: StoredDraft;
+  status: DraftStatus;
+}
+
+// Every stored quote was frozen to v5 (2026-09-27), so the legacy Items reader
+// is gone. A pre-v5 payload that still turns up (e.g. pushed from an old local
+// cache) converts with the bundled catalog.
+const LEGACY_CATALOG: CatalogItem[] = ITEM_CATALOG;
+
 function normalizeStatus(cell: unknown): DraftStatus {
   return String(cell ?? "").trim().toLowerCase() === "archived" ? "archived" : "active";
 }
 
 // --- Legacy format (pre-Phase 2) ---
 
-function rowToRecordLegacy(row: Row): DraftRecord | null {
+function rowToRecordLegacy(row: Row): StoredDraftRecord | null {
   const payload = row[LEGACY_COL.payload];
   if (typeof payload !== "string" || !payload) return null;
-  let draft: Draft | null;
+  let draft: StoredDraft | null;
   try {
-    draft = normalizeIncomingDraft(JSON.parse(payload));
+    draft = normalizeStoredDraft(JSON.parse(payload));
   } catch {
     return null;
   }
@@ -290,10 +309,15 @@ function rowToRecordLegacy(row: Row): DraftRecord | null {
 
 // --- New format (Phase 2) ---
 
+// The readable A–M row, always from the v5 view (G = summary, H = households,
+// I = priced lines, J = the v5 engine's total).
 function draftToReadableRow(
-  d: Draft,
-  status: "active" | "archived" = "active",
+  stored: StoredDraft,
+  status: "active" | "archived",
+  catalog: CatalogItem[],
 ): Row {
+  const d = toV5Draft(stored, catalog);
+  const totals = computeTotals(d.config);
   return [
     d.id,
     status,
@@ -302,16 +326,16 @@ function draftToReadableRow(
     d.client.eventDate,
     d.name,
     quoteDisplayName(d.config),
-    d.config.lines.map((l) => l.qty).join(", "),
-    summarizeLineItems(d),
-    Math.round(d.cachedTotal),
+    d.config.households,
+    summarizeLinesV5(d.config, totals),
+    Math.round(totals.total),
     d.client.notes,
     d.createdAt,
     d.updatedAt,
   ];
 }
 
-function draftToPayloadRow(d: Draft): Row {
+function draftToPayloadRow(d: StoredDraft): Row {
   return [d.id, JSON.stringify(d)];
 }
 
@@ -322,7 +346,7 @@ function draftToPayloadRow(d: Draft): Row {
 async function readRecordsNewSchema(
   docId: string,
   rows: Row[],
-): Promise<DraftRecord[]> {
+): Promise<StoredDraftRecord[]> {
   const dataRows = await readRange(docId, DATA_RANGE);
   const payloadById = new Map<string, string>();
   for (const r of dataRows) {
@@ -331,7 +355,7 @@ async function readRecordsNewSchema(
     if (id && typeof payload === "string") payloadById.set(id, payload);
   }
 
-  const out: DraftRecord[] = [];
+  const out: StoredDraftRecord[] = [];
   for (const row of rows) {
     const id = String(row[NEW_COL.id] ?? "").trim();
     if (!id) continue;
@@ -342,7 +366,7 @@ async function readRecordsNewSchema(
       continue;
     }
     try {
-      const draft = normalizeIncomingDraft(JSON.parse(payload));
+      const draft = normalizeStoredDraft(JSON.parse(payload));
       if (draft) out.push({ draft, status });
     } catch {
       console.warn(`[sheets] Quote ${id}: payload is not valid JSON — skipping.`);
@@ -416,14 +440,14 @@ async function migrateLegacyQuotesTab(
   legacyRows: Row[],
 ): Promise<void> {
   // Recover the full Draft from each legacy row's JSON; preserve status.
-  const recovered: { draft: Draft; status: "active" | "archived" }[] = [];
+  const recovered: { draft: StoredDraft; status: "active" | "archived" }[] = [];
   for (const row of legacyRows) {
     const status: "active" | "archived" =
       String(row[LEGACY_COL.status] ?? "") === "archived" ? "archived" : "active";
     const payload = row[LEGACY_COL.payload];
     if (typeof payload !== "string" || !payload) continue;
     try {
-      const draft = normalizeIncomingDraft(JSON.parse(payload));
+      const draft = normalizeStoredDraft(JSON.parse(payload));
       if (draft) recovered.push({ draft, status });
     } catch {
       // Drop unparseable rows — they were already broken.
@@ -440,8 +464,9 @@ async function migrateLegacyQuotesTab(
   await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
 
   if (recovered.length > 0) {
+    const catalog = LEGACY_CATALOG;
     const readable = recovered.map(({ draft, status }) =>
-      draftToReadableRow(draft, status),
+      draftToReadableRow(draft, status, catalog),
     );
     const payloads = recovered.map(({ draft }) => draftToPayloadRow(draft));
     await writeRange(docId, `${SHEET_TAB}!A2:M${1 + recovered.length}`, readable);
@@ -458,7 +483,8 @@ async function ensureNewSchema(
   if (view.schema === "new") {
     // Backfill the wider A–R header on a sheet that was migrated before Phase 3
     // added the portal columns. One-time; idempotent once the header is full.
-    if (view.header.length < NEW_HEADER_ROW.length) {
+    // Also renames G/H to Summary/Households for the v5 readable row.
+    if (view.header.length < NEW_HEADER_ROW.length || String(view.header[7] ?? "") !== "Households") {
       await writeRange(docId, HEADER_RANGE, [NEW_HEADER_ROW]);
     }
     return { rows: view.rows };
@@ -482,13 +508,15 @@ async function ensureNewSchema(
 // Every quote in the sheet, archived ones included, each tagged with its status.
 // Only the studio dashboard needs this — it renders archived quotes behind a
 // filter and must exclude them from its ledger totals.
-export async function listDraftRecords(): Promise<DraftRecord[]> {
+// Every stored payload as-is (v5 or pre-v5). The freeze, notes and duplicate
+// paths use this so they never rewrite a quote they weren't asked to convert.
+export async function listStoredDraftRecords(): Promise<StoredDraftRecord[]> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const { schema, rows } = await readQuotesTab(cfg.docId);
   if (schema === "empty") return [];
   if (schema === "legacy") {
-    const out: DraftRecord[] = [];
+    const out: StoredDraftRecord[] = [];
     for (const row of rows) {
       const rec = rowToRecordLegacy(row);
       if (rec) out.push(rec);
@@ -498,18 +526,22 @@ export async function listDraftRecords(): Promise<DraftRecord[]> {
   return readRecordsNewSchema(cfg.docId, rows);
 }
 
-// Live quotes only — the default everywhere except the dashboard.
-export async function listDrafts(): Promise<Draft[]> {
-  const records = await listDraftRecords();
-  return records.filter((r) => r.status === "active").map((r) => r.draft);
+// Every quote as v5 (a stray pre-v5 payload is converted in memory with the bundled
+// catalog, so each total equals what its client link shows). Archived quotes
+// included, tagged — the dashboard decides what to show.
+export async function listDraftRecords(): Promise<DraftRecord[]> {
+  const stored = await listStoredDraftRecords();
+  const catalog = LEGACY_CATALOG;
+  return stored.map((r) => ({ draft: toV5Draft(r.draft, catalog), status: r.status }));
 }
 
-export async function upsertDraftRow(draft: Draft): Promise<void> {
+export async function upsertDraftRow(draft: StoredDraft): Promise<void> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const { rows } = await ensureNewSchema(cfg.docId);
+  const catalog = LEGACY_CATALOG;
   const idx = rows.findIndex((row) => String(row[NEW_COL.id] ?? "") === draft.id);
-  const readable = [draftToReadableRow(draft, "active")];
+  const readable = [draftToReadableRow(draft, "active", catalog)];
   const payload = [draftToPayloadRow(draft)];
 
   if (idx >= 0) {
@@ -588,7 +620,7 @@ export async function restoreDraftRow(id: string): Promise<boolean> {
 // Read a single Draft by id straight from the _data payload tab, regardless of
 // archive status. Used by the public portal (token → id → payload) so it never
 // has to load the whole draft list.
-export async function getDraftById(id: string): Promise<Draft | null> {
+export async function getStoredDraftById(id: string): Promise<StoredDraft | null> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
   const dataRows = await readRange(cfg.docId, DATA_RANGE);
@@ -597,10 +629,19 @@ export async function getDraftById(id: string): Promise<Draft | null> {
   const payload = row[1];
   if (typeof payload !== "string" || !payload) return null;
   try {
-    return normalizeIncomingDraft(JSON.parse(payload));
+    return normalizeStoredDraft(JSON.parse(payload));
   } catch {
     return null;
   }
+}
+
+// The v5 view of one quote (a stray pre-v5 payload converts with the bundled catalog
+// when it predates v5). Every read surface — /q, Profile Overview, print —
+// goes through here, so they all show the same total.
+export async function getDraftById(id: string): Promise<Draft | null> {
+  const stored = await getStoredDraftById(id);
+  if (!stored) return null;
+  return toV5Draft(stored, LEGACY_CATALOG);
 }
 
 // --- Phase 3: portal metadata (columns N–R) ---
@@ -774,9 +815,9 @@ export async function setDepositPaid(id: string, amount: number): Promise<boolea
 export async function updateHiddenNotes(id: string, notes: string): Promise<boolean> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
-  const draft = await getDraftById(id);
+  const draft = await getStoredDraftById(id);
   if (!draft) return false;
-  const updated: Draft = {
+  const updated: StoredDraft = {
     ...draft,
     client: { ...draft.client, notes },
     updatedAt: new Date().toISOString(),
@@ -787,24 +828,10 @@ export async function updateHiddenNotes(id: string, notes: string): Promise<bool
   return writePortalCells(id, NEW_COL.notes, [notes]);
 }
 
-// --- Config (Items + Settings) reader ---
-
-interface ConfigCacheEntry {
-  config: RemoteConfig;
-  expiresAt: number;
-}
-let cachedConfig: ConfigCacheEntry | null = null;
-let inflightConfig: Promise<RemoteConfig> | null = null;
+// --- Sheet cell/range helpers ---
 
 function parseNumber(raw: unknown): number | null {
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (trimmed === "") return null;
-  // Tolerate "$1.50", "10%", "1,250" — Janelle is editing this in Sheets.
-  const cleaned = trimmed.replace(/[$,%\s]/g, "");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return parseSheetNumber(raw);
 }
 
 async function fetchSheetRange(docId: string, range: string): Promise<Row[] | "tab-missing"> {
@@ -823,152 +850,211 @@ async function fetchSheetRange(docId: string, range: string): Promise<Row[] | "t
   return data.values ?? [];
 }
 
-async function readConfigFromSheet(cfg: SheetsConfig): Promise<RemoteConfig> {
-  const warnings: ConfigWarning[] = [];
-  const settings: RemoteSetting[] = [];
-  const items: RemoteItem[] = [];
+// --- Price book (Products / Options / Packages / Settings) ---
+//
+// docs/quote-builder-redesign.md §5. Read-only except for the one-time seed
+// below. 60s module cache + in-flight dedupe; parsing and
+// validation live in the pure lib/quote-pricebook.ts.
 
-  const [settingsRes, itemsRes] = await Promise.all([
-    fetchSheetRange(cfg.docId, SETTINGS_RANGE).catch((err): "fetch-failed" => {
-      warnings.push({
-        kind: "fetch-failed",
-        tab: "Settings",
-        sheetRow: null,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return "fetch-failed";
-    }),
-    fetchSheetRange(cfg.docId, ITEMS_RANGE).catch((err): "fetch-failed" => {
-      warnings.push({
-        kind: "fetch-failed",
-        tab: "Items",
-        sheetRow: null,
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return "fetch-failed";
-    }),
-  ]);
+const PRICEBOOK_RANGES = {
+  products: `${PRODUCTS_TAB}!A2:O`,
+  options: `${OPTIONS_TAB}!A2:H`,
+  packages: `${PACKAGES_TAB}!A2:H`,
+  settings: `${PRICE_SETTINGS_TAB}!A2:B`,
+} as const;
 
-  if (settingsRes === "tab-missing") {
-    warnings.push({
-      kind: "tab-missing",
-      tab: "Settings",
-      sheetRow: null,
-      detail: 'No tab named "Settings" found in the Sheet.',
-    });
-  } else if (Array.isArray(settingsRes)) {
-    if (settingsRes.length === 0) {
-      warnings.push({
-        kind: "empty",
-        tab: "Settings",
-        sheetRow: null,
-        detail: 'The "Settings" tab has no data rows.',
-      });
-    }
-    settingsRes.forEach((row, i) => {
-      const sheetRow = i + 2; // skip header row
-      const key = String(row[0] ?? "").trim();
-      if (!key) return; // silent skip on blank rows
-      const value = parseNumber(row[1]);
-      if (value === null) {
-        warnings.push({
-          kind: "invalid-row",
-          tab: "Settings",
-          sheetRow,
-          detail: `Row ${sheetRow} (${key}): value "${row[1] ?? ""}" is not a number.`,
-        });
-        return;
-      }
-      settings.push({ key, value, sheetRow });
-    });
+interface PriceBookCacheEntry {
+  remote: RemotePriceBook;
+  expiresAt: number;
+}
+let cachedPriceBook: PriceBookCacheEntry | null = null;
+let inflightPriceBook: Promise<RemotePriceBook> | null = null;
+
+async function readTab(docId: string, range: string): Promise<TabRead> {
+  try {
+    const res = await fetchSheetRange(docId, range);
+    if (res === "tab-missing") return { status: "missing" };
+    return { status: "ok", rows: res as SheetRow[] };
+  } catch (err) {
+    return { status: "failed", detail: err instanceof Error ? err.message : String(err) };
   }
-
-  if (itemsRes === "tab-missing") {
-    warnings.push({
-      kind: "tab-missing",
-      tab: "Items",
-      sheetRow: null,
-      detail: 'No tab named "Items" found in the Sheet.',
-    });
-  } else if (Array.isArray(itemsRes)) {
-    if (itemsRes.length === 0) {
-      warnings.push({
-        kind: "empty",
-        tab: "Items",
-        sheetRow: null,
-        detail: 'The "Items" tab has no data rows.',
-      });
-    }
-    itemsRes.forEach((row, i) => {
-      const sheetRow = i + 2;
-      const key = String(row[0] ?? "").trim();
-      if (!key) return;
-      const label = String(row[1] ?? "").trim();
-      const designMin = parseNumber(row[2]);
-      const prodMin = parseNumber(row[3]);
-      const sheetCost = parseNumber(row[4]);
-      const yieldVal = parseNumber(row[5]);
-      const qty = parseNumber(row[6]);
-      const fixedRaw = row[7];
-      const fixed =
-        fixedRaw === undefined || fixedRaw === null || String(fixedRaw).trim() === ""
-          ? null
-          : parseNumber(fixedRaw);
-      if (
-        designMin === null ||
-        prodMin === null ||
-        sheetCost === null ||
-        yieldVal === null ||
-        qty === null
-      ) {
-        warnings.push({
-          kind: "invalid-row",
-          tab: "Items",
-          sheetRow,
-          detail: `Row ${sheetRow} (${key}): one or more numeric columns are blank or non-numeric.`,
-        });
-        return;
-      }
-      items.push({
-        key,
-        label,
-        designMin,
-        prodMin,
-        sheetCost,
-        yield: yieldVal,
-        qty,
-        fixed: fixed ?? null,
-        sheetRow,
-      });
-    });
-  }
-
-  return { settings, items, warnings };
 }
 
-export async function listConfig(options?: { force?: boolean }): Promise<RemoteConfig> {
+export async function listPriceBook(options?: { force?: boolean }): Promise<RemotePriceBook> {
   const cfg = getConfig();
   if (!cfg) throw new SheetsUnconfiguredError();
 
   const now = Date.now();
-  if (!options?.force && cachedConfig && cachedConfig.expiresAt > now) {
-    return cachedConfig.config;
+  if (!options?.force && cachedPriceBook && cachedPriceBook.expiresAt > now) {
+    return cachedPriceBook.remote;
   }
-  if (inflightConfig) return inflightConfig;
+  if (inflightPriceBook) return inflightPriceBook;
 
-  inflightConfig = (async () => {
-    const result = await readConfigFromSheet(cfg);
-    cachedConfig = { config: result, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
-    return result;
+  inflightPriceBook = (async () => {
+    const [products, opts, packages, settings] = await Promise.all([
+      readTab(cfg.docId, PRICEBOOK_RANGES.products),
+      readTab(cfg.docId, PRICEBOOK_RANGES.options),
+      readTab(cfg.docId, PRICEBOOK_RANGES.packages),
+      readTab(cfg.docId, PRICEBOOK_RANGES.settings),
+    ]);
+    const remote: RemotePriceBook = { products, options: opts, packages, settings };
+    cachedPriceBook = { remote, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
+    return remote;
   })().finally(() => {
-    inflightConfig = null;
+    inflightPriceBook = null;
   });
 
-  return inflightConfig;
+  return inflightPriceBook;
 }
 
-export function invalidateConfigCache(): void {
-  cachedConfig = null;
+export function priceBookSheetUrl(): string | null {
+  const cfg = getConfig();
+  return cfg ? `https://docs.google.com/spreadsheets/d/${cfg.docId}/edit` : null;
+}
+
+async function writeUserEntered(docId: string, range: string, values: Row[]): Promise<void> {
+  const res = await sheetsFetch(
+    `${docId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    { method: "PUT", body: JSON.stringify({ range, majorDimension: "ROWS", values }) },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets write failed (${range}): ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
+async function appendUserEntered(docId: string, range: string, values: Row[]): Promise<void> {
+  const res = await sheetsFetch(
+    `${docId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    { method: "POST", body: JSON.stringify({ range, majorDimension: "ROWS", values }) },
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets append failed (${range}): ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
+function cellsOf(rows: SheetRow[]): Row[] {
+  return rows.map((r) => r.map((c) => (c === null || c === undefined ? "" : typeof c === "boolean" ? String(c).toUpperCase() : c)));
+}
+
+export interface SeedReport {
+  created: string[];
+  seeded: string[];
+  settingsAppended: string[];
+  skipped: string[];
+}
+
+// One-time seed of the price-book tabs (§5.1). Writes only tabs that are
+// missing or empty and appends only missing Settings keys, so it never touches
+// a row Janelle has edited and a second run changes nothing.
+export async function seedPriceBookTabs(): Promise<SeedReport> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const meta = await fetchSpreadsheetMeta(cfg.docId);
+  const titles = new Set(meta.sheets.map((t) => t.title));
+
+  async function firstColumn(tab: string): Promise<string[]> {
+    if (!titles.has(tab)) return [];
+    const rows = await readRange(cfg!.docId, `${tab}!A2:A`);
+    return rows.map((r) => String(r[0] ?? "").trim()).filter(Boolean);
+  }
+  const [p, o, k, st] = await Promise.all([
+    firstColumn(PRODUCTS_TAB),
+    firstColumn(OPTIONS_TAB),
+    firstColumn(PACKAGES_TAB),
+    firstColumn(PRICE_SETTINGS_TAB),
+  ]);
+  const actions: SeedAction[] = planSeed({
+    products: { exists: titles.has(PRODUCTS_TAB), dataRows: p.length },
+    options: { exists: titles.has(OPTIONS_TAB), dataRows: o.length },
+    packages: { exists: titles.has(PACKAGES_TAB), dataRows: k.length },
+    settings: { exists: titles.has(PRICE_SETTINGS_TAB), dataRows: st.length, keys: st },
+  });
+
+  const report: SeedReport = { created: [], seeded: [], settingsAppended: [], skipped: [] };
+  const touched = new Set(actions.map((a) => a.tab));
+  for (const tab of [PRODUCTS_TAB, OPTIONS_TAB, PACKAGES_TAB, PRICE_SETTINGS_TAB]) {
+    if (!touched.has(tab)) report.skipped.push(tab);
+  }
+
+  const toCreate = actions.filter((a) => a.create).map((a) => a.tab);
+  if (toCreate.length > 0) {
+    const res = await sheetsFetch(`${cfg.docId}:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ requests: toCreate.map((title) => ({ addSheet: { properties: { title } } })) }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Sheets create-tab failed: ${res.status} ${body.slice(0, 200)}`);
+    }
+    report.created.push(...toCreate);
+  }
+
+  for (const a of actions) {
+    const values = cellsOf(a.rows);
+    if (a.mode === "write") {
+      const lastCol = colLetter(Math.max(...values.map((r) => r.length)) - 1);
+      await writeUserEntered(cfg.docId, `${a.tab}!A1:${lastCol}${values.length}`, values);
+      if (a.tab === PRICE_SETTINGS_TAB) report.settingsAppended.push(...values.slice(1).map((r) => String(r[0])));
+      else report.seeded.push(a.tab);
+    } else {
+      await appendUserEntered(cfg.docId, `${a.tab}!A:B`, values);
+      report.settingsAppended.push(...values.map((r) => String(r[0])));
+    }
+  }
+
+  cachedPriceBook = null;
+  return report;
 }
 
 export { SheetsUnconfiguredError, NUM_COLS, getAccessToken as getGoogleAccessToken };
+
+// --- Freeze (§8.5, run once by Janelle after deploy) ---
+//
+// Rewrites every pre-v5 `_data` payload as v5 JSON (converted with the live
+// Items catalog, updatedAt kept) and refreshes its readable G–J cells. A quote
+// whose converted total isn't within half a cent of the old engine's is left
+// untouched and reported. Idempotent.
+export async function freezeLegacyDrafts(): Promise<FreezeReport> {
+  const cfg = getConfig();
+  if (!cfg) throw new SheetsUnconfiguredError();
+  const [dataRows, catalog, view] = await Promise.all([
+    readRange(cfg.docId, DATA_RANGE),
+    Promise.resolve(LEGACY_CATALOG),
+    ensureNewSchema(cfg.docId),
+  ]);
+  const input = dataRows
+    .map((r, i) => ({ rowNumber: 2 + i, id: String(r[0] ?? "").trim(), payload: typeof r[1] === "string" ? r[1] : "" }))
+    .filter((r) => r.id && r.payload);
+  const { updates, report } = planFreeze(input, catalog, new Date().toISOString());
+  if (updates.length === 0) return report;
+
+  const statusById = new Map<string, { rowNumber: number; status: DraftStatus }>();
+  view.rows.forEach((row, i) => {
+    const id = String(row[NEW_COL.id] ?? "").trim();
+    if (id) statusById.set(id, { rowNumber: FIRST_DATA_ROW + i, status: normalizeStatus(row[NEW_COL.status]) });
+  });
+
+  const data: { range: string; values: Row[] }[] = [];
+  for (const u of updates) {
+    data.push({ range: `${DATA_TAB}!A${u.rowNumber}:B${u.rowNumber}`, values: [draftToPayloadRow(u.draft)] });
+    const q = statusById.get(u.draft.id);
+    if (q) {
+      const readable = draftToReadableRow(u.draft, q.status, catalog);
+      data.push({ range: `${SHEET_TAB}!G${q.rowNumber}:J${q.rowNumber}`, values: [readable.slice(6, 10)] });
+    }
+  }
+  // Chunked so one request stays well under the API's payload limits.
+  for (let i = 0; i < data.length; i += 100) {
+    const res = await sheetsFetch(`${cfg.docId}/values:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "RAW", data: data.slice(i, i + 100) }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Sheets freeze write failed: ${res.status} ${body.slice(0, 200)}`);
+    }
+  }
+  return report;
+}

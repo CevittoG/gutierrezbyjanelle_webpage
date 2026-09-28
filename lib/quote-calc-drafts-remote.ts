@@ -5,7 +5,7 @@
 // or just shrug and keep going.
 
 import type { Draft } from "./quote-calc-drafts";
-import { normalizeIncomingDraft } from "./quote-calc-drafts";
+import { normalizeDraftV5 } from "./quote-calc-drafts";
 
 export type RemoteFailure =
   | { kind: "network" }
@@ -40,7 +40,7 @@ export async function fetchRemoteDrafts(): Promise<RemoteResult<Draft[]>> {
     if (!body.ok || !Array.isArray(body.drafts)) return { ok: false, failure: { kind: "server" } };
     const drafts: Draft[] = [];
     for (const d of body.drafts) {
-      const norm = normalizeIncomingDraft(d);
+      const norm = normalizeDraftV5(d);
       if (norm) drafts.push(norm);
     }
     return { ok: true, value: drafts };

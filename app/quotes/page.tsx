@@ -8,7 +8,7 @@ import { AppShell } from "@/components/quote-app/AppShell";
 import { isQuoteAuthValid } from "@/lib/quote-calc-auth";
 import { isSheetsConfigured, listDraftRecords, listPortalMeta } from "@/lib/quote-calc-sheets";
 import { folderWebLink } from "@/lib/quote-calc-drive";
-import { quoteDisplayName } from "@/lib/quote-calc-summary";
+import { computeTotals, quoteDisplayName } from "@/lib/quote-engine";
 import { Dashboard } from "./_components/Dashboard";
 import type { QuoteRow } from "./_components/Dashboard";
 
@@ -47,6 +47,9 @@ export default async function QuotesDashboardPage() {
 
   const rows: QuoteRow[] = records.map(({ draft: d, status }) => {
     const m = portal.get(d.id);
+    // The same engine as the client link. Converted quotes keep the
+    // whole-dollar figure they always showed.
+    const total = computeTotals(d.config).total;
     return {
       id: d.id,
       archived: status === "archived",
@@ -55,7 +58,7 @@ export default async function QuotesDashboardPage() {
       eventDate: d.client.eventDate,
       name: d.name,
       packageName: quoteDisplayName(d.config),
-      total: Math.round(d.cachedTotal),
+      total: d.config.legacy ? Math.round(total) : total,
       updatedAt: d.updatedAt,
       publicToken: m?.publicToken ?? "",
       linkStatus: m?.linkStatus ?? "",

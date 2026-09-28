@@ -194,12 +194,14 @@ app/
   quotes/
     page.tsx              ← /quotes        (gated home — studio dashboard, integrates the explorer)
     [id]/page.tsx         ← /quotes/[id]   (gated "Profile Overview" — per-quote admin detail)
+    prices/page.tsx       ← /quotes/prices (gated read-only Price book)
     _components/          ← Dashboard
   quote/
-    new/page.tsx          ← /quote/new     (gated calculator; ?draft=<id> preloads a quote for editing)
+    new/page.tsx          ← /quote/new     (gated quote builder; ?draft=<id> opens a quote for editing)
+    new/_components/      ← QuoteBuilder and its parts
   quote-calc/
     page.tsx              ← redirects to /quotes (back-compat; /quote-calc/explorer* redirect too)
-    _components/          ← QuoteCalculator, BreakdownPanel, AssumptionsPanel, PasswordGate (shared by the gated pages)
+    _components/          ← PasswordGate, ClientInfoSection, ConfigBanner, MobileBreakdownSheet (shared by the gated pages)
     api/**                ← API route handlers stay here (fetched by absolute path)
     print/**              ← print view
   opengraph-image.tsx     ← /opengraph-image  (JSX ImageResponse, 1200×630)
@@ -248,192 +250,138 @@ The Dockerfile has four named stages: `base → deps → development → builder
 
 ---
 
-## Quote Calculator — `/quote-calc`
+## Quote Builder — `/quotes`, `/quote/new`, `/q/[token]`
 
-Password-gated internal pricing tool at `/quote-calc`. Not in the sitemap or public nav.
+Password-gated internal tools (dashboard, builder, Price book, Profile Overview) plus the public,
+tokenized client page. Not in the sitemap or public nav. Plain-language model:
+[docs/QUOTE_CALC_MODEL.md](../docs/QUOTE_CALC_MODEL.md). Design history, every decision and the
+implementation notes: [docs/quote-builder-redesign.md](../docs/quote-builder-redesign.md) (§15).
 
-### Pricing Formula (cost-plus model, three-tier — Phase 5 redesign)
+### Principles (don't break these)
 
-A quote is a list of **lines** (each a bundle *or* a single item) priced through one
-markup core, plus **once-per-quote project services**, minus **one grouped discount
-stage**. Per-line costs and per-quote costs are kept strictly separate — that is the
-invariant the redesign enforces.
+1. **Prices come from the price book; costs only warn.** The Sheet's `Products` / `Options` /
+   `Packages` / `Settings` tabs hold the data, `lib/quote-engine.ts` holds the rules, the builder
+   handles composition. No price editing in the app.
+2. **A saved quote is a document.** Lines store resolved names and prices, so
+   `computeTotals(config)` depends on the saved config **only** (asserted in tests). The price book
+   is read when a line is added or a refresh is applied, never to compute a total.
+3. **Percentages mean what they say.** Suite savings and the discount are true % of their base.
+4. **No cost data on client surfaces.** `/q/[token]` and print render only `buildPublicQuote()`
+   output: never `listUnitPrice`, `est`, health, `productId`, option `estCost`, `legacy` or notes.
+5. **Money never moves on a quote that exists.** Any rule change must be proven with fixtures
+   against saved configs before it ships.
+
+### Pricing (engine v2, `lib/quote-engine.ts`)
 
 ```
-# Per LINE (package bundle or single item)
-variable   = Σ(design_labor + production_labor + materials)   # NO revision, NO packaging
-list       = variable × (1 + admin%) × (1 + target_profit%)
-labor_base = design_labor + production_labor                  # RAW labor cost (NOT marked up)
-
-# All discounts are ADDITIVE and bite RAW LABOR ONLY (never materials/admin/profit/services).
-line_disc% = clamp( bundle_discount% + vendorIncentivePtg + familyFriendsPtg + customDiscountPtg )   # bundle = packages only, 0 for items
-net        = list − labor_base × line_disc%                   # discount lowers your effective hourly rate only
-
-# Once per QUOTE (computed a single time, then marked up — never discounted)
-revision   = extraRevisions × revisionMin/60 × hourly
-packaging  = anyPhysicalLine ? packagingCost : 0              # one shipment per order
-license    = digitalLicense ? (Σ design_labor) × digitalLicensePtg% : 0
-services_list = (revision + packaging + license) × (1 + admin%) × (1 + target_profit%)
-
-# Surcharge + free-form items
-order_subtotal = Σ net + services_list
-misc       = Σ(qty × unitPrice)                               # fixed selling price, never discounted
-rush_base  = order_subtotal + (pricingVersion ≥ 2 ? misc : 0) # v1 quotes leave misc out
-rush       = rushFee ? rush_base × rushFeePtg% : 0
-final      = order_subtotal + rush + misc
+printed line  = qty × (unit + per-piece options) + percent options + flat options
+                + designFee × (reuseDesign ? reuseDesignPct% : 1)
+digital line  = unitPrice (the digitalPrice) + percent/flat options      # qty unused, no design fee
+custom line   = qty × unitPrice
+group savings = bundlePct% × group subtotal
+services      = extraRevisions × revisionRoundPrice + license? licenseFee + anyPhysical? packagingFee
+base          = items − suite savings + services
+discount      = one discount: pct% × base, or min($, base); a reason + optional client label
+rush          = rush? rushPct% × (base − discount)
+total         = base − discount + rush + adjustment + (shipping ?? 0)      # deposit is display-only
 ```
 
-**Pricing versions** (`DraftConfig.pricingVersion`) keep a rule change from re-pricing a quote
-that was already saved or sent. Every surface recomputes totals from the saved draft, so a rule
-change would otherwise move the client's number. Quotes saved before the field existed load as
-**v1**; new quotes are **v2** (`CURRENT_PRICING_VERSION`). The calculator carries the opened
-quote's version through edits. v2 differs from v1 in exactly two places, both in
-`lib/quote-calc-totals.ts`: rush includes misc add-ons, and an add-on with qty + price but no name
-counts (labelled "Custom item") instead of being dropped (`countedMiscLines`). Gate any future
-money-rule change the same way and bump the constant.
+Every component is rounded to cents (`lib/money.ts round2`) **except on quotes converted from the
+old calculator** (`config.legacy` present): those skip rounding so their totals equal the old
+engine's, and every surface shows them in whole dollars (`PublicQuote.wholeDollars`). Client money
+uses `formatMoney` (cents only when not a whole dollar).
 
-**Zero-line quotes are valid** — a quote can be custom add-ons only. New quotes start blank
-(`DEFAULT_CONFIG.lines` is `[]`), and `migrateConfig` keeps a saved empty `lines` array as-is (only
-pre-v4 shapes with no packages still get the historical Sweet Suite × 75 fallback).
+Invariants (all in `lib/quote-engine.test.ts`): closure, true percentages, config-only totals,
+identical lines price identically, zero-line/custom-only quotes, digital ⇔ every line digital +
+packaging iff any printed line, guest count re-quantifies linked lines only, `setTargetTotal`
+lands exactly, and legacy conversion parity < $0.005 (254 fixtures).
 
-**Custom add-on physical/digital** (`MiscAddOn.digital`): a physical add-on counts toward
-`anyPhysical` (one packaging charge, the shipping reminder, physical stage wording via
-`isDigitalQuote`). It never changes the add-on's own price. Older add-ons without the flag are
-backfilled on load price-neutrally: physical if the quote already had a physical line, else digital.
+**Health** (`lib/quote-health.ts`, admin only): hours (design × reuse + printed qty × minutes +
+revision hours), estimated materials, fees (`feesPct` of total) → `$/hr = (total − shipping −
+packaging − materials − fees) / hours`, judged against `hourlyTarget` / `hourlyFloor` from the
+snapshot on the quote (`config.health`, else the current Settings). Shown as label + glyph
+(✦ / ~ / !), never traffic-light colors.
 
-**Per-item cost** (inside a line's `variable`): design labor `(design_min/60 × hourly ×
-(isReuse?reuseFactor:1))` once per piece; production `(prod_min/60 × hourly × qty)` and
-materials `(sheet_cost × materialMultiplier / yield) × (1+errorMargin%) × qty`, both
-physical-only and qty-scaled. `fullColorFactor`/`customPaperFactor` multiply sheet cost.
+### Data model v5 (`lib/quote-types.ts`, re-exported from `lib/quote-calc-drafts.ts`)
 
-**Item-line qty is a raw piece count**; package-line qty is a household/guest count that
-drives the catalog qty rules. The same catalog item prices identically wherever it is added
-(there is no longer a separate "add-on" pricing path).
+`Draft = { id, name, createdAt, updatedAt, client, config: DraftConfigV5, cachedTotal,
+schemaVersion: 5 }`. `DraftConfigV5` = households / guests, `groups` (packages: name + bundle %),
+`lines` (product or custom; `productId`, `groupId`, name, detail, includes, qty + `qtyLink`,
+unitPrice / `listUnitPrice`, designFee / `listDesignFee`, reuseDesign, digital, resolved
+`options`, `est`), `services` (rush %, revision price, license fee, packaging fee — policy
+snapshots), `reuseDesignPct`, `discount`, `adjustment`, `shipping` (null = "added later"),
+`deposit`, `pricedAt`, `health`, and `legacy` (the old quote, kept for audit).
 
-**Discounts** (one consistent rule): a package's intrinsic **bundle discount** (`discountSweet`,
-etc., packages only) and the three **relationship discounts** (vendor incentive, family & friends,
-custom) all **add together** into one per-line percentage (`clampPtg`, no compounding). That
-percentage bites the line's **raw labor cost only** (`labor_base` = design + production at cost, NOT
-marked up) — materials, admin overhead, target profit, project services, and misc are **never**
-discounted, so a discount only lowers your effective hourly rate and can't touch real cost or the
-margin earned on anything but your own time. Each line's
-discount is itemized in `LineResult.discountComponents`; the relationship %s are also aggregated
-across lines into `relationshipDiscountLines` for the client-facing surfaces (bundle stays per line).
-Family & friends and custom are typed integers stored on the draft; vendor incentive's % lives in
-`Settings`. There is **no margin floor** — the breakdown surfaces the resulting net margin instead.
+`StoredDraft = Draft | LegacyDraft` is what a `_data` cell may hold until the freeze has run.
+`toV5Draft(stored, catalog)` is the one conversion (`lib/quote-legacy.ts` replays the frozen old
+engine in `lib/legacy/` and stores each priced piece as a fixed-$ line). Server reads convert with
+the bundled catalog: every Sheet quote was frozen to v5, so only an old local browser cache can
+still hold a pre-v5 quote.
 
-**Closure invariant** (asserted in `lib/quote-calc-totals.test.ts`):
-`subtotalList − savings + rush == finalPrice`, where `savings = discountTotal` (= `itemsList −
-itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public projector reproduces it exactly.
+### The Sheet
 
-**Shipping** is excluded — added manually per carrier quote.
+| Tab | Written by | Notes |
+|---|---|---|
+| `Products`, `Options`, `Packages` | Janelle (seeded once) | Read by `listPriceBook()` (60s cache); validated in `mergePriceBook()` with warnings naming tab + row; each tab falls back to the bundled seed (`DEFAULT_PRICE_BOOK`, Appendix B) on its own. A product without a price is a to-do (`needs-price`), hidden from the picker |
+| `Settings` | Janelle | New keys: `guestsPerHousehold rushPct revisionRoundPrice revisionHours licenseFee packagingFee depositAmount reuseDesignPct vendorReferralPct feesPct hourlyTarget hourlyFloor`. Legacy keys are ignored silently |
+| `_legacy_Items` + legacy Settings keys | — | **Retired.** The freeze ran on 2026-09-27 (20 converted, 0 parity failures); nothing reads `Items` any more (renamed `_legacy_Items`). Legacy Settings rows are ignored silently and can be deleted |
+| `Quotes` | App | A–M readable row: ID · Status · Client · Event type · Event date · Quote name · **Summary** · **Households** · **Priced lines** · Total · Hidden notes · Created · Updated. N–U portal/lifecycle (unchanged) |
+| `_data` | App | Full Draft JSON by id (v5, or pre-v5 until frozen) |
 
-### Architecture
+`POST /quote-calc/api/pricebook/seed` (the Price book page's **Create price book tabs**) writes only
+missing/empty tabs and missing Settings keys; `POST /quote-calc/api/drafts/freeze` rewrites every
+pre-v5 payload as v5 (idempotent; reports `converted`, `skipped`, `parityFailures`, `unreadable`,
+`dashboardCorrections`). Both are run by Janelle after deploy, never from code or tests.
+
+The freeze has run and the legacy `Items` reader (`quote-calc-config.ts`, `listConfig()`) is
+deleted. `lib/legacy/` + `lib/quote-legacy.ts` stay while un-frozen local caches could exist;
+delete them (and `LegacyDraft`) once that no longer matters.
+
+### Files
 
 | File | Role |
-|------|------|
-| `lib/quote-calc-logic.ts` | Core engine: `QuoteState`, `DEFAULTS`, `ITEM_CATALOG` (18 items — bundled fallback), `PACKAGES` (6 bundle tiers: 3 wedding + 3 events). Pure **cost** functions only (no markup/discount lives here anymore): `calcPackageCost()` (bundle), `calcItemCost()` (single item, raw qty), both → `LineCost`; `calcQuoteServices()` → once-per-quote `QuoteServices`; `markupVariable()` (admin+profit on variable), `clampPtg()`, `getDiscountPtg()`, `getItemQty()`. All take an optional `catalog`. `PkgItem` supports per-item multiplier/displayLabel |
-| `lib/quote-calc-auth.ts` | Server-only HMAC-signed session helpers (`signSession`, `verifySession`, `isQuoteAuthValid`, `buildSessionCookieHeader`). Replaces the legacy `quote_auth=1` constant; requires `QUOTE_CALC_SESSION_SECRET` |
-| `lib/quote-calc-config.ts` | Runtime config types (`RemoteSetting`, `RemoteItem`, `RemoteConfig`, `ConfigWarning`) + `mergeRemoteConfig()` that overlays Sheet values onto `DEFAULTS`/`ITEM_CATALOG` and surfaces validation warnings |
-| `lib/quote-calc-drafts.ts` | Draft CRUD (localStorage), `DraftConfig` with `lines: QuoteLine[]` (unified — each line `kind: "package" \| "item"`, schema **v4**), `miscAddOns: MiscAddOn[]`, `customDiscountPtg`/`familyFriendsPtg`, `SyncStatus`, `reconcileDrafts()`. `migrateConfig` collapses every legacy shape into `lines`: v1/v2 single `pkg`/`qty`, v3 `packages[]` + `addOns` record + the `individual` pseudo-package → item lines (individual qty preserved via `getItemQty`), and `packageDiscountPtg`→`customDiscountPtg`; iDrinkTop→iWedgeTop still applied |
-| `lib/quote-calc-sheets.ts` | **Server-only** — service-account JWT auth (google-auth-library), module-level token cache, Sheets v4 REST. Schema-aware Quotes reads (legacy JSON-in-col-M or new readable + `_data` payload tab), auto-migrates legacy rows on first write. Column B is the soft-archive switch: `setDraftStatus()` backs `archiveDraftRow()`/`restoreDraftRow()` (single-cell write, `_data` payload never touched, so a restore returns the quote whole). `listDraftRecords()` returns every quote tagged `active`/`archived`; `listDrafts()` is the live-only filter over it. Also exposes `listConfig()` with a 60s cache for the Settings + Items tabs |
-| `lib/quote-calc-summary.ts` | Pure formatter — turns a `Draft` into the multiline "Line items" string that lands in column I of the new Quotes tab |
-| `lib/quote-calc-drafts-remote.ts` | Client-side wrappers (`fetchRemoteDrafts`, `pushRemoteDraft`, `archiveRemoteDraft`, `restoreRemoteDraft`) around the `/quote-calc/api/drafts` routes. The two status wrappers surface the route's `found` flag so "already gone" is distinguishable from "just archived" |
-| `lib/quote-calc-config-remote.ts` | Client wrapper for `GET /quote-calc/api/config` (RemoteResult-shaped, supports `refresh: true`) |
-| `app/quote-calc/api/drafts/route.ts` | `GET` list + `POST` upsert; uses `isQuoteAuthValid()`; returns 503 when Sheets not configured |
-| `app/quote-calc/api/drafts/[id]/route.ts` | `DELETE` soft-archive by id |
-| `app/quote-calc/api/config/route.ts` | `GET` merged Settings + Items payload from the Sheet; `?refresh=1` bypasses the cache |
-| `app/api/quote-auth/route.ts` | `POST` issues a signed session cookie on password match; `DELETE` clears it. Requires `QUOTE_CALC_PASSWORD` and `QUOTE_CALC_SESSION_SECRET` |
-| `app/quote-calc/_components/QuoteCalculator.tsx` | Main UI on a single `lines: QuoteLine[]` state: "Add a package" grid + "Add an individual item" picker both append lines to one "On this quote" list; controls regrouped into **Project services** (rush, revisions, digital license), **Discounts** (vendor, family & friends, custom), and **Materials** (full color, custom paper). Misc add-ons kept. Sheet sync on mount/save; pulls live `catalog` + `assumptions` from `/api/config` |
-| `app/quote-calc/_components/MiscAddOnSection.tsx` | One-off line items (name, qty, unit selling price, Physical/Digital toggle) for special client requests outside the catalog |
-| `app/quote-calc/_components/BreakdownPanel.tsx` | Detailed price breakdown driven entirely by `QuoteBreakdown`: per-line cost→markup→**additive labor-only discount** blocks (bundle + relationship itemized via `discountComponents`), then a quote-level **Project services** block, a total-discounts line, rush, custom add-ons, total, and the "Your costs"/margin rollup. Props: `{ breakdown, mode, assumptions, catalog?, embedded? }` |
-| `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table (driven by the passed-in `catalog`) |
-| `app/quote-calc/_components/ConfigBanner.tsx` | Inline warning banner shown above the calculator when the Sheet config fails to load or contains invalid/unknown rows. Names the offending tab/row; has a Retry button that calls `/api/config?refresh=1` |
-| `app/quote-calc/_components/PasswordGate.tsx` | Branded password gate; the front door for every gated page (`/quotes`, `/quote/new`, `/quotes/[id]`) |
-| `components/quote-app/AppShell.tsx` | Slim sticky app chrome (Dashboard / New quote nav + sign-out) for the gated tools; replaces the marketing header/footer (which self-hide on `^/(quotes|quote|quote-calc|q)` via `usePathname`) |
-| `components/quote-app/LinkControls.tsx` | Public-link controls (generate/regenerate/copy/revoke); shared by the dashboard and Profile Overview (moved here from the old explorer) |
-| `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the **single source of truth for the money math**. Prices each line (`LineResult`) applying one **additive, raw-labor-only** discount per line (bundle + relationship, biting `laborBase` = design + production at cost), adds the once-per-quote `services` (never discounted), then rush + misc. Returns `itemsList/itemsNet`, `totalLaborBase`, `discountTotal`, `bundleDiscountTotal`, `relationshipDiscountLines`, `services`, `savings`, `subtotalList`, `finalPrice`. Shared by the calculator, print view, and public portal. Invariants covered by `lib/quote-calc-totals.test.ts` (compile with `tsc` + run on Node — no test runner wired up) |
-| `lib/quote-calc-portal.ts` | **Pure** Phase 3 types + helpers: `PortalMeta`, `LinkStatus`, `isLinkActive`/`isLinkExpired`, `PublicQuote` shape, and `buildPublicQuote()` — the projector that strips everything secret down to the client-safe shape |
-| `lib/quote-calc-drive.ts` | **Server-only** Drive v3 REST (no `googleapis`): `createQuoteSubfolder`, `ensureQuoteFolder` (auto-create on save), `listFolderFiles` (60s cache), `streamFile` (alt=media, streamed), `folderWebLink`. Uses the shared SA token from `quote-calc-sheets` |
-| `app/q/[token]/page.tsx` · `_components/PublicQuoteView.tsx` | **Public** "Client Quote Profile" (no admin cookie, `force-dynamic`, noindex). Token → `PublicQuote` + `PublicProgress`; work-first sell layout: stage tracker, proofs, proof-approval action, suite, itemized investment + deposit/balance, contact CTA |
-| `app/q/[token]/_components/ApproveProofs.tsx` | Client proof-approval control (checkbox → typed name → confirm); POSTs `/q/[token]/approve`, which auto-advances `approval → balance` |
-| `components/quote-app/StageControl.tsx` | Admin stage selector on Profile Overview; POSTs `/quote-calc/api/portal/[id]/stage`, optimistic + `router.refresh()` |
-| `components/quote-app/DepositPaidControl.tsx` | Admin input recording the deposit amount paid; POSTs `/quote-calc/api/portal/[id]/deposit` (column U) |
-| `components/quote-app/HiddenNotesControl.tsx` | Admin editor for a quote's private hidden notes; POSTs `/quote-calc/api/drafts/[id]/notes` |
-| `components/ui/proof-gallery.tsx` | Brand proof gallery: responsive masonry + shared-element lightbox with drag-to-dismiss and keyboard nav, reduced-motion aware. Used by the client portal |
-| `app/q/[token]/file/[fileId]/route.ts` | Public streaming file proxy; re-verifies token + folder membership before streaming |
-| `app/quotes/page.tsx` · `_components/Dashboard.tsx` | Gated **studio dashboard** (`/quotes`): ledger stats + "up next" + searchable/filterable/date-sortable quote list with per-row Edit · Profile Overview · Client Quote Profile · **Delete** actions. Reads `listDraftRecords()` so archived quotes come through tagged; the client derives every stat from live rows only. Delete = soft archive behind a confirm dialog (optional link revoke), restorable from the **Archived** filter chip. Absorbs the old explorer |
-| `app/quotes/[id]/page.tsx` | Gated **"Profile Overview"** — per-quote admin detail (stage control, payment/approval status, link controls, itemized client-facing summary, admin-proxied proofs) |
-| `app/quote-calc/api/portal/[id]/{token,revoke,stage,deposit,file/[fileId]}/route.ts` | Cookie-gated: generate/regenerate token, revoke link, set lifecycle stage, record deposit paid, admin-side file proxy |
-| `app/quote-calc/api/drafts/[id]/notes/route.ts` | Cookie-gated: update a quote's private hidden notes |
-| `app/quote-calc/api/drafts/[id]/restore/route.ts` | Cookie-gated: un-archive a quote (`status` → `active`); the mirror of the `DELETE` handler one level up |
-| `app/q/[token]/approve/route.ts` | Public, token-gated: record client proof approval (name + timestamp) and auto-advance the stage |
+|---|---|
+| `lib/quote-engine.ts` | `computeTotals(config)` (the only money math) + pure builders: `newQuote`, `addProduct`, `addPackage`, `addCustomLine`, `setGuestCounts`, `setLineQty`/`relinkLine`, `setLineDigital`, `toggleOption`, `setTargetTotal`, `diffAgainstPriceBook`/`applyRefresh`, `isDigitalQuote`, `quoteDisplayName` |
+| `lib/quote-health.ts` | `computeHealth(config, totals, fallback)` |
+| `lib/quote-pricebook.ts` | Price-book types, the Appendix B seed rows (also the bundled fallback), `mergePriceBook`, `priceGuide` (floor/target), `packageSample`, `planSeed`, `ConfigWarning` |
+| `lib/quote-pricebook-remote.ts` | Client wrapper for `GET /quote-calc/api/pricebook` + last-good localStorage cache + seed call |
+| `lib/quote-types.ts` | v5 types |
+| `lib/quote-legacy.ts`, `lib/legacy/*` | Frozen old engine + `convertLegacyDraft` (do not edit the money math) |
+| `lib/quote-freeze.ts` | Pure freeze plan (`planFreeze`) |
+| `lib/quote-calc-drafts.ts` | `Draft`/`LegacyDraft`/`StoredDraft`, `normalizeStoredDraft`, `toV5Draft`, local cache (v5), last session, `reconcileDrafts` |
+| `lib/quote-calc-sheets.ts` | Server-only Sheets REST: drafts (`listDraftRecords`/`getDraftById` = v5 view; `listStoredDraftRecords`/`getStoredDraftById` = as stored, for write-back paths), portal columns, `listPriceBook`, `seedPriceBookTabs`, `freezeLegacyDrafts` (already run) |
+| `lib/quote-calc-portal.ts` | Portal meta, stages, `PublicQuote` v2 + `buildPublicQuote(draft, totals, files, depositPaid)` — the only client-safe projector |
+| `lib/quote-calc-summary.ts` | `summarizeLinesV5` (Quotes column I) |
+| `lib/money.ts` | `round2`, `formatMoney`, `formatMoney2`, `formatPct` |
+| `app/quote/new/_components/QuoteBuilder.tsx` (+ `EventBasics`, `PackageChips`, `LineGroup`, `LineRow`, `ProductCombobox`, `OptionChips`, `ServicesPanel`, `DiscountControl`, `SummaryPanel`, `SetTotalDialog`, `ShowMath`, `PriceRefreshBanner`, `fields`) | The builder (§9 of the redesign doc) |
+| `app/quotes/prices/**` | Read-only Price book page (floor · target · market · your price, package samples at 50/100 households, warnings, seed) |
+| `app/quotes/page.tsx`, `_components/Dashboard.tsx` | Dashboard (client-link totals, Duplicate, soft-archive/restore) |
+| `app/quotes/[id]/page.tsx` | Profile Overview (health, indicators, Edit/Duplicate/Print, stage, deposit, link, notes, proofs) |
+| `app/q/[token]/**` | Public client page (projector only) + proof approval + file proxy |
+| `app/quote-calc/print/**` | Print view (server v5 view first, local cache fallback) |
+| `components/quote-app/{InvestmentList,HealthCard,DuplicateQuoteButton,AppShell,…}.tsx` | Shared admin/portal pieces. `InvestmentList` renders the same rows on `/q`, Profile Overview, print and the builder summary |
+| `app/quote-calc/_components/{PasswordGate,ClientInfoSection,ConfigBanner,MobileBreakdownSheet}.tsx` | Shared gate, client fields (`part="basics" \| "notes"`), warning banner, mobile summary sheet |
+| `app/quote-calc/api/**` | Cookie-gated routes: `drafts` (GET v5 list, POST upsert), `drafts/[id]` (GET v5, DELETE archive), `drafts/[id]/{restore,notes,duplicate}`, `drafts/freeze`, `pricebook`, `pricebook/seed`, `portal/[id]/{token,revoke,stage,deposit,file}` |
 
-### Data model
+### Auth, portal, lifecycle (unchanged)
 
-All configurable values live in `QuoteState` (interface in `quote-calc-logic.ts`). Per-item fields follow the pattern `i{ItemKey}_{suffix}` where suffix is `_dt` (design time, minutes), `_pt` (production time/unit, minutes), `_sc` (sheet cost, $), `_y` (yield per sheet). Time values are stored as minutes internally, displayed as `Xh Ym` with dual number spinners.
+HMAC-signed `exp` cookie (`lib/quote-calc-auth.ts`, `QUOTE_CALC_PASSWORD` +
+`QUOTE_CALC_SESSION_SECRET`, cookie path `/`). Per-quote Drive folder auto-created on save
+(`GOOGLE_DRIVE_PARENT_FOLDER_ID`, optional `GBJ_QUOTES_OWNER_EMAIL`); proofs stream through
+token + folder-membership-checked proxies. 9-stage lifecycle (`STAGE_ORDER` in
+`quote-calc-portal.ts`, physical/digital wording from `isDigitalQuote`), deposit paid in column U,
+two-step client proof approval auto-advancing `approval → balance`. Env vars: `.env.example`.
 
-`DraftConfig` holds the full quote state per draft as a single `lines: QuoteLine[]` array (each line `kind: "package"` with a `pkg`, or `kind: "item"` with an `itemKey`; both carry `qty` and a `digital` flag; the array may be empty), plus `miscAddOns: MiscAddOn[]` for free-form selling-price items (each with its own `digital` flag), a `pricingVersion` (see Pricing versions above), the quote-level service toggles (`rushFee`, `extraRevisions`, `digitalLicense`), and the quote-wide discounts (`vendorIncentive`, `familyFriendsPtg`, `customDiscountPtg`). `DraftClientInfo` carries two notes: `notes` (private/hidden) and `clientNotes` (client-facing). `Draft.schemaVersion` is currently `4`; v1/v2/v3 drafts are auto-migrated on load into the unified `lines` model (see the drafts.ts row above). New fields need no version bump — `migrateConfig`/`migrateDraft` backfill them by spreading `DEFAULT_CONFIG` / `EMPTY_CLIENT_INFO`.
+### Tests
 
-**Persistence:** localStorage is the primary cache (instant reads). Google Sheets is the remote source of truth — drafts sync on save and reconcile on page load. The app degrades gracefully to local-only when Sheet credentials are not configured. Requires three env vars: `GOOGLE_SHEETS_SA_EMAIL`, `GOOGLE_SHEETS_SA_PRIVATE_KEY`, `GOOGLE_SHEETS_DOC_ID` (see `.env.example`). The Sheet must have a tab named `Quotes` — the app writes its header row automatically (now A1:U1 with the Phase 3 portal + Phase 4 lifecycle columns) but does not create the tab itself.
+Plain Node, no runner (`lib/quote-engine.test.ts`, `lib/quote-pricebook.test.ts`; fixtures only,
+never the real Sheet):
 
-### Auth (Phase 0)
+```bash
+npx tsc --target es2020 --module commonjs --skipLibCheck --lib es2020,dom --outDir /tmp/qe lib/quote-engine.test.ts && node /tmp/qe/quote-engine.test.js
+```
 
-The gate uses an HMAC-SHA256 signed cookie carrying an `exp` claim, verified in constant time by `isQuoteAuthValid()` in `lib/quote-calc-auth.ts`. The cookie `Path` is `/` (site-wide) so the session reaches every gated surface — `/quotes`, `/quote/new`, `/quotes/[id]`, and the `/quote-calc/api` routes. Requires `QUOTE_CALC_SESSION_SECRET` (≥32 chars). Rotating the secret invalidates every active session. The legacy forgeable `quote_auth=1` constant is gone.
-
-### Runtime config from the Sheet (Phase 1)
-
-Pricing data is loaded at runtime from two extra tabs in the same Google Sheet, so Janelle can edit numbers without touching the codebase. The engine stays in TS.
-
-- **`Settings` tab** — two columns: `key` (A), `value` (B). One row per global rate. Whitelisted keys: `hourly`, `adminPtg`, `targetProfitPtg`, `errorMarginPtg`, `packagingCost`, `reuseFactor`, `revisionMin`, `vendorIncentivePtg`, `fullColorFactor`, `customPaperFactor`, `rushFeePtg`, `digitalLicensePtg`, `depositAmount` (flat client deposit, $ — display-only, never in the price math), `discountIndividual`, `discountDiy`, `discountSweet`, `discountSignature`, `discountEventBasics`, `discountEventFun`, `discountEventWorks`. Unknown keys are ignored and surfaced in the banner. Row 1 is the header.
-- **`Items` tab** — eight columns: `key` (A), `label` (B), `designMin` (C), `prodMin` (D), `sheetCost` (E), `yield` (F), `qty` (G — per-household), `fixed` (H — flat count, blank means use `qty`). Unknown keys (typos) are ignored and listed in the banner. Row 1 is the header.
-
-Both tabs must be created and headered manually once. The app reads but never writes them. Reads are cached server-side for 60 seconds; the calculator's Retry button calls `/api/config?refresh=1` to bypass the cache.
-
-The Sheet is the source of truth — its values overlay locally-saved `assumptions` defaults on every fetch. If either tab is missing, empty, contains non-numeric values, or returns an error, the calculator falls back to bundled `DEFAULTS`/`ITEM_CATALOG` and `ConfigBanner` shows what failed (with tab + row number when known).
-
-### Quotes tab schema (Phase 2)
-
-The `Quotes` tab is now human-readable — Janelle sees client / event / package / line items / total / status, not a JSON blob. The full `Draft` payload was moved to a separate hidden `_data` tab keyed by Quote ID. Reads join the two tabs; writes update both.
-
-**`Quotes` tab columns** (header row in A1:M1, written automatically on first upsert):
-A=Quote ID · B=Status (`active` / `archived`) · C=Client · D=Event type · E=Event date · F=Quote name · G=Package (display name) · H=Quantity · I=Line items (multiline) · J=Total · K=Hidden notes · L=Created · M=Updated. The client-facing note has **no readable column** — it lives only in the `_data` Draft JSON (renders on `/q/[token]`).
-
-**`_data` tab** (hidden, two columns): A=Quote ID · B=full Draft JSON. The app creates this tab automatically on first write if it's missing.
-
-**Schema migration is automatic.** `listDrafts` detects the old schema (JSON in col M) by checking whether `A1 == "Quote ID"` and parses either format. The first `upsertDraftRow` call after deploy migrates any legacy rows over: parse each legacy JSON, write new readable rows to `Quotes`, write payloads to `_data`. Subsequent reads use the readable path. Idempotent — calling on an already-migrated sheet is a no-op.
-
-Line items in column I are produced by `lib/quote-calc-summary.ts` from the bundled `ITEM_CATALOG` labels. Catalog overrides Janelle has set in the `Items` tab aren't applied to the summary at write time (this is a deliberate scope cut — the readable label drifts at most a quote away from the real one).
-
-### Client portal + Drive proofs (Phase 3)
-
-Each quote can map to one Drive folder (proofs + the printed-quote PDF) and one public, tokenized, read-only client link.
-
-**Portal columns N–R** were appended to the `Quotes` tab: N=Drive folder · O=Public token · P=Link status (`active`/`revoked`) · Q=Expires · R=Approved at (now used by Phase 4, below — formerly reserved). These are **server-managed row metadata, kept out of the `Draft`/`_data` JSON** so a secret token never rides the client-synced draft. The draft pipeline still writes only A:M; the portal accessors in `quote-calc-sheets.ts` (`setDriveFolderId`, `activatePublicLink`, `revokePublicLink`, `findByPublicToken`, `listPortalMeta`, `getPortalMetaById`) write/read N–U via single-cell writes, with a ~30s module cache for token resolution. `ensureNewSchema` backfills the wider header on sheets migrated before Phase 3/4.
-
-**Drive (read + create).** The SA JWT gained `drive.file` (create the per-quote subfolder) and `drive.readonly` (read the proofs Janelle uploads, which she owns). On quote save, `POST /api/drafts` best-effort calls `ensureQuoteFolder` — if `GOOGLE_DRIVE_PARENT_FOLDER_ID` is set and the row has no folder yet, it creates `"<client> — <quote name>"` under that parent and registers the id in column N. Idempotent; a Drive failure never fails the save. The app **never uploads file content** (folder creation is metadata-only — Render RAM safe). Set up: share the `GBJ Quotes` root with the SA as **Editor**; optionally set `GBJ_QUOTES_OWNER_EMAIL` to grant Janelle Editor on each created subfolder.
-
-**Public route `/q/[token]`** (outside `/quote-calc`, no admin cookie, `force-dynamic`, noindex). Resolves the token → reads the `_data` Draft **server-side** → recomputes via `computeQuoteBreakdown` → projects to a `PublicQuote` (`buildPublicQuote`). The client-safe shape carries **included pieces, itemized selling-price lines (each package line + add-ons + misc), subtotal, savings, rush, total, the fixed deposit / remaining balance split, and the optional client-facing note** — never the cost buildup (design/production/admin/margin), per-item rates, the hidden note, or the `Draft` JSON. Proofs stream through `GET /q/[token]/file/[fileId]`, which re-verifies the token and confirms folder membership before streaming (the SA can read the whole tree, so membership is the cross-quote guard). Revocation/expiry is by editing column P/Q in the Sheet; propagates within the ~30s cache TTL.
-
-**Studio dashboard** (`/quotes`, server-gated; absorbs the former explorer): the list joins `listDraftRecords()` + `listPortalMeta()` and derives an overview (pipeline / open / shared ledger, nearest "up next" event) plus a searchable, filterable, date-sortable quote list. **Archived quotes are excluded from every ledger total and from "up next"** — they appear only behind the `Archived` filter chip (itself hidden until something is archived), with Restore as their sole action. **Profile Overview** (`/quotes/[id]`) shows the client-facing summary, the proofs gallery (via a cookie-gated admin file proxy so it works before any public link exists), an "Open folder" link, and link controls (generate/regenerate/revoke + copy). The app-shell nav links between the dashboard and the calculator.
-
-**Env vars:** `GOOGLE_DRIVE_PARENT_FOLDER_ID` (required for auto-folder; unset ⇒ feature off), `GBJ_QUOTES_OWNER_EMAIL` (optional). Public tokens are raw 128-bit `crypto.randomBytes` — no signing secret needed.
-
-### Lifecycle stages, client approval & itemized pricing (Phase 4)
-
-Each quote moves through a 9-stage pipeline that drives the client portal and the (derived) payment status. No money is ever entered — Janelle advances the stage from Profile Overview, and the deposit/balance "paid" flags follow.
-
-**Quotes columns R–U** (server-managed, Janelle-editable; header now A1:U1): R=Approved at (ISO) · **S=Stage** · **T=Approved by** (client's typed name) · **U=Deposit paid** ($). Written via the same `writePortalCells` single-cell helper and ~30s cache as the Phase 3 portal columns.
-
-**Stage model** (single source of truth: `STAGE_ORDER` / `STAGE_COPY` in `lib/quote-calc-portal.ts`): `inquiry → quote → deposit → proofing → approval → balance → production → delivery → completed`. `production` and `delivery` resolve to **physical** vs **digital** wording (In production/Shipping vs Finalizing files/Delivered); every other stage is shared. **Project type is auto-derived** — `isDigitalQuote(config)` returns digital only when *every* package line is digital (any physical piece ⇒ physical flow). Blank/unknown stage cells normalize to `inquiry`.
-
-**Payments (amount-based)** — there are no online payments. The **expected deposit is a fixed $ amount** (`assumptions.depositAmount`, from the `Settings` tab, per-quote-overridable in the calculator, capped at the total, never in the price math). Janelle records the **actual deposit paid** on Profile Overview (`DepositPaidControl` → `POST …/portal/[id]/deposit` → `setDepositPaid`, column U). The client portal shows **Deposit paid** + **Balance remaining = total − depositPaid**; before any payment it shows the expected "Deposit to begin". (`isDepositPaid`/`isBalancePaid` stage helpers still exist but no longer drive the display.)
-
-**Hidden notes** are editable from Profile Overview (`HiddenNotesControl` → `POST …/drafts/[id]/notes` → `updateHiddenNotes`, which writes readable column K + the `_data` Draft JSON, touching no other field). They remain private — never projected to `/q`.
-
-**Client approval** (`approval` stage only). The public page renders `ApproveProofs` (checkbox → typed name → confirm — two steps so it can't fire by accident). `POST /q/[token]/approve` is **token-gated** exactly like the file proxy (`findByPublicToken` + `isLinkActive`), then `recordApproval(id, name, "approval")` writes R/S/T and **auto-advances the stage** to `balance` (`nextStage`). Idempotent: a second submit is a no-op success; rejected at any non-`approval` stage. The name is stored as-is (no content validation, length-capped).
-
-**Admin** sets the stage via the cookie-gated `POST /quote-calc/api/portal/[id]/stage` (`StageControl`), validated against `STAGE_ORDER`. Profile Overview also shows the deposit-paid control, hidden-notes editor, approval banner, and the itemized client-facing summary (mirrors `/q`). The client portal renders a **horizontal, side-scrollable step tracker** (`buildPublicProgress`, auto-centers the current stage) plus the itemized investment + deposit/balance.
+(Same for `quote-pricebook.test.ts`.) Plus `npx tsc --noEmit` and `npm run lint`.
 
 ---
 
@@ -457,7 +405,7 @@ Three redesign mock-ups of all six public pages, built to compare directions sid
 
 ## Current Status
 
-All public routes render with brand styling and full SEO metadata. Quote calculator fully functional with cost-plus pricing model.
+All public routes render with brand styling and full SEO metadata. The quote builder prices from the Sheet price book (engine v2, data model v5); see the Quote Builder section.
 
 **Complete:**
 - 7 public routes: Home, About, Weddings, Events & Corporate, Gallery, Reviews, Quote Calculator (nav order: Home → About → Weddings → Events → Gallery → Reviews; `app/sitemap.ts` mirrors it). `/investment` is a back-compat redirect to `/weddings#wedding-investment` that nothing on the site links to any more — investment pricing lives inside the Weddings and Events pages
@@ -466,7 +414,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - `app/opengraph-image.tsx` — JSX-based 1200×630 OG image
 - `app/icon.tsx` — JSX-based 32×32 monogram favicon
 - `app/sitemap.ts` and `app/robots.ts`
-- Quote calculator with cost-plus pricing, 7 packages (4 wedding + 3 events), 17-item catalog, 8 add-ons
+- Quote builder redesign (docs/quote-builder-redesign.md, P0–P5): price book in the Sheet (`Products`/`Options`/`Packages`/`Settings`) with a read-only Price book page and one-time seed; engine v2 with resolved-price quote lines (schema v5), true suite savings and one discount with a reason, "Set total", a $/hr health check; new builder at `/quote/new`; client page, Profile Overview, print and dashboard on one projector; pre-v5 quotes converted with totals preserved and a one-time freeze endpoint. The items below marked "Phase N" describe the system it replaced
 - Google Sheets persistence for drafts (service-account JWT, cache-first sync, graceful offline fallback)
 - Phase 0: HMAC-signed expiring session cookie for `/quote-calc` (forged-cookie regression test in roadmap)
 - Phase 1: pricing data externalized to `Settings` + `Items` sheet tabs with 60s cache, validated merge, and an in-app fallback banner naming bad rows
@@ -476,9 +424,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - Phase 5: pricing-engine redesign for consistency — unified `lines` data model (schema v4: packages + items in one array; add-ons and the `individual` pseudo-package retired), revision/packaging/digital-license moved from per-line to **once-per-quote project services**, packaging charged once per order, and the same catalog item now prices identically wherever it's added. Engine split into pure cost functions (`calcPackageCost`/`calcItemCost`/`calcQuoteServices`) with all money math centralized in `computeQuoteBreakdown`. Invariants locked by `lib/quote-calc-totals.test.ts`
 - Phase 6: discount-logic redesign for consistency & margin safety — **all discounts are additive** (bundle + vendor + family & friends + custom sum into one per-line %, no compounding) and bite the **raw labor cost only** (`laborBase` = design + production at cost, not marked up), so materials, admin overhead, target profit, and project services are never discounted — a discount only lowers your effective hourly rate; the orphaned `discountIndividual` setting removed; resulting net margin surfaced (no hard floor). One discount rule across calculator, print, and portal
 - Dashboard quote deletion — per-row Delete guarded by a confirm dialog (`components/ui/dialog.tsx`) that can also revoke the client link; deletion is a soft archive (Status column), so archived quotes leave the list and every ledger total but stay restorable from the `Archived` filter via `POST /quote-calc/api/drafts/[id]/restore`. The local `localStorage` copy is dropped too, so the calculator can't resurrect a deleted quote
-- Misc add-on section for one-off client requests (selling price, no markup applied)
 - Custom-only quotes: lines can all be removed (new quotes start blank), unnamed add-ons count as "Custom item", add-ons carry a Physical/Digital flag, and rush covers add-ons — the latter two money rules gated behind `pricingVersion` 2 so saved quotes keep their totals
-- Wedding/Events package toggle with event-specific discount controls
 - Investment content split by audience and shaped identically on both pages: a single **"Individual Items and Enhancements"** ticker (the `add-ons` tier — standalone pieces and suite enhancements merged into one de-duplicated 20-item list) sits at the **top** of the Investment section, above the suites/collections grid. Both grids use the same `sm:grid-cols-2 lg:grid-cols-3 gap-6` shape and the same ✦ savings badges. Anchors: `#individual-items`, `#wedding-suites` / `#event-suites`. The standalone Individual Item card and the `individual` tier are retired
 - Savings are expressed **only** as ✦ / ✦✦ / ✦✦✦ (`savingsLabel`) while pricing is still being set — there is no percentage anywhere on the marketing site, and `InvestmentTier` carries no `discount` field. Both pages' body copy explains what the ✦ means
 - Home story scroll (4 scenes): hero (two pricing buttons straight to `/weddings#wedding-investment` and `/events#event-investment`) → **Meet the Founder** (portrait + Janelle's own opening line from `siteConfig.about`, buttons to `/about` + `/gallery`) → featured review → inquiry CTA + Etsy
@@ -488,6 +434,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers
 
 **Still remaining:**
+- Review the 8 quotes the freeze listed under `dashboardCorrections` (their old dashboard figure differed from the client link)
 - Docker prod build verification (`docker build --target runner`)
 - Lighthouse audit (target 90+ on all categories)
 
