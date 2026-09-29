@@ -1,0 +1,167 @@
+/* Live site — "Linen, Re-inked" (promoted from concept V1): same two voices
+   (Square Peg + Anybody), Sage Garden palette with a chestnut wax-seal accent.
+   The palette tokens live on :root in app/globals.css. */
+.site-root {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  overflow-x: clip;
+}
+
+.site-root ::selection { background: hsl(var(--accent) / 0.25); }
+
+.site-paper {
+  background-color: hsl(var(--card));
+  background-image:
+    radial-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 5px 5px;
+}
+
+/* Stitched edge, like a sewn envelope */
+.site-stitch { position: relative; }
+.site-stitch::after {
+  content: ""; position: absolute; inset: 8px; pointer-events: none;
+  border: 1.5px dashed hsl(var(--sage) / 0.7); border-radius: 2px;
+}
+
+/* Wax seal. z-index keeps it above the .site-stitch dashed line (an
+   unstacked ::after that would otherwise paint over it). */
+.site-seal {
+  display: grid; place-items: center; border-radius: 9999px; z-index: 1;
+  background: radial-gradient(circle at 35% 30%, hsl(var(--accent-light)), hsl(var(--accent)) 55%, hsl(var(--accent-deep)));
+  color: hsl(var(--accent-foreground));
+  box-shadow: inset 0 0 0 3px hsl(var(--accent-deep) / 0.45), inset 0 0 0 6px hsl(var(--accent-light) / 0.35), 0 6px 14px -6px hsl(var(--accent-deep) / 0.7);
+}
+
+/* Janelle's monogram pressed into a seal: the logo SVG as a mask, filled with
+   the seal's text color (swap `color` on the seal for a black mark). */
+.site-logo-mark {
+  display: block; width: 80%; aspect-ratio: 1; background-color: currentColor;
+  -webkit-mask: url("/logo.svg") center / contain no-repeat;
+  mask: url("/logo.svg") center / contain no-repeat;
+}
+
+/* ── Envelope hero ───────────────────────────────────────── */
+.site-stage { position: relative; width: min(88vw, 440px); aspect-ratio: 2 / 3; margin-inline: auto; }
+.site-env { position: absolute; left: 0; right: 0; bottom: 0; aspect-ratio: 10 / 7; perspective: 1400px; cursor: pointer; }
+.site-env-back { position: absolute; inset: 0; border-radius: 4px; background: hsl(36 28% 84%); box-shadow: 0 30px 60px -30px hsl(90 30% 15% / 0.45); }
+.site-env-clip { position: absolute; left: 0; right: 0; bottom: 0; height: 220%; overflow: hidden; z-index: 10; }
+.site-env-card {
+  position: absolute; left: 8%; width: 84%; top: 58%; aspect-ratio: 1964 / 2750;
+  border-radius: 3px; overflow: hidden;
+  box-shadow: 0 12px 30px -12px hsl(90 30% 15% / 0.45);
+  animation: site-card-rise 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) 1.55s both;
+}
+.site-env-front {
+  position: absolute; inset: 0; z-index: 20; border-radius: 4px;
+  background: linear-gradient(170deg, hsl(38 36% 90%), hsl(36 30% 86%));
+  clip-path: polygon(0 0, 50% 52%, 100% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 -2px 3px hsl(90 30% 15% / 0.12));
+}
+.site-env-front::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to top right, transparent 49.6%, hsl(36 20% 70% / 0.55) 50%, transparent 50.4%),
+              linear-gradient(to top left, transparent 49.6%, hsl(36 20% 70% / 0.55) 50%, transparent 50.4%);
+}
+.site-env-flap {
+  position: absolute; left: 0; right: 0; top: 0; height: 58%; z-index: 30;
+  transform-origin: top center;
+  background: linear-gradient(180deg, hsl(36 30% 82%), hsl(38 34% 88%));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  animation: site-flap-open 0.9s cubic-bezier(0.6, 0, 0.3, 1) 0.75s both;
+}
+.site-env-seal {
+  position: absolute; left: 50%; top: 58%; z-index: 40; width: 22%; aspect-ratio: 1;
+  transform: translate(-50%, -62%);
+  animation: site-seal-break 0.6s ease-in 0.25s both;
+}
+@keyframes site-flap-open {
+  0%   { transform: rotateX(0deg); z-index: 30; }
+  49%  { z-index: 30; }
+  50%  { z-index: 5; }
+  100% { transform: rotateX(180deg); z-index: 5; }
+}
+@keyframes site-seal-break {
+  0%   { opacity: 1; transform: translate(-50%, -62%) scale(1) rotate(0); }
+  40%  { transform: translate(-50%, -62%) scale(1.08) rotate(-6deg); }
+  100% { opacity: 0; transform: translate(-50%, -30%) scale(0.6) rotate(18deg); }
+}
+@keyframes site-card-rise { to { transform: translateY(-70%); } }
+.site-env:hover .site-env-card { filter: brightness(1.02); }
+
+/* Suite fan. Every piece keeps its real proportions (long edge = --L), so
+   landscape pieces lie wide instead of being cropped. Position, tilt and zoom
+   come in as --x/--y/--r/--s from SuiteShowcase; the active piece zooms to
+   --zoom and its neighbours slide aside. */
+.site-fan-wrap { container-type: inline-size; }
+.site-fan {
+  --L: 190px; --zoom: 1.7;
+  --spread: min(64px, calc((100cqw - var(--L)) / 6));
+  position: relative; height: calc(var(--L) * var(--zoom) + 48px);
+}
+@media (min-width: 1024px) {
+  .site-fan { --L: 210px; --spread: min(80px, calc((100cqw - var(--L)) / 6)); }
+}
+.site-fan-card {
+  position: absolute; left: 50%; bottom: 20px;
+  width: calc(var(--L) * var(--wr)); height: calc(var(--L) * var(--hr));
+  overflow: hidden; border-radius: 3px; background: hsl(var(--card)); pointer-events: none;
+  box-shadow: 0 18px 40px -20px hsl(var(--foreground) / 0.5);
+  transform-origin: 50% 100%;
+  transform: translateX(-50%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) var(--delay, 0ms), box-shadow 0.4s, filter 0.4s;
+}
+[data-inview] .site-fan-card {
+  transform: translateX(calc(-50% + var(--x))) translateY(var(--y)) rotate(var(--r)) scale(var(--s));
+}
+.site-fan[data-has-active] .site-fan-card { transition-duration: 0.55s; }
+.site-fan[data-has-active] .site-fan-card:not([data-active]) { filter: saturate(0.8) brightness(0.95); }
+.site-fan-card[data-active] { box-shadow: 0 34px 60px -28px hsl(var(--foreground) / 0.6); }
+.site-fan-hits { position: absolute; inset: 0; z-index: 60; display: grid; }
+.site-fan-hit { cursor: zoom-in; outline: none; }
+.site-fan:has(.site-fan-hit:focus-visible) .site-fan-card[data-active] { outline: 2px solid hsl(var(--ring)); outline-offset: 4px; }
+
+/* Phone strip: same real proportions, fixed long edge */
+.site-strip-card {
+  position: relative; display: block; overflow: hidden; border-radius: 3px; background: hsl(var(--card));
+  width: calc(220px * var(--wr)); height: calc(220px * var(--hr));
+  box-shadow: 0 14px 30px -18px hsl(var(--foreground) / 0.5);
+}
+
+/* Process thread */
+.site-thread { transform-origin: left; transform: scaleX(0); transition: transform 1.6s cubic-bezier(0.6, 0, 0.2, 1) 0.2s; }
+[data-inview] > .site-thread, [data-inview] .site-thread { transform: scaleX(1); }
+
+/* Envelope collection card */
+.site-tier { transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s; }
+.site-tier:hover { transform: translateY(-6px); box-shadow: 0 24px 50px -24px hsl(var(--accent) / 0.55); }
+.site-tier-flap {
+  height: 64px; background: hsl(var(--muted));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: top; transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.site-tier:hover .site-tier-flap { transform: rotateX(55deg); }
+
+/* Sticky mobile CTA */
+.site-sticky { animation: site-slide-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.5s both; }
+@keyframes site-slide-up { from { transform: translateY(110%); } to { transform: none; } }
+
+/* Nav underline */
+.site-navlink { position: relative; }
+.site-navlink::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -6px; height: 2px; border-radius: 2px;
+  background: hsl(var(--accent)); transform: scaleX(0); transform-origin: left; transition: transform 0.35s ease;
+}
+.site-navlink:hover::after, .site-navlink[aria-current="page"]::after { transform: scaleX(1); }
+
+/* Gallery */
+.site-masonry { columns: 2; column-gap: 1rem; }
+@media (min-width: 768px) { .site-masonry { columns: 3; column-gap: 1.25rem; } }
+@media (min-width: 1280px) { .site-masonry { columns: 4; } }
+.site-masonry > * { break-inside: avoid; margin-bottom: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-env-flap { transform: rotateX(180deg); z-index: 5; animation: none; }
+  .site-env-seal { display: none; }
+  .site-env-card { transform: translateY(-70%); animation: none; }
+  .site-thread { transform: none; }
+}

@@ -13,26 +13,21 @@ import { useLocale } from "@/lib/locale-context";
 import type { TranslationKey } from "@/lib/i18n";
 import { cn } from "@/utils";
 
-// Gated quote tools (/quotes, /quote/new, /quote-calc/*) and the client portal
-// (/q/*) render their own chrome (AppShell / standalone presentation), so the
-// public marketing header is suppressed there. The hidden design concepts
-// (/v1, /v2, /v3) carry their own header too.
-const HIDE_CHROME = /^\/(quotes|quote|quote-calc|q|v1|v2|v3)(\/|$)/;
-
-export function SiteHeader() {
+// Header of the "Classic" (previous live) site, now archived at /v1. `basePath`
+// prefixes every nav link so browsing stays inside the archive.
+export function SiteHeader({ basePath = "" }: { basePath?: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const { t } = useLocale();
 
-  if (pathname && HIDE_CHROME.test(pathname)) return null;
-
+  const hrefFor = (href: string) => (href === "/" ? basePath || "/" : `${basePath}${href}`);
   const navLabel = (item: { title: string; i18nKey?: string }) =>
     item.i18nKey ? t(item.i18nKey as TranslationKey) : item.title;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between px-4 md:px-8">
-        <Link href="/" aria-label="Go to homepage" className="flex items-center space-x-2">
+        <Link href={hrefFor("/")} aria-label="Go to homepage" className="flex items-center space-x-2">
           <Image
             src="/logo.svg"
             alt={siteConfig.name}
@@ -48,10 +43,10 @@ export function SiteHeader() {
             {siteConfig.mainNav.map((item) => (
               <Link
                 key={item.href}
-                href={item.href}
+                href={hrefFor(item.href)}
                 className={cn(
                   "transition-colors",
-                  pathname === item.href
+                  pathname === hrefFor(item.href)
                     ? "text-foreground underline decoration-accent decoration-2 underline-offset-4"
                     : "text-foreground hover:text-foreground/70"
                 )}
@@ -76,11 +71,11 @@ export function SiteHeader() {
               {siteConfig.mainNav.map((item) => (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={hrefFor(item.href)}
                   onClick={() => setOpen(false)}
                   className={cn(
                     "text-lg font-medium transition-colors",
-                    pathname === item.href
+                    pathname === hrefFor(item.href)
                       ? "text-foreground underline decoration-accent decoration-2 underline-offset-4"
                       : "hover:text-foreground/70"
                   )}

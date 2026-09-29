@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Anybody, Square_Peg } from "next/font/google";
 import "./globals.css";
-import { SiteHeader } from "../components/site-header";
-import { SiteFooter } from "../components/site-footer";
 import { LocaleProvider } from "@/lib/locale-context";
 import { siteConfig } from "@/config/site";
 
@@ -51,9 +49,7 @@ export default function RootLayout({
           >
             Skip to content
           </a>
-          <SiteHeader />
           <main id="main-content" className="flex-1">{children}</main>
-          <SiteFooter />
         </LocaleProvider>
       </body>
     </html>

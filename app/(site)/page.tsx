@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { HomeContent } from "./_home-content";
+import { SiteHome } from "./_components/home";
 
 export const metadata: Metadata = {
   title: { absolute: siteConfig.name },
@@ -25,5 +25,5 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <HomeContent />;
+  return <SiteHome />;
 }

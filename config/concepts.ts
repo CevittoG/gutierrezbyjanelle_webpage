@@ -1,17 +1,18 @@
 import type { Bilingual } from "@/lib/i18n";
 
 /**
- * Copy used only by the hidden design concepts (/v1, /v2, /v3).
+ * Copy for the live site ("Linen, Re-inked", promoted from concept V1) and the
+ * hidden concepts /v2, /v3. (/v1 is now the archived previous live site.)
  * Everything else those pages show comes from `siteConfig` — this file only
  * holds the few extra lines the new layouts need (process steps, suite piece
- * labels, small UI labels). Throwaway along with the concepts.
+ * labels, small UI labels).
  */
 const b = (en: string, es: string): Bilingual => ({ en, es });
 
 export type ConceptVersion = 1 | 2 | 3;
 
 export const conceptVersions: { version: ConceptVersion; name: string }[] = [
-  { version: 1, name: "Linen, Re-inked" },
+  { version: 1, name: "Classic (previous live)" },
   { version: 2, name: "Editorial Atelier" },
   { version: 3, name: "Stationery Table" },
 ];
@@ -77,6 +78,9 @@ export const conceptCopy = {
     "Every piece is designed together, so your day reads as one story, from the save the date to the last place card.",
     "Cada pieza se diseña en conjunto, para que tu día cuente una sola historia, desde el save the date hasta la última tarjeta de lugar."
   ),
+  suiteHint: b("Hover a piece for a closer look, click to see it full size.", "Pasa el cursor sobre una pieza para verla de cerca; haz clic para verla completa."),
+  suiteHintTouch: b("Tap a piece to see it full size.", "Toca una pieza para verla completa."),
+  viewFullDesign: b("View full design", "Ver diseño completo"),
   processEyebrow: b("How it works", "Cómo funciona"),
   processHeading: b("From a blank page to your hands", "De una página en blanco a tus manos"),
   occasionsEyebrow: b("Two celebrations, one craft", "Dos celebraciones, un mismo oficio"),

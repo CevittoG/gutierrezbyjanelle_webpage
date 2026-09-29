@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { AboutContent } from "./_content";
+import { SiteOccasion } from "../_components/occasion";
 
-const pageDescription = `Meet Janelle Gutiérrez, the designer and founder behind ${siteConfig.name}.`;
-const pageTitle = `About | ${siteConfig.name}`;
-const pageUrl = `${siteConfig.url}/about`;
+const pageDescription = `Custom stationery and signage for dinner parties, graduations, showers, birthdays, quinceañeras, and corporate events by ${siteConfig.name}.`;
+const pageTitle = `Events & Corporate | ${siteConfig.name}`;
+const pageUrl = `${siteConfig.url}/events`;
 
 export const metadata: Metadata = {
-  title: "About",
+  title: "Events & Corporate",
   description: pageDescription,
   alternates: { canonical: pageUrl },
   openGraph: {
@@ -28,6 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AboutPage() {
-  return <AboutContent />;
+export default function EventsPage() {
+  return <SiteOccasion kind="events" />;
 }

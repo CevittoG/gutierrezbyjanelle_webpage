@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { WeddingsContent } from "./_content";
+import { SiteOccasion } from "../_components/occasion";
 
 const pageDescription = `A personal note from Janelle to brides and grooms, your wedding stationery and signage designer.`;
 const pageTitle = `Weddings | ${siteConfig.name}`;
@@ -29,5 +29,5 @@ export const metadata: Metadata = {
 };
 
 export default function WeddingsPage() {
-  return <WeddingsContent />;
+  return <SiteOccasion kind="weddings" />;
 }

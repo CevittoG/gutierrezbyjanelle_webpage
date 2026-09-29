@@ -9,9 +9,9 @@ import { conceptCopy } from "@/config/concepts";
 import { siteConfig } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
 import { cn } from "@/utils";
-import { CtaBlock, PageHeader, V1Button } from "./ui";
+import { CtaBlock, PageHeader, SiteButton } from "./ui";
 
-export function V1Gallery() {
+export function SiteGallery() {
   const p = usePick();
   const { t } = useLocale();
   const g = useGallery();
@@ -47,13 +47,13 @@ export function V1Gallery() {
             </p>
           )}
           {g.items.length === 0 ? (
-            <div className="v1-paper v1-stitch relative mx-auto max-w-xl rounded-[4px] border border-border px-8 py-16 text-center">
+            <div className="site-paper site-stitch relative mx-auto max-w-xl rounded-[4px] border border-border px-8 py-16 text-center">
               <h2 className="font-squarepeg text-5xl">{t("gallery.empty.heading")}</h2>
               <p className="font-anybody-prose mt-4 text-muted-foreground">{t("gallery.empty.body")}</p>
-              <V1Button href={mailtoHref(p(conceptCopy.mailSubject))} variant="seal" className="mt-8">{t("cta.emailJanelle")}</V1Button>
+              <SiteButton href={mailtoHref(p(conceptCopy.mailSubject))} variant="seal" className="mt-8">{t("cta.emailJanelle")}</SiteButton>
             </div>
           ) : (
-            <div key={g.filter} className="v1-masonry">
+            <div key={g.filter} className="site-masonry">
               {g.items.map((item, i) => (
                 <Reveal key={item.id} delay={(i % 4) * 90}>
                   <button type="button" onClick={() => g.setOpen(i)} className="group relative block w-full overflow-hidden rounded-[3px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

@@ -2,33 +2,34 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { ArrowRight, RotateCcw } from "lucide-react";
 import { Reveal } from "@/components/concepts/reveal";
 import { Marquee } from "@/components/concepts/marquee";
 import { usePick } from "@/components/concepts/use-concept";
-import { conceptCopy, processSteps, suitePieces } from "@/config/concepts";
+import { conceptCopy, processSteps } from "@/config/concepts";
 import { siteConfig } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
-import { CtaBlock, Eyebrow, V1Button } from "./ui";
+import { CtaBlock, Eyebrow, LogoMark, SiteButton } from "./ui";
+import { SuiteShowcase } from "./suite-showcase";
 
 function Envelope() {
   const [run, setRun] = useState(0);
   const { locale } = useLocale();
   return (
     <div className="relative">
-      <div className="v1-stage" key={run}>
+      <div className="site-stage" key={run}>
         <div
-          className="v1-env"
+          className="site-env"
           role="button"
           tabIndex={0}
           aria-label={locale === "es" ? "Abrir el sobre otra vez" : "Open the envelope again"}
           onClick={() => setRun((r) => r + 1)}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setRun((r) => r + 1)}
         >
-          <div className="v1-env-back" />
-          <div className="v1-env-clip">
-            <div className="v1-env-card">
+          <div className="site-env-back" />
+          <div className="site-env-clip">
+            <div className="site-env-card">
               <Image
                 src="/invitation/invite-3.jpg"
                 alt="Invitation designed by Janelle"
@@ -39,9 +40,11 @@ function Envelope() {
               />
             </div>
           </div>
-          <div className="v1-env-front" />
-          <div className="v1-env-flap" />
-          <div className="v1-env-seal v1-seal font-squarepeg text-4xl md:text-5xl">J</div>
+          <div className="site-env-front" />
+          <div className="site-env-flap" />
+          <div className="site-env-seal site-seal">
+            <LogoMark />
+          </div>
         </div>
       </div>
       <button
@@ -56,7 +59,7 @@ function Envelope() {
   );
 }
 
-export function V1Home() {
+export function SiteHome() {
   const p = usePick();
   const { t } = useLocale();
   const [featured, ...moreReviews] = siteConfig.reviews;
@@ -78,12 +81,12 @@ export function V1Home() {
               {p(siteConfig.hero.subheadline)}
             </Reveal>
             <Reveal delay={440} className="flex flex-wrap gap-3">
-              <V1Button href="/v1/weddings#collections">
+              <SiteButton href="/weddings#collections">
                 {t("cta.weddingInvestment")} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-              </V1Button>
-              <V1Button href="/v1/events#collections" variant="outline">
+              </SiteButton>
+              <SiteButton href="/events#collections" variant="outline">
                 {t("cta.eventInvestment")}
-              </V1Button>
+              </SiteButton>
             </Reveal>
             <Reveal delay={560} className="flex max-w-md items-start gap-3 border-l-2 border-accent/60 pl-4">
               <p className="font-anybody-prose line-clamp-2 text-sm italic text-muted-foreground" lang={featured.originalLang}>
@@ -100,40 +103,7 @@ export function V1Home() {
         <Marquee items={addOns.features.map(p)} itemClassName="text-xs tracking-[0.2em]" duration={55} />
       </div>
 
-      {/* ── What's in a suite ─────────────────────────────── */}
-      <section className="px-4 py-24 md:px-8 md:py-32">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[0.8fr_1.2fr]">
-          <Reveal className="flex flex-col gap-5">
-            <Eyebrow>{p(conceptCopy.suiteEyebrow)}</Eyebrow>
-            <h2 className="font-squarepeg text-6xl leading-[0.95] md:text-7xl">{p(conceptCopy.suiteHeading)}</h2>
-            <p className="font-anybody-prose max-w-md text-lg leading-relaxed text-muted-foreground">{p(conceptCopy.suiteBody)}</p>
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {suitePieces.map((s) => (
-                <li key={s.id} className="rounded-full border border-border bg-card px-3 py-1.5 text-[10px] tracking-[0.16em]">{p(s.label)}</li>
-              ))}
-            </ul>
-            <Link href="/v1/weddings#collections" className="group mt-2 inline-flex w-fit items-center gap-2 text-xs tracking-[0.16em] text-accent">
-              {p(conceptCopy.seeCollections)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-            </Link>
-          </Reveal>
-          <Reveal variant="fade" className="v1-fan">
-            {suitePieces.map((s, i) => {
-              const k = i - (suitePieces.length - 1) / 2;
-              return (
-                <figure
-                  key={s.id}
-                  className="v1-fan-card overflow-hidden rounded-[3px] bg-card shadow-[0_18px_40px_-20px_hsl(90_30%_15%/0.5)]"
-                  style={{ "--i": i, "--k": k, "--r": `${k * 6}deg`, zIndex: 10 - Math.abs(Math.round(k)) } as CSSProperties}
-                >
-                  <div className="relative aspect-[5/7]">
-                    <Image src={s.src} alt={p(s.label)} fill sizes="150px" className="object-cover" />
-                  </div>
-                </figure>
-              );
-            })}
-          </Reveal>
-        </div>
-      </section>
+      <SuiteShowcase />
 
       {/* ── How it works ──────────────────────────────────── */}
       <section className="bg-muted/70 px-4 py-24 md:px-8">
@@ -143,11 +113,11 @@ export function V1Home() {
             <h2 className="font-squarepeg text-6xl leading-none md:text-7xl">{p(conceptCopy.processHeading)}</h2>
           </Reveal>
           <Reveal variant="fade" className="relative">
-            <div aria-hidden="true" className="v1-thread absolute left-[12%] right-[12%] top-8 hidden border-t-2 border-dashed border-accent/50 md:block" />
+            <div aria-hidden="true" className="site-thread absolute left-[12%] right-[12%] top-8 hidden border-t-2 border-dashed border-accent/50 md:block" />
             <ol className="grid gap-10 md:grid-cols-4">
               {processSteps.map((step, i) => (
                 <Reveal as="li" key={i} delay={200 + i * 180} className="relative flex flex-col items-center text-center">
-                  <span className="v1-seal relative z-10 h-16 w-16 font-squarepeg text-3xl">{i + 1}</span>
+                  <span className="site-seal relative z-10 h-16 w-16 font-squarepeg text-3xl">{i + 1}</span>
                   <h3 className="mt-6 text-sm tracking-[0.16em]">{p(step.title)}</h3>
                   <p className="font-anybody-prose mt-3 max-w-[30ch] text-muted-foreground">{p(step.body)}</p>
                 </Reveal>
@@ -163,8 +133,8 @@ export function V1Home() {
           <Reveal className="mb-12 flex justify-center"><Eyebrow>{p(conceptCopy.occasionsEyebrow)}</Eyebrow></Reveal>
           <div className="grid gap-6 md:grid-cols-2">
             {[
-              { href: "/v1/weddings", title: t("nav.weddings"), body: p(conceptCopy.weddingsCard), img: "/gallery/welcome-sign.jpeg", alt: "Wedding welcome sign" },
-              { href: "/v1/events", title: t("nav.events"), body: p(conceptCopy.eventsCard), img: "/gallery/birthday-invitation.jpeg", alt: "Birthday invitation" },
+              { href: "/weddings", title: t("nav.weddings"), body: p(conceptCopy.weddingsCard), img: "/gallery/welcome-sign.jpeg", alt: "Wedding welcome sign" },
+              { href: "/events", title: t("nav.events"), body: p(conceptCopy.eventsCard), img: "/gallery/birthday-invitation.jpeg", alt: "Birthday invitation" },
             ].map((o, i) => (
               <Reveal key={o.href} delay={i * 150}>
                 <Link href={o.href} className="group relative block aspect-[4/5] overflow-hidden rounded-[4px] md:aspect-[5/6]">
@@ -194,7 +164,7 @@ export function V1Home() {
           </blockquote>
           <p className="mt-8 font-squarepeg text-4xl">{featured.author}</p>
           <p className="text-[10px] tracking-[0.2em] text-muted-foreground">{p(featured.role)}</p>
-          <Link href="/v1/reviews" className="group mt-8 inline-flex items-center gap-2 text-xs tracking-[0.16em] text-accent">
+          <Link href="/reviews" className="group mt-8 inline-flex items-center gap-2 text-xs tracking-[0.16em] text-accent">
             {t("cta.readAllReviews")} ({moreReviews.length + 1})
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
           </Link>
@@ -209,12 +179,12 @@ export function V1Home() {
               <Eyebrow>{t("home.gallery.eyebrow")}</Eyebrow>
               <h2 className="mt-3 font-squarepeg text-6xl leading-none">{t("home.gallery.heading")}</h2>
             </div>
-            <V1Button href="/v1/gallery" variant="outline">{t("cta.viewFullGallery")}</V1Button>
+            <SiteButton href="/gallery" variant="outline">{t("cta.viewFullGallery")}</SiteButton>
           </Reveal>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {peek.map((g, i) => (
               <Reveal key={g.id} delay={i * 120} variant="mask" className={i % 2 ? "md:mt-12" : ""}>
-                <Link href="/v1/gallery" className="group block overflow-hidden rounded-[3px]">
+                <Link href="/gallery" className="group block overflow-hidden rounded-[3px]">
                   <div className="relative aspect-[3/4]">
                     <Image src={g.src} alt={g.alt} fill sizes="(min-width: 768px) 25vw, 50vw" className="object-cover transition-transform duration-1000 group-hover:scale-105" />
                   </div>

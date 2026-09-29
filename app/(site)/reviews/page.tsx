@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { EventsContent } from "./_content";
+import { SiteReviews } from "../_components/reviews";
 
-const pageDescription = `Custom stationery and signage for dinner parties, graduations, showers, birthdays, quinceañeras, and corporate events by ${siteConfig.name}.`;
-const pageTitle = `Events & Corporate | ${siteConfig.name}`;
-const pageUrl = `${siteConfig.url}/events`;
+const pageDescription = `Read what clients say about ${siteConfig.name}. Real experiences from real clients.`;
+const pageTitle = `Client Reviews | ${siteConfig.name}`;
+const pageUrl = `${siteConfig.url}/reviews`;
 
 export const metadata: Metadata = {
-  title: "Events & Corporate",
+  title: "Reviews",
   description: pageDescription,
   alternates: { canonical: pageUrl },
   openGraph: {
@@ -28,6 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function EventsPage() {
-  return <EventsContent />;
+export default function ReviewsPage() {
+  return <SiteReviews />;
 }

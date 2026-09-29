@@ -98,7 +98,7 @@ export function GalleryContent() {
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
             <Button asChild size="lg" variant="outline">
-              <Link href="/investment">
+              <Link href="/v1/weddings#wedding-investment">
                 {t("cta.seeInvestment")}
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>

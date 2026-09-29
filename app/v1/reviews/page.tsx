@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { V1Reviews } from "../_components/reviews";
+import { ReviewsContent } from "./_content";
 
 export const metadata: Metadata = { title: "Reviews" };
 
 export default function Page() {
-  return <V1Reviews />;
+  return <ReviewsContent />;
 }

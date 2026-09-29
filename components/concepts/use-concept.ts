@@ -25,13 +25,16 @@ export function mailtoHref(subject: string, body?: string): string {
   return `mailto:${siteConfig.contactEmail}?${params.join("&")}`;
 }
 
-/** Nav items for a concept, with active state resolved against the current path. */
-export function useConceptNav(version: ConceptVersion) {
+/**
+ * Nav items for a concept (or the live site when `version` is omitted), with
+ * active state resolved against the current path.
+ */
+export function useConceptNav(version?: ConceptVersion) {
   const pathname = usePathname();
   const current = stripConcept(pathname);
   const { t } = useLocale();
   return siteConfig.mainNav.map((item) => ({
-    href: conceptHref(version, item.href),
+    href: version ? conceptHref(version, item.href) : item.href,
     label: item.i18nKey ? t(item.i18nKey as TranslationKey) : item.title,
     active: current === item.href,
   }));

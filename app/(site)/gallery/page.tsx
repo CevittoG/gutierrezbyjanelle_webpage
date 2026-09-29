@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { GalleryContent } from "./_content";
+import { SiteGallery } from "../_components/gallery";
 
 const pageDescription =
   "Recent invitations, signage, and event pieces by Janelle. A look at the work, hand to hand.";
@@ -30,5 +30,5 @@ export const metadata: Metadata = {
 };
 
 export default function GalleryPage() {
-  return <GalleryContent />;
+  return <SiteGallery />;
 }

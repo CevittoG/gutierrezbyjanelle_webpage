@@ -62,8 +62,8 @@ export function HomeContent() {
           title={pick(siteConfig.hero.headline, locale)}
           description={pick(siteConfig.hero.subheadline, locale)}
           actions={[
-            { label: t("cta.weddingInvestment"), href: "/weddings#wedding-investment" },
-            { label: t("cta.eventInvestment"), href: "/events#event-investment" },
+            { label: t("cta.weddingInvestment"), href: "/v1/weddings#wedding-investment" },
+            { label: t("cta.eventInvestment"), href: "/v1/events#event-investment" },
           ]}
           imageUrl1="/invitation/invite-4.png"
           imageUrl2="/invitation/invite-3.jpg"
@@ -91,13 +91,13 @@ export function HomeContent() {
 
             <div className="flex flex-col sm:flex-row gap-3 items-center">
               <Button asChild size="lg" variant="outline">
-                <Link href="/about">
+                <Link href="/v1/about">
                   {t("cta.readMyStory")}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/gallery">
+                <Link href="/v1/gallery">
                   {t("cta.viewFullGallery")}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -127,7 +127,7 @@ export function HomeContent() {
           )}
 
           <Button asChild variant="outline" size="lg">
-            <Link href="/reviews">
+            <Link href="/v1/reviews">
               {t("cta.readAllReviews")}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

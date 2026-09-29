@@ -4,7 +4,34 @@
 @tailwind utilities;
 
 @layer base {
+  /* Sage Garden palette ("Linen, Re-inked") — the live site, quote tools,
+     client portal and print view all read these. */
   :root {
+    --background:          40 38% 95%;   /* linen cream  #F6F2EA */
+    --foreground:          90 16% 16%;   /* olive ink    #2A3023 */
+    --card:                42 50% 98%;
+    --card-foreground:     90 16% 16%;
+    --primary:             88 20% 30%;   /* deep olive   #4D5B3D */
+    --primary-foreground:  40 38% 96%;
+    --secondary:           42 50% 98%;
+    --secondary-foreground: 90 16% 16%;
+    --muted:               84 20% 89%;   /* sage mist */
+    --muted-foreground:    88 10% 32%;
+    --accent:              22 40% 36%;   /* chestnut seal   #815237 */
+    --accent-foreground:   40 38% 97%;
+    --accent-deep:         20 42% 27%;   /* accent hover + seal rim */
+    --accent-light:        26 48% 66%;   /* seal highlight, links on olive */
+    --border:              70 14% 80%;
+    --input:               70 14% 80%;
+    --ring:                22 42% 32%;
+    --sage:                95 16% 62%;
+    --radius: 0.25rem;
+  }
+
+  /* Previous palette (Paper Cream + Powder Rose), kept for the archived
+     "Classic" site at /v1. Set on :root via :has() so Radix portals (the
+     mobile nav sheet) outside the page wrapper pick it up too. */
+  :root:has(.classic-root) {
     --background:          30 45% 95%;
     --foreground:          22 45% 15%;
     --card:                0 0% 100%;
@@ -20,7 +47,6 @@
     --border:              30 20% 82%;
     --input:               30 20% 82%;
     --ring:                30 38% 55%;
-    --radius: 0.25rem;
   }
 }
 

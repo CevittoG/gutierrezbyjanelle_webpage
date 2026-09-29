@@ -8,16 +8,16 @@ import { mailtoHref, usePick } from "@/components/concepts/use-concept";
 import { conceptCopy } from "@/config/concepts";
 import { siteConfig, type InvestmentTier } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
-import { CtaBlock, Eyebrow, V1Button } from "./ui";
+import { CtaBlock, Eyebrow, SiteButton } from "./ui";
 
 function TierCard({ tier, index }: { tier: InvestmentTier; index: number }) {
   const p = usePick();
   return (
     <Reveal delay={index * 140} className="h-full">
-      <article className="v1-tier v1-paper relative flex h-full flex-col overflow-hidden rounded-[4px] border border-border" style={{ perspective: 800 }}>
-        <div className="v1-tier-flap" aria-hidden="true" />
+      <article className="site-tier site-paper relative flex h-full flex-col overflow-hidden rounded-[4px] border border-border" style={{ perspective: 800 }}>
+        <div className="site-tier-flap" aria-hidden="true" />
         {tier.savingsLabel && (
-          <span className="v1-seal absolute left-1/2 top-10 h-12 w-12 -translate-x-1/2 text-[11px] tracking-normal" aria-label={`Savings ${tier.savingsLabel}`}>
+          <span className="site-seal absolute left-1/2 top-10 h-12 w-12 -translate-x-1/2 text-[11px] tracking-normal" aria-label={`Savings ${tier.savingsLabel}`}>
             {tier.savingsLabel}
           </span>
         )}
@@ -39,9 +39,9 @@ function TierCard({ tier, index }: { tier: InvestmentTier; index: number }) {
               </li>
             ))}
           </ul>
-          <V1Button href={mailtoHref(`${p(conceptCopy.mailSubject)}: ${p(tier.name)}`)} variant="outline" className="mt-8 w-full">
+          <SiteButton href={mailtoHref(`${p(conceptCopy.mailSubject)}: ${p(tier.name)}`)} variant="outline" className="mt-8 w-full">
             {p(conceptCopy.askAbout)}
-          </V1Button>
+          </SiteButton>
         </div>
       </article>
     </Reveal>
@@ -75,7 +75,7 @@ const content = {
   },
 } as const;
 
-export function V1Occasion({ kind }: { kind: "weddings" | "events" }) {
+export function SiteOccasion({ kind }: { kind: "weddings" | "events" }) {
   const p = usePick();
   const { t } = useLocale();
   const c = content[kind];
@@ -92,8 +92,8 @@ export function V1Occasion({ kind }: { kind: "weddings" | "events" }) {
             <h1 className="font-squarepeg text-7xl leading-[0.9] text-balance md:text-8xl">{t(c.h1)}</h1>
             <p className="font-anybody-prose max-w-md text-lg leading-relaxed text-muted-foreground">{p(c.paragraphs[0])}</p>
             <div className="flex flex-wrap gap-3">
-              <V1Button href="#collections">{t("cta.seeInvestment")}</V1Button>
-              <V1Button href="#letter" variant="outline">{t("weddings.letterHeading")}</V1Button>
+              <SiteButton href="#collections">{t("cta.seeInvestment")}</SiteButton>
+              <SiteButton href="#letter" variant="outline">{t("weddings.letterHeading")}</SiteButton>
             </div>
           </Reveal>
           <div className="relative h-[420px] md:h-[520px]">
@@ -117,7 +117,7 @@ export function V1Occasion({ kind }: { kind: "weddings" | "events" }) {
 
       {/* ── The letter ────────────────────────────────────── */}
       <section id="letter" className="scroll-mt-24 bg-muted/70 px-4 py-24 md:px-8">
-        <Reveal className="v1-paper v1-stitch relative mx-auto max-w-2xl rounded-[4px] border border-border px-7 py-14 shadow-[0_30px_60px_-40px_hsl(90_30%_15%/0.5)] md:px-14">
+        <Reveal className="site-paper site-stitch relative mx-auto max-w-2xl rounded-[4px] border border-border px-7 py-14 shadow-[0_30px_60px_-40px_hsl(90_30%_15%/0.5)] md:px-14">
           <h2 className="font-squarepeg text-5xl md:text-6xl">{t("weddings.letterHeading")}</h2>
           <div className="font-anybody-prose mt-8 space-y-6 text-lg leading-relaxed">
             {c.paragraphs.map((para, i) => <p key={i}>{p(para)}</p>)}

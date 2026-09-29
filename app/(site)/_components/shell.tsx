@@ -7,15 +7,14 @@ import { Menu, X, Mail } from "lucide-react";
 import { InstagramIcon as Instagram } from "@/components/concepts/icons";
 import { usePathname } from "next/navigation";
 import { LocaleToggle } from "@/components/locale-toggle";
-import { ConceptSwitcher } from "@/components/concepts/concept-switcher";
 import { useConceptNav, useContactLinks, usePick, externalProps } from "@/components/concepts/use-concept";
 import { conceptCopy } from "@/config/concepts";
 import { siteConfig } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
 import { cn } from "@/utils";
 
-export function V1Shell({ children }: { children: React.ReactNode }) {
-  const nav = useConceptNav(1);
+export function SiteShell({ children }: { children: React.ReactNode }) {
+  const nav = useConceptNav();
   const contacts = useContactLinks();
   const p = usePick();
   const { t } = useLocale();
@@ -34,7 +33,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
   const [email, instagram] = contacts;
 
   return (
-    <div className="v1-root min-h-screen pb-20 md:pb-0">
+    <div className="site-root min-h-screen pb-20 md:pb-0">
       <header
         className={cn(
           "sticky top-0 z-40 transition-all duration-500",
@@ -42,13 +41,13 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:h-20 md:px-8">
-          <Link href="/v1" className="flex items-center gap-3" aria-label={siteConfig.name}>
+          <Link href="/" className="flex items-center gap-3" aria-label={siteConfig.name}>
             <Image src="/logo.svg" alt="" width={44} height={44} className="h-10 w-10 md:h-11 md:w-11" priority />
             <span className="hidden font-squarepeg text-3xl leading-none sm:inline">{siteConfig.name}</span>
           </Link>
           <nav className="hidden items-center gap-7 text-[11px] tracking-[0.18em] lg:flex" aria-label="Main">
             {nav.map((item) => (
-              <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined} className="v1-navlink">
+              <Link key={item.href} href={item.href} aria-current={item.active ? "page" : undefined} className="site-navlink">
                 {item.label}
               </Link>
             ))}
@@ -57,7 +56,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
             <LocaleToggle />
             <a
               href={email.href}
-              className="hidden rounded-[3px] bg-accent px-4 py-2.5 text-[11px] tracking-[0.16em] text-accent-foreground transition-colors hover:bg-[hsl(14_52%_42%)] md:inline-flex"
+              className="hidden rounded-[3px] bg-accent px-4 py-2.5 text-[11px] tracking-[0.16em] text-accent-foreground transition-colors hover:bg-[hsl(var(--accent-deep))] md:inline-flex"
             >
               {t("cta.emailJanelle")}
             </a>
@@ -65,7 +64,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
               type="button"
               className="grid h-10 w-10 place-items-center rounded-full border border-border lg:hidden"
               aria-expanded={open}
-              aria-controls="v1-menu"
+              aria-controls="site-menu"
               aria-label={p(open ? conceptCopy.close : conceptCopy.menu)}
               onClick={() => setOpen((o) => !o)}
             >
@@ -74,7 +73,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div
-          id="v1-menu"
+          id="site-menu"
           className={cn(
             "grid overflow-hidden border-border bg-background/95 backdrop-blur-md transition-all duration-500 lg:hidden",
             open ? "grid-rows-[1fr] border-b" : "grid-rows-[0fr]"
@@ -110,12 +109,12 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
           </div>
           <nav aria-label="Footer" className="flex flex-col gap-3 text-[11px] tracking-[0.18em]">
             {nav.map((item) => (
-              <Link key={item.href} href={item.href} className="w-fit hover:text-[hsl(16_60%_75%)]">{item.label}</Link>
+              <Link key={item.href} href={item.href} className="w-fit hover:text-[hsl(var(--accent-light))]">{item.label}</Link>
             ))}
           </nav>
           <div className="flex flex-col gap-3 text-[11px] tracking-[0.18em]">
             {contacts.map((c) => (
-              <a key={c.id} href={c.href} {...externalProps(c.external)} className="w-fit hover:text-[hsl(16_60%_75%)]">
+              <a key={c.id} href={c.href} {...externalProps(c.external)} className="w-fit hover:text-[hsl(var(--accent-light))]">
                 {c.label}
               </a>
             ))}
@@ -128,7 +127,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
       </footer>
 
       {/* Sticky mobile CTA — the two ways to start a conversation, always in reach */}
-      <div className="v1-sticky fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-border bg-background/90 p-3 backdrop-blur-md md:hidden">
+      <div className="site-sticky fixed inset-x-0 bottom-0 z-40 grid grid-cols-2 gap-2 border-t border-border bg-background/90 p-3 backdrop-blur-md md:hidden">
         <a href={email.href} className="flex min-h-11 items-center justify-center gap-2 rounded-[3px] bg-accent text-[11px] tracking-[0.14em] text-accent-foreground">
           <Mail className="h-4 w-4" aria-hidden="true" /> {email.short}
         </a>
@@ -136,7 +135,6 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
           <Instagram className="h-4 w-4" aria-hidden="true" /> {instagram.short}
         </a>
       </div>
-      <ConceptSwitcher className="[--switcher-bottom:5.25rem] md:[--switcher-bottom:0.75rem]" />
     </div>
   );
 }

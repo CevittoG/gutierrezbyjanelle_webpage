@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { V1Occasion } from "../_components/occasion";
+import { EventsContent } from "./_content";
 
-export const metadata: Metadata = { title: "Events" };
+export const metadata: Metadata = { title: "Events & Corporate" };
 
 export default function Page() {
-  return <V1Occasion kind="events" />;
+  return <EventsContent />;
 }

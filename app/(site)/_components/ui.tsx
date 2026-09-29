@@ -17,7 +17,7 @@ export function Eyebrow({ children, className }: { children: ReactNode; classNam
   );
 }
 
-export function V1Button({
+export function SiteButton({
   href,
   children,
   variant = "solid",
@@ -33,7 +33,7 @@ export function V1Button({
   const styles = {
     solid: "bg-primary text-primary-foreground hover:bg-foreground",
     outline: "border border-foreground/30 bg-card/60 hover:border-accent hover:text-accent",
-    seal: "bg-accent text-accent-foreground hover:bg-[hsl(14_52%_42%)]",
+    seal: "bg-accent text-accent-foreground hover:bg-[hsl(var(--accent-deep))]",
   }[variant];
   const cls = cn(
     "group inline-flex min-h-11 items-center justify-center gap-2 rounded-[3px] px-5 py-3 text-xs tracking-[0.14em] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -54,22 +54,29 @@ export function ContactRow({ className, only }: { className?: string; only?: Con
     <div className={cn("flex flex-wrap justify-center gap-3", className)}>
       {links.map((l, i) => {
         return (
-          <V1Button key={l.id} href={l.href} external={l.external} variant={i === 0 ? "seal" : "outline"}>
+          <SiteButton key={l.id} href={l.href} external={l.external} variant={i === 0 ? "seal" : "outline"}>
             <ContactIcon id={l.id} className="h-4 w-4" />
             {l.label}
             {l.external && <ArrowUpRight className="h-3.5 w-3.5 opacity-60 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />}
-          </V1Button>
+          </SiteButton>
         );
       })}
     </div>
   );
 }
 
+/** Janelle's monogram, for pressing into a `.site-seal`. Decorative. */
+export function LogoMark({ className }: { className?: string }) {
+  return <span aria-hidden="true" className={cn("site-logo-mark", className)} />;
+}
+
 export function CtaBlock({ heading, body, className }: { heading: ReactNode; body: string; className?: string }) {
   return (
     <section className={cn("px-4 py-24 md:py-32", className)}>
-      <Reveal className="v1-paper v1-stitch relative mx-auto max-w-3xl rounded-[4px] border border-border px-6 py-16 text-center md:px-16">
-        <div className="v1-seal absolute -top-8 left-1/2 h-16 w-16 -translate-x-1/2 font-squarepeg text-3xl">J</div>
+      <Reveal className="site-paper site-stitch relative mx-auto max-w-3xl rounded-[4px] border border-border px-6 py-16 text-center md:px-16">
+        <div className="site-seal absolute -top-8 left-1/2 h-16 w-16 -translate-x-1/2">
+          <LogoMark />
+        </div>
         <h2 className="font-squarepeg text-5xl leading-none md:text-6xl">{heading}</h2>
         <p className="font-anybody-prose mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">{body}</p>
         <ContactRow className="mt-10" />

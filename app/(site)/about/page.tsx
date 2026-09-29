@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { ReviewsContent } from "./_content";
+import { SiteAbout } from "../_components/about";
 
-const pageDescription = `Read what clients say about ${siteConfig.name}. Real experiences from real clients.`;
-const pageTitle = `Client Reviews | ${siteConfig.name}`;
-const pageUrl = `${siteConfig.url}/reviews`;
+const pageDescription = `Meet Janelle Gutiérrez, the designer and founder behind ${siteConfig.name}.`;
+const pageTitle = `About | ${siteConfig.name}`;
+const pageUrl = `${siteConfig.url}/about`;
 
 export const metadata: Metadata = {
-  title: "Reviews",
+  title: "About",
   description: pageDescription,
   alternates: { canonical: pageUrl },
   openGraph: {
@@ -28,6 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ReviewsPage() {
-  return <ReviewsContent />;
+export default function AboutPage() {
+  return <SiteAbout />;
 }
