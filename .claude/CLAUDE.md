@@ -11,9 +11,9 @@ Before any design or UI work, read both:
 - [PRODUCT.md](../PRODUCT.md) — strategy: register (`brand`), users, brand personality (*intimate, refined, tasteful*), anti-references, 5 design principles.
 - [DESIGN.md](../DESIGN.md) — visual system: tokens, typography rules, components, do's and don'ts. Creative North Star: **"The Modern Linen Envelope."**
 
-Sidecar at [.impeccable/design.json](../.impeccable/design.json) carries tonal ramps, motion tokens, and self-contained component snippets for tooling.
+DESIGN.md's frontmatter carries the tokens (hex, type scale, radii, component recipes) for tooling. `.impeccable/critique/` holds past design critiques.
 
-**Non-negotiable visual rules** (full list in DESIGN.md §6 — note DESIGN.md/PRODUCT.md still describe the pre-2026-09 Powder Rose system; the live palette below wins):
+**Non-negotiable visual rules** (full list in DESIGN.md §6):
 - Palette is **Sage Garden** (linen cream, olive ink, deep olive primary, sage). One accent only — **Chestnut** (`#815237`): wax seals, the Email CTA, eyebrows, links, active-nav underline.
 - Two fonts only — **Square Peg** (cursive signature) and **Anybody** (weight 132, uppercase, tracked).
 - No pure `#000` or `#FFF` (Card White is the one sanctioned white).
@@ -64,10 +64,10 @@ globals.css  →  tailwind.config.ts  →  Tailwind utilities
 **Current palette (Janelle's brand — Sage Garden, "Linen, Re-inked"):**
 | Token | Value | Hex | Role |
 |-------|-------|-----|------|
-| `--background` | `40 38% 95%` | `#F6F2EA` | Linen cream — page background |
-| `--foreground` | `90 16% 16%` | `#2A3023` | Olive ink — body text and headings (never pure `#000`) |
+| `--background` | `40 38% 95%` | `#F7F4ED` | Linen cream — page background |
+| `--foreground` | `90 16% 16%` | `#292F22` | Olive ink — body text and headings (never pure `#000`) |
 | `--card` / `--secondary` | `42 50% 98%` | — | Card linen — card layer |
-| `--primary` | `88 20% 30%` | `#4D5B3D` | Deep olive — primary buttons, footer |
+| `--primary` | `88 20% 30%` | `#4E5C3D` | Deep olive — primary buttons, footer |
 | `--muted` | `84 20% 89%` | — | Sage mist — muted section surfaces |
 | `--muted-foreground` | `88 10% 32%` | — | Captions, helper copy |
 | `--accent` | `22 40% 36%` | `#815237` | Chestnut — the one accent (seals, Email CTA, links, eyebrows). 6:1 on linen |
