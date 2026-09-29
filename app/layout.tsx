@@ -30,7 +30,6 @@ export const metadata: Metadata = {
     description: siteConfig.description,
     images: siteConfig.twitterImages,
   },
-  icons: { icon: "/icon", shortcut: "/icon" },
 };
 
 export default function RootLayout({

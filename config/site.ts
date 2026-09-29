@@ -111,7 +111,6 @@ export const siteConfig = {
   locale: "en_US",
   alternateLocales: ["es_ES"],
   ogImages: [
-    { url: "/logo.svg", width: 1785, height: 1785, alt: "Gutiérrez by Janelle logo", type: "image/svg+xml" },
     { url: "/opengraph-image", width: 1200, height: 630, alt: "Gutiérrez by Janelle", type: "image/png" },
   ],
   twitterImages: ["/opengraph-image"],
