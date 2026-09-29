@@ -1,4 +1,4 @@
-/* Shared by the hidden design concepts (/v1, /v2, /v3). Imported from their layouts only. */
+/* Shared by the live site (app/(site)) and the hidden /v2, /v3 concepts; imported from their layouts. */
 
 /* ── Scroll reveal ─────────────────────────────────────────── */
 .reveal {

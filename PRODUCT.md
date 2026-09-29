@@ -57,11 +57,11 @@ The work and the voice should always read as the loudest things on the page; sty
 2. **Intimate, not romantic.** Warmth is earned through tone and detail — Janelle's own words, careful spacing, considered typography — not through script-font shortcuts or heart-emoji decoration. The accent cursive is a guest, not the host.
 3. **Restraint is the tell of taste.** Fewer tiers, fewer fonts, fewer flourishes than competitors. Confidence through what's left out. Every element on a page should be defensible.
 4. **Bilingual by design.** Spanish and English are both first-class. Layouts must survive longer Spanish strings; tone should feel native in either language; a Spanish-speaking mother-of-the-groom should never feel like a footnote.
-5. **Every page earns the inquiry.** Home, Gallery, Reviews, Weddings, Investment — each one is a step toward "I want to talk to Janelle." No page is a dead end; no page begs.
+5. **Every page earns the inquiry.** Home, About, Weddings, Events, Gallery, Reviews — each one is a step toward "I want to talk to Janelle." No page is a dead end; no page begs.
 
 ## Accessibility & Inclusion
 
 - **WCAG 2.1 AA** as the floor for contrast, focus, hit targets, and keyboard navigation. Already partway there (skip-to-content link, `prefers-reduced-motion`, focus-visible rings) — hold the line on new work.
 - **Multilingual (English + Spanish).** Reviews already mix both. Layouts must accommodate longer Spanish strings without truncation. When new copy is added, treat translatability as a constraint, not an afterthought.
-- **Mobile-first and daylight-readable.** Most visits come from phones, often outdoors at a venue tour or in bright cafés. Body type stays readable on a 60-year-old's phone in sun; contrast holds up on warm taupe backgrounds (the current palette is close to its readability floor — be careful when reducing it further).
+- **Mobile-first and daylight-readable.** Most visits come from phones, often outdoors at a venue tour or in bright cafés. Body type stays readable on a 60-year-old's phone in sun. The palette itself has headroom (olive ink on linen is 12.5:1, chestnut on linen 6:1); the fragile spot is the hairline 10–11px labels, so anything a client must read stays at 12px or larger (see DESIGN.md §3).
 - **Reduced-motion respected globally** — already wired in `globals.css`. Any new animation must honor it.
