@@ -13,11 +13,11 @@ Before any design or UI work, read both:
 
 Sidecar at [.impeccable/design.json](../.impeccable/design.json) carries tonal ramps, motion tokens, and self-contained component snippets for tooling.
 
-**Non-negotiable visual rules** (full list in DESIGN.md §6):
-- One accent only — **Powder Rose** (`#EFC8CE`), state-only, ≤10% of any screen.
+**Non-negotiable visual rules** (full list in DESIGN.md §6 — note DESIGN.md/PRODUCT.md still describe the pre-2026-09 Powder Rose system; the live palette below wins):
+- Palette is **Sage Garden** (linen cream, olive ink, deep olive primary, sage). One accent only — **Chestnut** (`#815237`): wax seals, the Email CTA, eyebrows, links, active-nav underline.
 - Two fonts only — **Square Peg** (cursive signature) and **Anybody** (weight 132, uppercase, tracked).
 - No pure `#000` or `#FFF` (Card White is the one sanctioned white).
-- Flat by default; shadows are Powder Rose-tinted state revelations, never gray.
+- Flat by default; shadows are soft olive-ink or accent-tinted, never neutral gray.
 - Layouts must survive longer Spanish strings — bilingual support is a constraint, not an afterthought.
 
 ---
@@ -61,20 +61,23 @@ globals.css  →  tailwind.config.ts  →  Tailwind utilities
 --radius         borderRadius.lg                         rounded-lg
 ```
 
-**Current palette (Janelle's brand):**
+**Current palette (Janelle's brand — Sage Garden, "Linen, Re-inked"):**
 | Token | Value | Hex | Role |
 |-------|-------|-----|------|
-| `--background` | `30 45% 95%` | `#F8F2ED` | Paper Cream — page background, dominant warm surface |
-| `--foreground` | `22 45% 15%` | `#372215` | Deep Ink — body text and headings (warm brown-black, never pure `#000`) |
-| `--card` | `0 0% 100%` | `#FFFFFF` | Card White — the only true white; reserved for the card layer |
-| `--primary` | `30 38% 68%` | `#CCAD8E` | Warm Tan — primary button fills, brand color |
-| `--secondary` | `0 0% 100%` | `#FFFFFF` | White (same as card) |
-| `--muted` | `30 30% 90%` | `#EDE6DE` | Linen Mist — muted section surfaces, half-step deeper than background |
-| `--muted-foreground` | `25 20% 35%` | `#6B5647` | Muted Bark — captions, descriptions, helper copy |
-| `--accent` | `350 55% 86%` | `#EFC8CE` | Powder Rose — state accent (hover glow, savings badge, focus underline). Guest, not host: ≤10% of any screen |
-| `--border` | `30 20% 82%` | `#DAD1C8` | Warm Thread — all borders. Never colored |
-| `--ring` | `30 38% 55%` | `#B88C61` | Ring Tan — focus rings only; deepened tan meeting WCAG AA against Paper Cream |
+| `--background` | `40 38% 95%` | `#F6F2EA` | Linen cream — page background |
+| `--foreground` | `90 16% 16%` | `#2A3023` | Olive ink — body text and headings (never pure `#000`) |
+| `--card` / `--secondary` | `42 50% 98%` | — | Card linen — card layer |
+| `--primary` | `88 20% 30%` | `#4D5B3D` | Deep olive — primary buttons, footer |
+| `--muted` | `84 20% 89%` | — | Sage mist — muted section surfaces |
+| `--muted-foreground` | `88 10% 32%` | — | Captions, helper copy |
+| `--accent` | `22 40% 36%` | `#815237` | Chestnut — the one accent (seals, Email CTA, links, eyebrows). 6:1 on linen |
+| `--accent-deep` / `--accent-light` | `20 42% 27%` / `26 48% 66%` | — | Accent hover + seal rim / seal highlight + link hover on olive |
+| `--border` | `70 14% 80%` | — | All borders |
+| `--ring` | `22 42% 32%` | — | Focus rings + eyebrow text |
+| `--sage` | `95 16% 62%` | — | Stitched-edge dashes |
 | `--radius` | `0.25rem` | — | Card radius (4px, near-square "pressed paper"). `rounded-md` = 3px, `rounded-sm` = 2px. Tailwind scale is capped in `tailwind.config.ts` so `rounded-xl`/`rounded-2xl` also resolve to 4px; images use `rounded-sm` (2px) |
+
+The previous Paper Cream / Powder Rose palette survives only for the `/v1` Classic archive, as a `:root:has(.classic-root)` block in `app/globals.css`.
 
 To retheme the entire site, only the `:root` block in `app/globals.css` needs to change. Full visual spec (with named rules, component patterns, do's/don'ts) lives in [DESIGN.md](../DESIGN.md).
 
@@ -171,20 +174,16 @@ App Router convention: one file per route.
 
 ```
 app/
-  layout.tsx              ← shared shell (SiteHeader + SiteFooter), root metadata
-  page.tsx                ← /  (Home)
+  layout.tsx              ← root: fonts, LocaleProvider, skip link, <main>, root metadata (no header/footer)
+  (site)/                 ← the live public site (route group — adds no URL segment)
+    layout.tsx            ← SiteShell: header, footer, sticky mobile Email/Instagram bar
+    site.css              ← site-only classes (seal, envelope, fan, stitch…); tokens live in globals.css
+    _components/          ← SiteHome, SiteOccasion (weddings + events), SiteAbout, SiteGallery, SiteReviews, SuiteShowcase, ui
+    page.tsx              ← /  (Home)
+    about/ weddings/ events/ gallery/ reviews/   ← one page.tsx each (SEO metadata + the component)
+  v1/                     ← "Classic" archive of the previous live site (noindex); SiteHeader basePath="/v1" + SiteFooter
   investment/
-    page.tsx              ← redirects to /weddings#wedding-investment (back-compat only; nothing on the site links here — the home hero now links straight to the two pricing sections)
-  reviews/
-    page.tsx              ← /reviews
-  gallery/
-    page.tsx              ← /gallery
-  weddings/
-    page.tsx              ← /weddings (note to brides & grooms + wedding investment tiers at the bottom)
-  events/
-    page.tsx              ← /events   (events & corporate intro + event investment tiers at the bottom)
-  about/
-    page.tsx              ← /about    ("Meet the Founder" bio)
+    page.tsx              ← redirects to /weddings#collections (back-compat only)
   quotes/
     page.tsx              ← /quotes        (gated home — studio dashboard, integrates the explorer)
     [id]/page.tsx         ← /quotes/[id]   (gated "Profile Overview" — per-quote admin detail)
@@ -208,8 +207,9 @@ app/
 
 | File | Role |
 |------|------|
-| `components/site-header.tsx` | Sticky nav bar; reads `siteConfig.mainNav` and `siteConfig.name`; collapses to hamburger on mobile; closes sheet on nav-link click; highlights active route with accent underline via `usePathname` |
-| `components/site-footer.tsx` | Bottom footer; reads `siteConfig.name` |
+| `app/(site)/_components/*` | The live site: `SiteShell` (header/footer/sticky CTA), page components, `SiteButton`/`CtaBlock`/`LogoMark` (logo SVG as a CSS mask inside a `.site-seal`), and `SuiteShowcase` — the "What's in a suite" fan: real piece proportions, fixed hover columns that zoom one piece, lightbox on click, swipe strip on phones |
+| `components/site-header.tsx` | **`/v1` Classic archive only.** Sticky nav; `basePath` prop prefixes every nav link so browsing stays in the archive |
+| `components/site-footer.tsx` | **`/v1` Classic archive only.** Bottom footer; reads `siteConfig.name` |
 | `components/ui/button.tsx` | shadcn Button — 6 variants, 4 sizes |
 | `components/ui/card.tsx` | shadcn Card with Header/Title/Description/Content/Footer |
 | `components/ui/badge.tsx` | shadcn Badge — 4 variants |
@@ -344,7 +344,7 @@ itemsNet` = `bundleDiscountTotal + Σ relationshipDiscountLines`). The public pr
 | `app/quote-calc/_components/AssumptionsPanel.tsx` | Collapsible settings: cost structure, wedding + event package discounts, extras, per-item table (driven by the passed-in `catalog`) |
 | `app/quote-calc/_components/ConfigBanner.tsx` | Inline warning banner shown above the calculator when the Sheet config fails to load or contains invalid/unknown rows. Names the offending tab/row; has a Retry button that calls `/api/config?refresh=1` |
 | `app/quote-calc/_components/PasswordGate.tsx` | Branded password gate; the front door for every gated page (`/quotes`, `/quote/new`, `/quotes/[id]`) |
-| `components/quote-app/AppShell.tsx` | Slim sticky app chrome (Dashboard / New quote nav + sign-out) for the gated tools; replaces the marketing header/footer (which self-hide on `^/(quotes|quote|quote-calc|q)` via `usePathname`) |
+| `components/quote-app/AppShell.tsx` | Slim sticky app chrome (Dashboard / New quote nav + sign-out) for the gated tools; the root layout renders no marketing header/footer, so the tools carry only this chrome |
 | `components/quote-app/LinkControls.tsx` | Public-link controls (generate/regenerate/copy/revoke); shared by the dashboard and Profile Overview (moved here from the old explorer) |
 | `lib/quote-calc-totals.ts` | **Pure** `computeQuoteBreakdown(config, assumptions, catalog)` — the **single source of truth for the money math**. Prices each line (`LineResult`) applying one **additive, raw-labor-only** discount per line (bundle + relationship, biting `laborBase` = design + production at cost), adds the once-per-quote `services` (never discounted), then rush + misc. Returns `itemsList/itemsNet`, `totalLaborBase`, `discountTotal`, `bundleDiscountTotal`, `relationshipDiscountLines`, `services`, `savings`, `subtotalList`, `finalPrice`. Shared by the calculator, print view, and public portal. Invariants covered by `lib/quote-calc-totals.test.ts` (compile with `tsc` + run on Node — no test runner wired up) |
 | `lib/quote-calc-portal.ts` | **Pure** Phase 3 types + helpers: `PortalMeta`, `LinkStatus`, `isLinkActive`/`isLinkExpired`, `PublicQuote` shape, and `buildPublicQuote()` — the projector that strips everything secret down to the client-safe shape |
@@ -431,21 +431,20 @@ Each quote moves through a 9-stage pipeline that drives the client portal and th
 
 ---
 
-## Design Concepts — `/v1`, `/v2`, `/v3` (hidden, throwaway)
+## Hidden routes — `/v1` (Classic archive), `/v2`, `/v3` (concepts)
 
-Three redesign mock-ups of all six public pages, built to compare directions side by side. Same content (everything reads `siteConfig` + the i18n dictionary, EN/ES works), different look. **They deliberately break the brand rules above** (new palettes and fonts) — they are experiments, not the system.
+The live site is the former concept V1, **"Linen, Re-inked"** (promoted 2026-09). The hidden routes:
 
-| Route | Concept | Look |
+| Route | What | Look |
 |---|---|---|
-| `/v1/*` | **Linen, Re-inked** | Current fonts (Square Peg + Anybody), Sage Garden palette, terracotta wax seal. Envelope-opening hero, fanned suite, stitched envelope cards, sticky mobile Email/Instagram bar |
-| `/v2/*` | **Editorial Atelier** | Fraunces + Manrope, ivory/oxblood/champagne. Magazine chapters, word-rise headlines, scroll-driven parallax, lookbook strip, table-of-contents collections, full-screen menu |
-| `/v3/*` | **Stationery Table** | Bricolage Grotesque + Instrument Serif, butter/chocolate/cherry/blush. Draggable desk of real pieces (framer-motion), spinning stickers, flip-card collections, bento grid, à-la-carte **wish list → pre-written email** |
+| `/v1/*` | **Classic (previous live)** — archived so it can be compared or restored | Paper Cream + Powder Rose, Square Peg + Anybody, `SiteHeader`/`SiteFooter` |
+| `/v2/*` | **Editorial Atelier** concept | Fraunces + Manrope, ivory/oxblood/champagne. Magazine chapters, parallax, lookbook strip |
+| `/v3/*` | **Stationery Table** concept | Bricolage Grotesque + Instrument Serif, butter/chocolate/cherry/blush. Draggable desk, flip cards, wish list → pre-written email |
 
-- Hidden: `robots` noindex in each `app/vN/layout.tsx`, disallowed in `app/robots.ts`, not in the sitemap or `mainNav`. The live header/footer self-hide on these routes (`HIDE_CHROME`).
-- Floating **Concept switcher** (bottom-left) jumps to the same page in Live / V1 / V2 / V3.
-- Shared helpers in `components/concepts/` (`Reveal`, `Marquee`, `Lightbox`, `ConceptSwitcher`, `use-concept.ts`, `use-gallery.ts`, `concepts.css`); concept-only copy in `config/concepts.ts`. Tokens are re-scoped per concept by redefining the shadcn CSS variables on `.v1-root` / `.v2-root` / `.v3-root`.
-- No new dependencies. Motion is CSS-first (IntersectionObserver reveals, keyframes, `animation-timeline: view()` behind `@supports`), and everything honours `prefers-reduced-motion`. Concept fonts load only inside their own layout.
-- To remove a concept: delete `app/vN/`, drop it from `HIDE_CHROME` and `robots.ts`. Deleting all three also frees `components/concepts/`, `config/concepts.ts`, and the four concept font families in `tailwind.config.ts`.
+- Hidden: `robots` noindex in each `app/vN/layout.tsx`, disallowed in `app/robots.ts`, not in the sitemap or `mainNav`.
+- Floating **Concept switcher** (bottom-left, hidden routes only — never on the live site) jumps to the same page in Live / V1 / V2 / V3.
+- Shared helpers in `components/concepts/` (`Reveal`, `Marquee`, `Lightbox`, `ConceptSwitcher`, `use-concept.ts`, `use-gallery.ts`, `concepts.css`) and copy in `config/concepts.ts` are **also used by the live site** — keep them. `useConceptNav()` with no version returns live hrefs. `/v2`, `/v3` re-scope tokens on `.v2-root` / `.v3-root`.
+- To remove a hidden route: delete `app/vN/` and drop it from `robots.ts` (and, for `/v1`, the `:root:has(.classic-root)` block in `globals.css`). Removing `/v2` + `/v3` frees their font families in `tailwind.config.ts`.
 
 ---
 
@@ -489,7 +488,7 @@ All public routes render with brand styling and full SEO metadata. Quote calcula
 
 ## How to Add a New Page
 
-1. Create `app/<route>/page.tsx` with a default export.
+1. Create `app/(site)/<route>/page.tsx` with a default export (and its SEO metadata).
 2. Add the route to `siteConfig.mainNav` in `config/site.ts`.
 3. Add any new data types/arrays to `siteConfig` and `config/site.ts`.
-4. The shared header/footer render automatically via `app/layout.tsx`.
+4. The header, footer and sticky mobile CTA render automatically via `app/(site)/layout.tsx` (`SiteShell`).
