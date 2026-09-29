@@ -330,7 +330,7 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
                 className={cn(
                   "h-8 px-3 rounded-full text-xs normal-case tracking-normal border transition-colors",
                   active
-                    ? "border-ring bg-accent/40 text-foreground"
+                    ? "border-ring bg-accent-soft text-foreground"
                     : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60"
                 )}
               >

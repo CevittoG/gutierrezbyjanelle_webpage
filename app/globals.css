@@ -21,6 +21,7 @@
     --accent-foreground:   40 38% 97%;
     --accent-deep:         20 42% 27%;   /* accent hover + seal rim */
     --accent-light:        26 48% 66%;   /* seal highlight, links on olive */
+    --accent-soft:         28 42% 89%;   /* pale chestnut surface for chips/badges with ink text */
     --border:              70 14% 80%;
     --input:               70 14% 80%;
     --ring:                22 42% 32%;
@@ -44,6 +45,7 @@
     --muted-foreground:    25 20% 35%;
     --accent:              350 55% 86%;
     --accent-foreground:   22 45% 15%;
+    --accent-soft:         350 55% 86%;
     --border:              30 20% 82%;
     --input:               30 20% 82%;
     --ring:                30 38% 55%;

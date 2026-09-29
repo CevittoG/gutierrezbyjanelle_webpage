@@ -21,7 +21,7 @@ export function HealthCard({ health, className }: { health: QuoteHealth; classNa
           aria-hidden
           className={cn(
             "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
-            onTarget ? "border-accent bg-accent text-foreground" : "border-foreground/40 text-foreground",
+            onTarget ? "border-accent bg-accent text-accent-foreground" : "border-foreground/40 text-foreground",
           )}
         >
           {HEALTH_GLYPH[h.status]}

@@ -170,7 +170,7 @@ export function LineRow({
           <span className="text-xs text-muted-foreground">{digitalFile ? "file" : "/ pc"}</span>
           {customPrice && (
             <>
-              <span className="rounded-full border border-accent bg-accent/50 px-2 py-0.5 text-xs">custom</span>
+              <span className="rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-xs">custom</span>
               <span className="text-xs text-muted-foreground tabular-nums">list {formatMoney2(line.listUnitPrice!)}</span>
               <button
                 type="button"

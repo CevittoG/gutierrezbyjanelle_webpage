@@ -43,7 +43,7 @@ export function OptionChips({
             onClick={() => onToggle(o)}
             className={cn(
               "h-11 sm:h-9 inline-flex items-center gap-1.5 rounded-full border px-3 text-xs transition-colors",
-              on ? "border-accent bg-accent/60 text-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted",
+              on ? "border-accent bg-accent-soft text-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted",
             )}
           >
             {on && <Check className="h-3.5 w-3.5" aria-hidden />}
@@ -58,7 +58,7 @@ export function OptionChips({
           type="button"
           aria-pressed
           onClick={() => onRemove(o.id)}
-          className="h-11 sm:h-9 inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent/60 px-3 text-xs"
+          className="h-11 sm:h-9 inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent-soft px-3 text-xs"
           title="No longer in the price book; kept on this quote. Click to remove."
         >
           <Check className="h-3.5 w-3.5" aria-hidden />

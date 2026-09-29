@@ -353,7 +353,7 @@ function PayRow({ label, value, paid }: { label: string; value: string; paid: bo
         <span
           className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
-            paid ? "bg-accent/40 text-foreground" : "bg-muted text-muted-foreground",
+            paid ? "bg-accent-soft text-foreground" : "bg-muted text-muted-foreground",
           )}
         >
           {paid ? "Paid" : "Due"}

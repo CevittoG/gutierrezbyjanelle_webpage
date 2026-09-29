@@ -99,7 +99,7 @@ function StatusBadge({ status, hasToken }: { status: LinkStatus; hasToken: boole
   const label = status === "active" && hasToken ? "Link active" : status === "revoked" ? "Revoked" : "No link";
   const tone =
     status === "active" && hasToken
-      ? "bg-accent/30 text-foreground"
+      ? "bg-accent-soft text-foreground"
       : "bg-muted text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] normal-case tracking-normal", tone)}>

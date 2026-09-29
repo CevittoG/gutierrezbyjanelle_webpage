@@ -263,7 +263,7 @@ export function PriceBookView({ merged, sheetUrl, state }: Props) {
                 <div className="flex items-baseline justify-between gap-2">
                   <h3 className="font-squarepeg text-3xl leading-tight min-w-0">{pkg.name}</h3>
                   {pkg.bundlePct > 0 && (
-                    <span className="shrink-0 rounded-full border border-accent/40 bg-accent/30 px-2.5 py-0.5 text-xs tabular-nums">
+                    <span className="shrink-0 rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-xs tabular-nums">
                       −{formatPct(pkg.bundlePct)}
                     </span>
                   )}
