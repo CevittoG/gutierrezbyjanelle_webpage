@@ -7,15 +7,15 @@ import { join } from "node:path";
  * keep it in sync with the :root block in app/globals.css.
  */
 export const brand = {
-  linen: "#F6F2EA",
-  card: "#FBF8F2",
-  ink: "#2A3023",
-  olive: "#4D5B3D",
-  muted: "#55604A",
+  linen: "#F7F4ED",
+  card: "#FCFBF7",
+  ink: "#292F22",
+  olive: "#4E5C3D",
+  muted: "#525A49",
   chestnut: "#815237",
-  chestnutDeep: "#623D28",
-  chestnutLight: "#D09C78",
-  sage: "#98AA8C",
+  chestnutDeep: "#623B28",
+  chestnutLight: "#D2A37F",
+  sage: "#9CAE8F",
 };
 
 /**

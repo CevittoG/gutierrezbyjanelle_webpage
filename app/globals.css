@@ -7,11 +7,11 @@
   /* Sage Garden palette ("Linen, Re-inked") — the live site, quote tools,
      client portal and print view all read these. */
   :root {
-    --background:          40 38% 95%;   /* linen cream  #F6F2EA */
-    --foreground:          90 16% 16%;   /* olive ink    #2A3023 */
+    --background:          40 38% 95%;   /* linen cream  #F7F4ED */
+    --foreground:          90 16% 16%;   /* olive ink    #292F22 */
     --card:                42 50% 98%;
     --card-foreground:     90 16% 16%;
-    --primary:             88 20% 30%;   /* deep olive   #4D5B3D */
+    --primary:             88 20% 30%;   /* deep olive   #4E5C3D */
     --primary-foreground:  40 38% 96%;
     --secondary:           42 50% 98%;
     --secondary-foreground: 90 16% 16%;
