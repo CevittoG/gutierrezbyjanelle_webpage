@@ -7,6 +7,8 @@ interface Props {
   onChange: (next: DraftClientInfo) => void;
   /** Highlight the event-date field as required (set when a save was blocked). */
   dateError?: boolean;
+  /** Render only the event basics, only the two notes, or both (default). */
+  part?: "basics" | "notes" | "all";
 }
 
 const fieldClass =
@@ -15,13 +17,17 @@ const fieldClass =
 const labelClass =
   "block text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1.5";
 
-export function ClientInfoSection({ client, onChange, dateError }: Props) {
+export function ClientInfoSection({ client, onChange, dateError, part = "all" }: Props) {
   function set<K extends keyof DraftClientInfo>(key: K, value: DraftClientInfo[K]) {
     onChange({ ...client, [key]: value });
   }
+  const basics = part !== "notes";
+  const notes = part !== "basics";
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {basics && (
+      <>
       <div className="sm:col-span-2">
         <label htmlFor="client-name" className={labelClass}>
           Client name
@@ -78,6 +84,11 @@ export function ClientInfoSection({ client, onChange, dateError }: Props) {
         </select>
       </div>
 
+      </>
+      )}
+
+      {notes && (
+      <>
       <div className="sm:col-span-2">
         <label htmlFor="hidden-notes" className={labelClass}>
           Hidden notes
@@ -105,6 +116,8 @@ export function ClientInfoSection({ client, onChange, dateError }: Props) {
           className={fieldClass + " resize-y"}
         />
       </div>
+      </>
+      )}
     </div>
   );
 }

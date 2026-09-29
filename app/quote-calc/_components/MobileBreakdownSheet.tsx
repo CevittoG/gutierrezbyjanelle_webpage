@@ -1,75 +1,66 @@
 "use client";
 
+// Mobile: a sticky bottom bar ("Total $570 · ! $24.21/hr") that opens the
+// summary as a bottom sheet. Hidden from lg up, where the summary is sticky.
+
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { fmt$, fmtPct } from "@/lib/quote-calc-logic";
-import { cn } from "@/utils";
 
 interface Props {
-  total: number;
-  netMargin: number;
-  marginDiff: number;
+  total: string;
+  status?: React.ReactNode;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function MobileBreakdownSheet({ total, netMargin, marginDiff, children }: Props) {
+export function MobileBreakdownSheet({ total, status, actions, children }: Props) {
   const [open, setOpen] = useState(false);
-
-  const marginTone =
-    marginDiff >= 0
-      ? "text-emerald-700"
-      : marginDiff >= -5
-      ? "text-amber-700"
-      : "text-red-700";
 
   return (
     <>
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="flex items-center gap-3 px-4 py-3 max-w-screen-2xl mx-auto">
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground leading-none">
-              Total quote
-            </p>
-            <p className="font-squarepeg text-3xl leading-tight truncate">
-              {fmt$(Math.round(total))}
-            </p>
-            <p className={cn("text-xs font-mono tabular-nums leading-none", marginTone)}>
-              {fmtPct(netMargin)} margin
-            </p>
-          </div>
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+        <div className="mx-auto flex max-w-screen-2xl items-center gap-2 px-4 py-2.5">
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="h-11 px-4 rounded-lg border border-border bg-foreground text-background text-sm font-medium shrink-0"
+            className="min-h-[44px] min-w-0 flex-1 text-left"
+            aria-label="Open the quote summary"
           >
-            View breakdown
+            <span className="block font-squarepeg text-3xl leading-none tabular-nums truncate">{total}</span>
+            {status && <span className="block text-xs text-muted-foreground truncate normal-case tracking-normal">{status}</span>}
           </button>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="h-11 shrink-0 rounded-md border border-border px-3 text-sm normal-case tracking-normal"
+          >
+            Summary
+          </button>
+          {actions}
         </div>
       </div>
 
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="lg:hidden fixed inset-0 z-40 bg-foreground/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
+          <Dialog.Overlay className="lg:hidden fixed inset-0 z-40 bg-foreground/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
           <Dialog.Content
-            className="lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom"
+            className="lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-lg border-t border-border bg-card data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom"
             aria-describedby={undefined}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card/95 backdrop-blur px-4 py-3">
-              <Dialog.Title className="text-sm font-semibold normal-case tracking-normal">
-                Price breakdown
-              </Dialog.Title>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-2 backdrop-blur">
+              <Dialog.Title className="text-sm normal-case tracking-normal">Quote summary</Dialog.Title>
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  className="h-10 w-10 rounded-md hover:bg-muted flex items-center justify-center"
+                  className="h-11 w-11 rounded-md hover:bg-muted flex items-center justify-center"
                   aria-label="Close"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </Dialog.Close>
             </div>
-            <div className="p-4 pb-8">{children}</div>
+            <div className="p-4 pb-10">{children}</div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

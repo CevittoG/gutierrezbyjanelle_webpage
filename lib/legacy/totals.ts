@@ -1,9 +1,13 @@
+// FROZEN (docs/quote-builder-redesign.md §8.5): the pre-v5 quote engine,
+// moved here unchanged so legacy quotes keep converting to the exact totals
+// their clients saw. Do not edit the money math in this file.
+
 // Pure quote-total computation, shared by the calculator, the print view, and
 // the public client portal so every surface renders the *same* numbers from the
 // *same* engine path.
 //
 // This is the single source of truth for the quote money math. The engine
-// (quote-calc-logic) only computes per-line *variable cost*; everything else —
+// (./logic) only computes per-line *variable cost*; everything else —
 // markup, discounts, the once-per-quote project services (revisions, packaging,
 // digital license), rush, and misc — is layered on here, in one place.
 //
@@ -19,7 +23,7 @@
 //
 // No IO, no React — importable on the server and the client.
 
-import type { DraftConfig, LineKind, MiscAddOn, QuoteLine } from "./quote-calc-drafts";
+import type { DraftConfig, LineKind, MiscAddOn, QuoteLine } from "./types";
 import {
   CatalogItem,
   ITEM_CATALOG,
@@ -34,7 +38,7 @@ import {
   clampPtg,
   getDiscountPtg,
   markupVariable,
-} from "./quote-calc-logic";
+} from "./logic";
 
 // One component of a discount, itemized for display (the bundle discount, or one
 // of the relationship discounts). `amount` is in dollars off this scope's labor.

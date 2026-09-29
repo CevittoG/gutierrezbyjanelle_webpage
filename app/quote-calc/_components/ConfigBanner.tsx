@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CloudOff, RefreshCw } from "lucide-react";
 import { cn } from "@/utils";
-import type { ConfigWarning } from "@/lib/quote-calc-config";
+import type { ConfigWarning } from "@/lib/quote-pricebook";
 
 export type ConfigBannerState =
   | { kind: "ok"; warnings: ConfigWarning[] }
@@ -71,12 +71,10 @@ export function ConfigBanner({ state, onRetry, retrying }: Props) {
       role="alert"
       aria-live="polite"
       className={cn(
-        "mb-6 rounded-md border bg-card text-card-foreground shadow-sm",
-        "border-l-4 border-l-accent",
-        "border-border",
+        "mb-6 rounded-md border border-border bg-card text-card-foreground",
       )}
     >
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex flex-wrap items-start gap-3 p-4">
         <div
           className={cn(
             "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
@@ -85,7 +83,7 @@ export function ConfigBanner({ state, onRetry, retrying }: Props) {
         >
           <Icon className="h-4 w-4" aria-hidden />
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-[12rem]">
           <p className="font-anybody text-xs uppercase tracking-wider text-foreground">
             {title}
           </p>
@@ -95,10 +93,10 @@ export function ConfigBanner({ state, onRetry, retrying }: Props) {
           {warnings.length > 0 && (
             <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
               {warnings.map((w, i) => (
-                <li key={i} className="flex gap-2">
+                <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span
                     className={cn(
-                      "mt-0.5 inline-flex shrink-0 items-center rounded-sm border border-border",
+                      "inline-flex shrink-0 items-center whitespace-nowrap rounded-sm border border-border",
                       "px-1.5 py-0.5 font-anybody text-[10px] uppercase tracking-wider",
                       "text-muted-foreground",
                     )}
@@ -106,7 +104,7 @@ export function ConfigBanner({ state, onRetry, retrying }: Props) {
                     {w.tab ?? "Sheet"}
                     {w.sheetRow != null ? ` · row ${w.sheetRow}` : ""}
                   </span>
-                  <span className="leading-snug">{w.detail}</span>
+                  <span className="leading-snug min-w-0">{w.detail}</span>
                 </li>
               ))}
             </ul>
@@ -118,8 +116,8 @@ export function ConfigBanner({ state, onRetry, retrying }: Props) {
             onClick={onRetry}
             disabled={retrying}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-sm border border-border",
-              "bg-background px-3 py-1.5 font-anybody text-xs uppercase tracking-wider",
+              "flex h-11 shrink-0 items-center gap-1.5 rounded-sm border border-border",
+              "bg-background px-3 font-anybody text-xs uppercase tracking-wider",
               "text-foreground transition-colors",
               "hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-50",
             )}

@@ -1,11 +1,34 @@
-import {
-  DEFAULTS,
-  PACKAGES,
-  PkgKey,
-  PricingMode,
-  QuoteState,
-  getItemQty,
-} from "./quote-calc-logic";
+import { ITEM_CATALOG, type CatalogItem, type QuoteState } from "./legacy/logic";
+import type { DraftConfig } from "./legacy/types";
+import { migrateConfig, withSnapshotDefaults } from "./legacy/migrate";
+// (DraftConfig above is the pre-v5 config, carried only by LegacyDraft.)
+import { computeTotals } from "./quote-engine";
+import { convertLegacyDraft } from "./quote-legacy";
+import { DEFAULT_SETTINGS } from "./quote-pricebook";
+import type {
+  DraftConfigV5,
+  LineOption,
+  QuoteDiscount,
+  QuoteGroup,
+  QuoteLineV5,
+} from "./quote-types";
+
+export type {
+  DiscountReason,
+  DraftConfigV5,
+  HealthSnapshot,
+  LegacyRecord,
+  LineKindV5,
+  LineOption,
+  QtyLink,
+  QuoteDiscount,
+  QuoteGroup,
+  QuoteLineV5,
+  QuoteServices,
+} from "./quote-types";
+
+// The v1–v4 config shape and its migration are frozen in lib/legacy/.
+export * from "./legacy/types";
 
 export interface DraftClientInfo {
   name: string;
@@ -34,101 +57,11 @@ export const EVENT_TYPES = [
   "Other",
 ] as const;
 
-export interface MiscAddOn {
-  id: string;
-  label: string;
-  qty: number;
-  unitPrice: number;
-  /**
-   * Digital (nothing to ship) vs physical. A physical add-on pulls the quote
-   * into packaging + the shipping reminder + the physical stage wording. Never
-   * changes the add-on's own price. Backfilled on load for older quotes.
-   */
-  digital?: boolean;
-}
+// The pre-v5 draft, still written by the old calculator until the new builder
+// ships (P4). Read surfaces convert it with toV5Draft().
+export const LEGACY_SCHEMA_VERSION = 4 as const;
 
-export type LineKind = "package" | "item";
-
-// One line on a quote. A quote holds an array of these so a client can buy
-// several things at once. A line is either a predefined bundle (`kind:
-// "package"`, keyed by `pkg`) or a single catalog piece (`kind: "item"`, keyed
-// by `itemKey`). This unified model replaces the old `packages` + `addOns` +
-// `individual` pseudo-package split — one catalog item now prices identically
-// however it is added.
-export interface QuoteLine {
-  id: string;
-  kind: LineKind;
-  /** Bundle key when `kind === "package"` (sweet, signature, diy, event-*). */
-  pkg?: PkgKey;
-  /** Catalog item key when `kind === "item"` (iInvite, iGames, …). */
-  itemKey?: string;
-  /**
-   * Package lines: household/guest count (drives the catalog qty rules).
-   * Item lines: the raw piece count.
-   */
-  qty: number;
-  /** Digital (design-only) vs physical (printed + shipped). Applies to both kinds. */
-  digital?: boolean;
-}
-
-export interface DraftConfig {
-  lines: QuoteLine[];
-  mode: PricingMode;
-  miscAddOns: MiscAddOn[];
-
-  // Project services (quote-level — computed once, never per line).
-  rushFee: boolean;
-  extraRevisions: number;
-  digitalLicense: boolean;
-
-  // Quote-wide discounts (grouped — applied in one stage, stacked additively).
-  vendorIncentive: boolean;
-  /** Optional extra discount (0–100), e.g. bulk pricing. Was `packageDiscountPtg`. */
-  customDiscountPtg: number;
-  /** Optional extra discount (0–100) for friends & family. */
-  familyFriendsPtg: number;
-
-  // Material toggles (quote-wide).
-  fullColor: boolean;
-  customPaper: boolean;
-
-  /**
-   * Which pricing rules this quote was built under, so a rule change never
-   * silently re-prices a quote that was already saved/sent.
-   *   1 — rush excludes custom add-ons; an add-on needs a name to count.
-   *   2 — rush includes custom add-ons; an unnamed add-on counts as "Custom item".
-   * Missing ⇒ 1 (quotes saved before the field existed).
-   */
-  pricingVersion?: number;
-}
-
-export const CURRENT_PRICING_VERSION = 2;
-
-export const DEFAULT_CONFIG: DraftConfig = {
-  lines: [],
-  mode: "fresh",
-  miscAddOns: [],
-  rushFee: false,
-  extraRevisions: 0,
-  digitalLicense: false,
-  vendorIncentive: false,
-  customDiscountPtg: 0,
-  familyFriendsPtg: 0,
-  fullColor: false,
-  customPaper: false,
-  pricingVersion: CURRENT_PRICING_VERSION,
-};
-
-// A line is digital (design-only, nothing shipped) when it's a digital item or a
-// digital package. Shared by the physical/digital project-type rule.
-export function isLineDigital(line: QuoteLine): boolean {
-  if (line.kind === "item") return line.digital ?? false;
-  return line.pkg && PACKAGES[line.pkg] ? PACKAGES[line.pkg].isDigital : false;
-}
-
-export const CURRENT_SCHEMA_VERSION = 4 as const;
-
-export interface Draft {
+export interface LegacyDraft {
   id: string;
   name: string;
   createdAt: string;
@@ -162,149 +95,11 @@ export function newId(): string {
   return "id-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// Rewrite the legacy `iDrinkTop` add-on key as `iWedgeTop`. Idempotent.
-function migrateAddOns(addOns: Record<string, number> | undefined): Record<string, number> {
-  const next: Record<string, number> = { ...(addOns ?? {}) };
-  if ("iDrinkTop" in next) {
-    const qty = next.iDrinkTop;
-    delete next.iDrinkTop;
-    if (qty > 0) next.iWedgeTop = (next.iWedgeTop ?? 0) + qty;
-  }
-  return next;
-}
-
-function numOr(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
-
-function validPkg(pkg: unknown): PkgKey {
-  return typeof pkg === "string" && pkg in PACKAGES ? (pkg as PkgKey) : "sweet";
-}
-
-// One line as it may appear on disk: either a current v4 `QuoteLine` (has
-// `kind`) or a legacy package object (`pkg`/`qty`/`individual*`, where
-// `pkg === "individual"` meant a single à-la-carte piece).
-type LegacyLine = {
-  id?: string;
-  kind?: string;
-  pkg?: string;
-  qty?: number;
-  itemKey?: string;
-  individualItem?: string;
-  individualDigital?: boolean;
-  digital?: boolean;
-};
-
-// Project any on-disk line shape to a clean v4 QuoteLine. Legacy `individual`
-// packages collapse to item lines, preserving their piece count via getItemQty
-// so the migrated quote re-prices to the same per-item quantities.
-function lineFromLegacy(p: LegacyLine): QuoteLine {
-  const id = typeof p.id === "string" && p.id ? p.id : newId();
-  if (p.kind === "item") {
-    return { id, kind: "item", itemKey: p.itemKey ?? "iInvite", qty: numOr(p.qty, 1), digital: p.digital ?? false };
-  }
-  if (p.kind === "package") {
-    return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: p.digital ?? false };
-  }
-  // Legacy package shape.
-  if (p.pkg === "individual") {
-    const itemKey = p.individualItem ?? "iInvite";
-    return {
-      id,
-      kind: "item",
-      itemKey,
-      qty: getItemQty(itemKey, numOr(p.qty, 75)),
-      digital: p.individualDigital ?? false,
-    };
-  }
-  return { id, kind: "package", pkg: validPkg(p.pkg), qty: numOr(p.qty, 75), digital: false };
-}
-
-// A config as it may appear on disk / on the wire: a current v4 shape (with
-// `lines`), a v3 shape (`packages` + `addOns`), or a legacy v1/v2 shape (single
-// `pkg`/`qty`/`individual*`).
-type LegacyConfig = Partial<DraftConfig> & {
-  pkg?: string;
-  qty?: number;
-  individualItem?: string;
-  individualDigital?: boolean;
-  packages?: LegacyLine[];
-  lines?: LegacyLine[];
-  addOns?: Record<string, number>;
-  packageDiscountPtg?: number;
-};
-
-function migrateConfig(c: LegacyConfig): DraftConfig {
-  const {
-    pkg: legacyPkg,
-    qty: legacyQty,
-    individualItem: legacyItem,
-    individualDigital: legacyDigital,
-    packages: rawPackages,
-    lines: rawLines,
-    addOns: rawAddOns,
-    packageDiscountPtg: legacyCustomDiscount,
-    customDiscountPtg,
-    ...rest
-  } = c;
-
-  let lines: QuoteLine[];
-  if (Array.isArray(rawLines)) {
-    // v4 shape: trust it as saved — an empty list is a real zero-line quote
-    // (e.g. custom add-ons only), never a cue to inject a default package.
-    lines = rawLines.map(lineFromLegacy);
-  } else {
-    if (Array.isArray(rawPackages) && rawPackages.length > 0) {
-      lines = rawPackages.map(lineFromLegacy);
-    } else if (legacyPkg) {
-      lines = [
-        lineFromLegacy({
-          pkg: legacyPkg,
-          qty: legacyQty,
-          individualItem: legacyItem,
-          individualDigital: legacyDigital,
-        }),
-      ];
-    } else {
-      lines = [];
-    }
-
-    // Fold legacy à-la-carte add-ons into item lines (raw piece counts).
-    for (const [key, qty] of Object.entries(migrateAddOns(rawAddOns))) {
-      if (qty > 0) lines.push({ id: newId(), kind: "item", itemKey: key, qty, digital: false });
-    }
-
-    // Pre-v4 quotes always carried a package; keep their old Sweet Suite
-    // fallback so an odd legacy shape still re-prices the way it did.
-    if (lines.length === 0) lines = [{ id: newId(), kind: "package", pkg: "sweet", qty: 75, digital: false }];
-  }
-
-  // Backfill the add-on digital flag without moving any existing total: an
-  // add-on only "adds" physicality when the quote already has a physical line.
-  const hasPhysicalLine = lines.some((l) => !isLineDigital(l));
-  const miscAddOns: MiscAddOn[] = (Array.isArray(rest.miscAddOns) ? rest.miscAddOns : []).map((m) => ({
-    ...m,
-    digital: typeof m.digital === "boolean" ? m.digital : !hasPhysicalLine,
-  }));
-
-  return {
-    ...DEFAULT_CONFIG,
-    ...rest,
-    lines,
-    miscAddOns,
-    customDiscountPtg: numOr(customDiscountPtg, numOr(legacyCustomDiscount, 0)),
-    pricingVersion: numOr(rest.pricingVersion, 1),
-  };
-}
-
-export function migrateDraft(d: Draft): Draft {
-  return {
-    ...d,
-    client: { ...EMPTY_CLIENT_INFO, ...d.client },
-    config: migrateConfig(d.config),
-    schemaVersion: CURRENT_SCHEMA_VERSION,
-  };
-}
+// --- Local cache (localStorage) ---
+//
+// v5 drafts only. A cache written by the old calculator is converted on load
+// (bundled catalog); the server copy wins on
+// reconcile (equal updatedAt ⇒ remote).
 
 export function loadDrafts(): Draft[] {
   if (!isBrowser()) return [];
@@ -313,19 +108,12 @@ export function loadDrafts(): Draft[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((d): d is Draft => {
-        return (
-          d &&
-          typeof d === "object" &&
-          (d.schemaVersion === 1 ||
-            d.schemaVersion === 2 ||
-            d.schemaVersion === 3 ||
-            d.schemaVersion === 4) &&
-          typeof d.id === "string"
-        );
-      })
-      .map(migrateDraft);
+    const out: Draft[] = [];
+    for (const d of parsed) {
+      const stored = normalizeStoredDraft(d);
+      if (stored) out.push(toV5Draft(stored));
+    }
+    return out;
   } catch (err) {
     console.warn("Failed to load drafts; resetting.", err);
     return [];
@@ -334,16 +122,14 @@ export function loadDrafts(): Draft[] {
 
 export function saveDrafts(drafts: Draft[]): void {
   if (!isBrowser()) return;
-  localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  try {
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  } catch (err) {
+    console.warn("Failed to cache drafts locally.", err);
+  }
 }
 
-export function createDraft(
-  name: string,
-  client: DraftClientInfo,
-  config: DraftConfig,
-  assumptions: QuoteState,
-  cachedTotal: number,
-): Draft {
+export function createDraft(name: string, client: DraftClientInfo, config: DraftConfigV5): Draft {
   const now = new Date().toISOString();
   return {
     id: newId(),
@@ -352,21 +138,18 @@ export function createDraft(
     updatedAt: now,
     client,
     config,
-    assumptionsSnapshot: { ...assumptions },
-    cachedTotal,
+    cachedTotal: computeTotals(config).total,
     schemaVersion: CURRENT_SCHEMA_VERSION,
   };
 }
 
+/** Save to the local cache, stamping updatedAt and recomputing cachedTotal. */
 export function upsertDraft(draft: Draft): Draft[] {
   const drafts = loadDrafts();
   const idx = drafts.findIndex((d) => d.id === draft.id);
-  const next: Draft = { ...draft, updatedAt: new Date().toISOString() };
-  if (idx >= 0) {
-    drafts[idx] = next;
-  } else {
-    drafts.unshift(next);
-  }
+  const next: Draft = { ...draft, updatedAt: new Date().toISOString(), cachedTotal: computeTotals(draft.config).total };
+  if (idx >= 0) drafts[idx] = next;
+  else drafts.unshift(next);
   saveDrafts(drafts);
   return drafts;
 }
@@ -377,18 +160,10 @@ export function deleteDraft(id: string): Draft[] {
   return drafts;
 }
 
-export function renameDraft(id: string, name: string): Draft[] {
-  const drafts = loadDrafts();
-  const idx = drafts.findIndex((d) => d.id === id);
-  if (idx < 0) return drafts;
-  drafts[idx] = { ...drafts[idx], name: name.trim() || drafts[idx].name, updatedAt: new Date().toISOString() };
-  saveDrafts(drafts);
-  return drafts;
-}
-
 export interface LastSession {
   client: DraftClientInfo;
-  config: DraftConfig;
+  config: DraftConfigV5;
+  name: string;
   currentDraftId: string | null;
 }
 
@@ -398,10 +173,12 @@ export function loadLastSession(): LastSession | null {
     const raw = localStorage.getItem(LAST_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LastSession>;
-    if (!parsed.config || !parsed.client) return null;
+    const config = sanitizeConfigV5(parsed.config);
+    if (!config || !parsed.client) return null;
     return {
       client: { ...EMPTY_CLIENT_INFO, ...parsed.client },
-      config: migrateConfig(parsed.config),
+      config,
+      name: typeof parsed.name === "string" ? parsed.name : "",
       currentDraftId: parsed.currentDraftId ?? null,
     };
   } catch {
@@ -411,7 +188,11 @@ export function loadLastSession(): LastSession | null {
 
 export function saveLastSession(session: LastSession): void {
   if (!isBrowser()) return;
-  localStorage.setItem(LAST_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(LAST_KEY, JSON.stringify(session));
+  } catch {
+    // storage full or blocked
+  }
 }
 
 export function clearLastSession(): void {
@@ -419,19 +200,15 @@ export function clearLastSession(): void {
   localStorage.removeItem(LAST_KEY);
 }
 
-// Sanity helper for QuoteState completeness when loading a snapshot.
-export function withSnapshotDefaults(snapshot: Partial<QuoteState>): QuoteState {
-  return { ...DEFAULTS, ...snapshot };
-}
-
-// Helper used by remote-load paths to take an unknown draft-shaped object
-// from the wire and produce a clean, migrated Draft we trust.
-export function normalizeIncomingDraft(raw: unknown): Draft | null {
+// Helper used by remote-load paths to take an unknown legacy draft from the
+// wire and produce a clean, migrated LegacyDraft we trust. v5 drafts are
+// rejected here (they have no assumptionsSnapshot); see normalizeStoredDraft.
+export function normalizeIncomingDraft(raw: unknown): LegacyDraft | null {
   if (!raw || typeof raw !== "object") return null;
-  const d = raw as Partial<Draft>;
+  const d = raw as Partial<LegacyDraft>;
   if (typeof d.id !== "string") return null;
   if (!d.config || !d.client || !d.assumptionsSnapshot) return null;
-  const migrated: Draft = {
+  const migrated: LegacyDraft = {
     id: d.id,
     name: d.name ?? "Untitled quote",
     createdAt: d.createdAt ?? new Date().toISOString(),
@@ -440,7 +217,7 @@ export function normalizeIncomingDraft(raw: unknown): Draft | null {
     config: migrateConfig(d.config),
     assumptionsSnapshot: withSnapshotDefaults(d.assumptionsSnapshot),
     cachedTotal: typeof d.cachedTotal === "number" ? d.cachedTotal : 0,
-    schemaVersion: CURRENT_SCHEMA_VERSION,
+    schemaVersion: LEGACY_SCHEMA_VERSION,
   };
   return migrated;
 }
@@ -456,4 +233,160 @@ export function reconcileDrafts(local: Draft[], remote: Draft[]): Draft[] {
   return Array.from(byId.values()).sort(
     (a, b) => (b.updatedAt > a.updatedAt ? 1 : b.updatedAt < a.updatedAt ? -1 : 0),
   );
+}
+
+// ---------------------------------------------------------------------------
+// v5 drafts (docs/quote-builder-redesign.md §8)
+// ---------------------------------------------------------------------------
+
+export const CURRENT_SCHEMA_VERSION = 5 as const;
+
+export interface Draft {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  client: DraftClientInfo;
+  config: DraftConfigV5;
+  /** Always computeTotals(config).total, recomputed on save. */
+  cachedTotal: number;
+  schemaVersion: 5;
+}
+
+/** Whatever a `_data` payload or a local cache holds: v5, or a pre-v5 quote. */
+export type StoredDraft = Draft | LegacyDraft;
+
+export function isV5Draft(d: StoredDraft): d is Draft {
+  return d.schemaVersion === 5;
+}
+
+function num(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+function str(v: unknown, fallback = ""): string {
+  return typeof v === "string" ? v : fallback;
+}
+
+function cleanOption(o: unknown): LineOption | null {
+  if (!o || typeof o !== "object") return null;
+  const r = o as Partial<LineOption>;
+  if (typeof r.id !== "string") return null;
+  const kind = r.kind === "percent" || r.kind === "flat" ? r.kind : "per-piece";
+  return {
+    id: r.id,
+    name: str(r.name, r.id),
+    kind,
+    amount: num(r.amount, 0),
+    ...(typeof r.estCost === "number" ? { estCost: r.estCost } : {}),
+  };
+}
+
+function cleanLine(l: unknown, i: number): QuoteLineV5 | null {
+  if (!l || typeof l !== "object") return null;
+  const r = l as Partial<QuoteLineV5>;
+  const link = r.qtyLink && (r.qtyLink.basis === "household" || r.qtyLink.basis === "guest")
+    ? { basis: r.qtyLink.basis, per: num(r.qtyLink.per, 1) }
+    : null;
+  return {
+    ...r,
+    id: str(r.id) || `line-${i}`,
+    kind: r.kind === "custom" ? "custom" : "product",
+    name: str(r.name),
+    qty: num(r.qty, 0),
+    qtyLink: link,
+    unitPrice: num(r.unitPrice, 0),
+    designFee: num(r.designFee, 0),
+    digital: r.digital === true,
+    options: (Array.isArray(r.options) ? r.options : []).map(cleanOption).filter((o): o is LineOption => !!o),
+  } as QuoteLineV5;
+}
+
+/** Validate a v5 config from the wire, backfilling any missing field. */
+export function sanitizeConfigV5(raw: unknown): DraftConfigV5 | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Partial<DraftConfigV5>;
+  if (c.schema !== 5) return null;
+  const sv: Partial<DraftConfigV5["services"]> = c.services ?? {};
+  const discount = c.discount as QuoteDiscount | null | undefined;
+  return {
+    ...c,
+    schema: 5,
+    households: num(c.households, 0),
+    guests: num(c.guests, 0),
+    groups: (Array.isArray(c.groups) ? c.groups : [])
+      .filter((g): g is QuoteGroup => !!g && typeof g.id === "string")
+      .map((g) => ({ ...g, name: str(g.name), bundlePct: num(g.bundlePct, 0) })),
+    lines: (Array.isArray(c.lines) ? c.lines : []).map(cleanLine).filter((l): l is QuoteLineV5 => !!l),
+    services: {
+      rush: sv.rush === true,
+      rushPct: num(sv.rushPct, DEFAULT_SETTINGS.rushPct),
+      extraRevisions: num(sv.extraRevisions, 0),
+      revisionRoundPrice: num(sv.revisionRoundPrice, DEFAULT_SETTINGS.revisionRoundPrice),
+      license: sv.license === true,
+      licenseFee: num(sv.licenseFee, DEFAULT_SETTINGS.licenseFee),
+      packagingFee: num(sv.packagingFee, DEFAULT_SETTINGS.packagingFee),
+    },
+    reuseDesignPct: num(c.reuseDesignPct, DEFAULT_SETTINGS.reuseDesignPct),
+    discount:
+      discount && typeof discount === "object" && (discount.kind === "percent" || discount.kind === "amount")
+        ? { ...discount, value: num(discount.value, 0) }
+        : null,
+    adjustment:
+      c.adjustment && typeof c.adjustment === "object" && Number.isFinite(c.adjustment.amount)
+        ? { amount: c.adjustment.amount, label: str(c.adjustment.label) }
+        : null,
+    shipping: typeof c.shipping === "number" && Number.isFinite(c.shipping) ? c.shipping : null,
+    deposit: num(c.deposit, 0),
+    pricedAt: str(c.pricedAt),
+  };
+}
+
+export function normalizeDraftV5(raw: unknown): Draft | null {
+  if (!raw || typeof raw !== "object") return null;
+  const d = raw as Partial<Draft>;
+  if (typeof d.id !== "string" || d.schemaVersion !== 5) return null;
+  const config = sanitizeConfigV5(d.config);
+  if (!config) return null;
+  return {
+    id: d.id,
+    name: str(d.name, "Untitled quote") || "Untitled quote",
+    createdAt: str(d.createdAt) || new Date().toISOString(),
+    updatedAt: str(d.updatedAt) || new Date().toISOString(),
+    client: { ...EMPTY_CLIENT_INFO, ...(d.client ?? {}) },
+    config,
+    cachedTotal: computeTotals(config).total,
+    schemaVersion: 5,
+  };
+}
+
+/** Any stored quote (v5 or legacy) from the wire or a `_data` cell. */
+export function normalizeStoredDraft(raw: unknown): StoredDraft | null {
+  if (raw && typeof raw === "object" && (raw as { schemaVersion?: unknown }).schemaVersion === 5) {
+    return normalizeDraftV5(raw);
+  }
+  return normalizeIncomingDraft(raw);
+}
+
+/**
+ * The v5 view of a stored quote. A pre-v5 quote is converted in memory with
+ * `catalog` (the bundled catalog: every Sheet quote was frozen to v5 on
+ * 2026-09-27, so only old local caches still need this). v5 drafts pass through.
+ */
+export function toV5Draft(d: StoredDraft, catalog: CatalogItem[] = ITEM_CATALOG): Draft {
+  if (isV5Draft(d)) return d;
+  const { config } = convertLegacyDraft(
+    { id: d.id, config: d.config, assumptionsSnapshot: d.assumptionsSnapshot, updatedAt: d.updatedAt },
+    catalog,
+    d.updatedAt,
+  );
+  return {
+    id: d.id,
+    name: d.name,
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+    client: { ...EMPTY_CLIENT_INFO, ...d.client },
+    config,
+    cachedTotal: computeTotals(config).total,
+    schemaVersion: 5,
+  };
 }

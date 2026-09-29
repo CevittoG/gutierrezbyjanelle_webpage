@@ -8,6 +8,7 @@ import { GalleryGrid } from "@/components/ui/gallery-grid";
 import { Button } from "@/components/ui/button";
 import { InstagramGrid } from "@/components/ui/instagram-grid";
 import { siteConfig } from "@/config/site";
+import { mailtoHref } from "@/lib/mailto";
 import type { GalleryTag } from "@/config/site";
 import { useLocale } from "@/lib/locale-context";
 import { pick } from "@/lib/i18n";
@@ -104,7 +105,7 @@ export function GalleryContent() {
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <a href={`mailto:${siteConfig.contactEmail ?? ""}`}>
+              <a href={mailtoHref(t("cta.emailSubject"))}>
                 <Mail className="w-4 h-4" aria-hidden="true" />
                 {t("cta.emailJanelle")}
               </a>

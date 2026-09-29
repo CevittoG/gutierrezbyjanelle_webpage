@@ -24,7 +24,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ExternalLink } from "lucide-react";
-import { fmt$ } from "@/lib/quote-calc-logic";
+import { formatMoney } from "@/lib/money";
+import { DuplicateQuoteButton } from "@/components/quote-app/DuplicateQuoteButton";
 import { isLinkActive, type LinkStatus } from "@/lib/quote-calc-portal";
 import { deleteDraft } from "@/lib/quote-calc-drafts";
 import { archiveRemoteDraft, restoreRemoteDraft } from "@/lib/quote-calc-drafts-remote";
@@ -280,7 +281,7 @@ export function Dashboard({ rows, todayISO }: { rows: QuoteRow[]; todayISO: stri
 
       {/* Ledger strip — flat, hairline-divided. Not a stat-card grid. */}
       <dl className="grid grid-cols-3 border-y border-border divide-x divide-border mb-10">
-        <Stat label="Active pipeline" value={fmt$(pipeline)} />
+        <Stat label="Active pipeline" value={formatMoney(pipeline)} />
         <Stat label="Open quotes" value={String(activeRows.length)} />
         <Stat label="Shared links" value={String(sharedCount)} />
       </dl>
@@ -417,7 +418,7 @@ function UpNext({ row, todayISO }: { row: QuoteRow; todayISO: string }) {
           </div>
           <div className="text-right shrink-0">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total</p>
-            <p className="font-squarepeg text-4xl leading-none tabular-nums">{fmt$(row.total)}</p>
+            <p className="font-squarepeg text-4xl leading-none tabular-nums">{formatMoney(row.total)}</p>
           </div>
         </div>
 
@@ -470,7 +471,7 @@ function QuoteListRow({
   const shared = linkLive(row);
 
   return (
-    <li className="flex items-center gap-3 px-4 sm:px-5 py-3.5 normal-case tracking-normal hover:bg-muted/40 transition-colors">
+    <li className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3.5 normal-case tracking-normal hover:bg-muted/40 transition-colors">
       <div className="min-w-0 flex-1">
         <p className={cn("text-sm font-medium truncate", row.archived && "text-muted-foreground")}>
           {row.client || "—"}
@@ -487,24 +488,24 @@ function QuoteListRow({
 
       <p
         className={cn(
-          "w-20 sm:w-24 shrink-0 text-right font-mono tabular-nums text-sm",
+          "w-24 shrink-0 text-right font-mono tabular-nums text-sm whitespace-nowrap",
           row.archived && "text-muted-foreground",
         )}
       >
-        {fmt$(row.total)}
+        {formatMoney(row.total)}
       </p>
 
       {/* An archived quote isn't a working quote — editing, managing its link, or
           opening the client's view would all be misleading. Restore is the only
           way back in. */}
       {row.archived ? (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex w-full sm:w-auto items-center justify-end gap-1 shrink-0">
           <RowAction as="button" label="Restore quote" onClick={onRestore} disabled={busy}>
             <RestoreIcon className="h-4 w-4" />
           </RowAction>
         </div>
       ) : (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex w-full sm:w-auto items-center justify-end gap-1 shrink-0">
           <RowAction
             as="link"
             href={`/quote/new?draft=${encodeURIComponent(row.id)}`}
@@ -528,6 +529,7 @@ function QuoteListRow({
               <ExternalLink className="h-4 w-4" aria-hidden />
             </RowAction>
           )}
+          <DuplicateQuoteButton id={row.id} variant="icon" />
           <RowAction as="button" label="Delete quote" onClick={onDelete} disabled={busy}>
             <TrashIcon className="h-4 w-4" />
           </RowAction>
@@ -553,7 +555,7 @@ function RowAction({
   children: React.ReactNode;
 }) {
   const base =
-    "h-9 w-9 inline-flex items-center justify-center rounded-md border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+    "h-11 w-11 sm:h-9 sm:w-9 inline-flex items-center justify-center rounded-md border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   if (as === "button") {
     return (
       <button
@@ -667,7 +669,7 @@ function DeleteQuoteDialog({
               <DialogTitle>Delete this quote?</DialogTitle>
               <DialogDescription>
                 <span className="block text-foreground font-medium">{row.client || "Untitled"}</span>
-                {row.eventType || "Event"} · {formatEventDate(row.eventDate)} · {fmt$(row.total)}
+                {row.eventType || "Event"} · {formatEventDate(row.eventDate)} · {formatMoney(row.total)}
               </DialogDescription>
             </DialogHeader>
 

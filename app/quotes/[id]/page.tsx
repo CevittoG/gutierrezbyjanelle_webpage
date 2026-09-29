@@ -11,11 +11,12 @@ import {
   getDraftById,
   getPortalMetaById,
   isSheetsConfigured,
-  listConfig,
+  listPriceBook,
 } from "@/lib/quote-calc-sheets";
-import { mergeRemoteConfig } from "@/lib/quote-calc-config";
-import { ITEM_CATALOG, fmt$ } from "@/lib/quote-calc-logic";
-import { computeQuoteBreakdown } from "@/lib/quote-calc-totals";
+import { computeTotals, diffAgainstPriceBook } from "@/lib/quote-engine";
+import { computeHealth } from "@/lib/quote-health";
+import { mergePriceBook, type PriceBook } from "@/lib/quote-pricebook";
+import { formatMoney } from "@/lib/money";
 import {
   buildPublicQuote,
   isLinkActive,
@@ -27,6 +28,9 @@ import { LinkControls } from "@/components/quote-app/LinkControls";
 import { StageControl } from "@/components/quote-app/StageControl";
 import { DepositPaidControl } from "@/components/quote-app/DepositPaidControl";
 import { HiddenNotesControl } from "@/components/quote-app/HiddenNotesControl";
+import { HealthCard } from "@/components/quote-app/HealthCard";
+import { InvestmentList } from "@/components/quote-app/InvestmentList";
+import { DuplicateQuoteButton } from "@/components/quote-app/DuplicateQuoteButton";
 import { cn } from "@/utils";
 
 export const runtime = "nodejs";
@@ -37,8 +41,10 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-function money(n: number): string {
-  return fmt$(Math.round(n));
+function formatDay(iso: string | undefined): string {
+  const t = new Date((iso ?? "").trim());
+  if (!iso || Number.isNaN(t.getTime())) return "";
+  return t.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatApprovedAt(iso: string | undefined): string {
@@ -59,13 +65,24 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
 
   const meta = await getPortalMetaById(id, { force: true });
 
-  let catalog = ITEM_CATALOG;
+  // Money comes from the saved config alone. The price book is read only for
+  // the health fallback (quotes without a health snapshot) and the
+  // "prices changed since" count.
+  const totals = computeTotals(draft.config);
+  let priceBook: PriceBook = mergePriceBook(null).priceBook;
   try {
-    catalog = mergeRemoteConfig(await listConfig()).catalog;
+    priceBook = mergePriceBook(await listPriceBook()).priceBook;
   } catch {
     // bundled fallback
   }
-  const breakdown = computeQuoteBreakdown(draft.config, draft.assumptionsSnapshot, catalog);
+  const s = priceBook.settings;
+  const health = computeHealth(draft.config, totals, {
+    revisionHours: s.revisionHours,
+    feesPct: s.feesPct,
+    hourlyTarget: s.hourlyTarget,
+    hourlyFloor: s.hourlyFloor,
+  });
+  const changed = draft.config.legacy ? [] : diffAgainstPriceBook(draft.config, priceBook);
 
   // Admin proxy URLs (cookie-gated) so proofs render regardless of link state.
   let files: PublicQuoteFile[] = [];
@@ -89,8 +106,9 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
   }
 
   const type = projectTypeOf(draft.config);
-  const quote = buildPublicQuote(draft, breakdown, files, catalog, meta?.depositPaid ?? 0);
-  const savings = Math.round(quote.savings);
+  const quote = buildPublicQuote(draft, totals, files, meta?.depositPaid ?? 0);
+  const money = (n: number) => formatMoney(n, { wholeDollars: quote.wholeDollars });
+  const editHref = `/quote/new?draft=${encodeURIComponent(id)}`;
   const folderUrl = meta?.driveFolderId ? folderWebLink(meta.driveFolderId) : null;
   const linkLive = meta ? isLinkActive(meta) && !!meta.publicToken : false;
   const approvedOn = formatApprovedAt(meta?.approvedAt);
@@ -117,6 +135,53 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
             ← All quotes
           </Link>
         </header>
+
+        <div className="flex flex-wrap items-center gap-2 normal-case tracking-normal">
+          <Link
+            href={editHref}
+            className="h-11 px-4 inline-flex items-center rounded-md bg-primary text-primary-foreground text-sm hover:bg-ring transition-colors"
+          >
+            Edit quote
+          </Link>
+          <DuplicateQuoteButton id={id} />
+          <a
+            href={`/quote-calc/print?draft=${encodeURIComponent(id)}`}
+            target="_blank"
+            rel="noopener"
+            className="h-11 px-4 inline-flex items-center rounded-md border border-border bg-card text-sm hover:bg-muted transition-colors"
+          >
+            Print / PDF ↗
+          </a>
+        </div>
+
+        <ul className="text-xs text-muted-foreground space-y-1 normal-case tracking-normal">
+          {draft.config.legacy ? (
+            <li>
+              <span aria-hidden>· </span>Converted from the old calculator. Totals preserved exactly as the client saw them.
+            </li>
+          ) : draft.config.pricedAt ? (
+            <li>
+              <span aria-hidden>· </span>Priced from the price book on {formatDay(draft.config.pricedAt)}.
+            </li>
+          ) : null}
+          {changed.length > 0 && (
+            <li>
+              <span aria-hidden className="text-foreground">! </span>
+              {changed.length} price{changed.length === 1 ? "" : "s"} changed since.{" "}
+              <Link href={editHref} className="underline underline-offset-4 hover:text-foreground">
+                Review in the builder
+              </Link>
+            </li>
+          )}
+        </ul>
+
+        {/* Pricing health (admin only) */}
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 normal-case tracking-normal">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
+            Pricing health · only you see this
+          </p>
+          <HealthCard health={health} />
+        </section>
 
         {/* Project stage */}
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-4 normal-case tracking-normal">
@@ -167,7 +232,7 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
               </a>
             ) : (
               <p className="text-muted-foreground">
-                No Drive folder yet. It's created automatically the next time this quote is saved.
+                No Drive folder yet. It&apos;s created automatically the next time this quote is saved.
               </p>
             )}
           </div>
@@ -175,43 +240,19 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
 
         {/* Client-facing summary — exactly what the public link shows */}
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 normal-case tracking-normal">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">
-            Client-facing summary — {quote.packageName}
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+            Client-facing summary
           </p>
-          {quote.includedPieces.length > 0 && (
-            <ul className="text-sm space-y-1 mb-4">
-              {quote.includedPieces.map((piece, i) => (
-                <li key={i} className="flex items-baseline gap-2">
-                  <span className="text-accent" aria-hidden>·</span>
-                  <span>{piece}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <dl className="space-y-1.5 text-sm border-t border-border pt-3">
-            {quote.lineItems.map((li, i) => {
-              const prevKind = i > 0 ? quote.lineItems[i - 1].kind : li.kind;
-              const isFirstExtra = li.kind !== "package" && prevKind === "package";
-              return (
-                <div key={i}>
-                  {isFirstExtra && (
-                    <div className="flex items-center gap-2 pt-0.5 pb-0.5">
-                      <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">Add-ons</span>
-                      <span className="flex-1 h-px bg-border/50" />
-                    </div>
-                  )}
-                  <SummaryRow label={li.label} value={money(li.price)} />
-                </div>
-              );
-            })}
-            <div className="border-t border-border/60 my-1.5" />
-            <SummaryRow label="Subtotal" value={money(quote.subtotal)} dim />
-            {savings > 0 && <SummaryRow label="Savings" value={`-${money(savings)}`} dim />}
-            {quote.rush > 0 && <SummaryRow label="Rush" value={`+${money(quote.rush)}`} dim />}
-            <div className="flex items-baseline justify-between gap-3 pt-1">
+          <p className="font-squarepeg text-3xl leading-tight mb-4">{quote.title}</p>
+          <InvestmentList quote={quote} compact />
+          <dl className="space-y-1.5 text-sm border-t border-border mt-4 pt-3">
+            <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-medium">Total</span>
               <span className="font-mono tabular-nums text-base">{money(quote.total)}</span>
             </div>
+            {quote.shipping === null && quote.anyPhysical && (
+              <p className="text-xs text-muted-foreground">Shipping: added later, from the carrier quote.</p>
+            )}
             {(quote.depositExpected > 0 || quote.depositPaid > 0) && (
               <div className="space-y-1.5 border-t border-border/60 pt-2 mt-1.5">
                 {quote.depositExpected > 0 && (

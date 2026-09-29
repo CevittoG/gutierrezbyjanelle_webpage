@@ -5,10 +5,9 @@
 // shape is defined in exactly one place and can never accidentally carry a
 // secret (cost rate, margin %, the full Draft) across to a public route.
 
-import { isLineDigital, type Draft, type DraftConfig } from "./quote-calc-drafts";
-import { countedMiscLines, type LineResult, type QuoteBreakdown } from "./quote-calc-totals";
-import { CatalogItem, ITEM_CATALOG, PACKAGES } from "./quote-calc-logic";
-import { quoteDisplayName } from "./quote-calc-summary";
+import type { Draft } from "./quote-calc-drafts";
+import { isDigitalQuote as isDigitalConfig, quoteDisplayName, type QuoteTotals } from "./quote-engine";
+import type { DraftConfigV5, QuoteLineV5 } from "./quote-types";
 
 export type LinkStatus = "active" | "revoked" | "";
 
@@ -168,17 +167,13 @@ export function isBalancePaid(stage: ProjectStage): boolean {
   return stageIndex(stage) > stageIndex("balance");
 }
 
-// A quote is "digital" only when *every* line and every counted custom add-on is
-// digital — any physical piece pulls the whole project into the physical flow
+// A quote is "digital" only when *every* line (custom lines included) is
+// digital: any physical piece pulls the whole project into the physical flow
 // (it must be produced and shipped). An empty quote reads as physical.
-export function isDigitalQuote(config: DraftConfig): boolean {
-  const flags = [
-    ...config.lines.map(isLineDigital),
-    ...countedMiscLines(config.miscAddOns, config.pricingVersion).map((m) => m.digital),
-  ];
-  return flags.length > 0 && flags.every(Boolean);
+export function isDigitalQuote(config: Pick<DraftConfigV5, "lines">): boolean {
+  return isDigitalConfig(config);
 }
-export function projectTypeOf(config: DraftConfig): ProjectType {
+export function projectTypeOf(config: Pick<DraftConfigV5, "lines">): ProjectType {
   return isDigitalQuote(config) ? "digital" : "physical";
 }
 
@@ -206,34 +201,57 @@ export interface PublicQuoteFile {
   url: string; // server proxy: /q/<token>/file/<id>
 }
 
-// One priced line on the client's investment table — a bundle, a single item,
-// the project-services charge, or a misc item. Selling price only; never the
-// cost buildup.
-export interface PublicQuoteLine {
-  label: string;
-  price: number; // list price (before quote-wide savings)
-  kind: "package" | "addon" | "service" | "misc";
+// PublicQuote v2 (docs/quote-builder-redesign.md §10.2). Selling prices only:
+// never listUnitPrice, estimates, health, productId, option costs, `legacy`,
+// or the hidden notes. Built from computeTotals(config) and nothing else.
+
+export interface PublicPiece {
+  name: string;
+  /** null for a digital file. */
+  qty: number | null;
+  detail?: string;
 }
 
-// Clients see what's included, an itemized investment, how much they save, the
-// total, and the deposit/balance split — never the cost buildup
-// (design/production/admin/margin) or any per-item rate.
+export interface PublicGroup {
+  name: string;
+  pieces: PublicPiece[];
+  subtotal: number;
+  savingsPct: number;
+  savings: number;
+}
+
+export interface PublicExtra extends PublicPiece {
+  price: number;
+  /** Bullet list (e.g. the pieces of a suite converted from the old calculator). */
+  includes?: string[];
+}
+
 export interface PublicQuote {
   clientName: string;
   eventType: string;
   eventDate: string; // formatted for display
-  packageName: string;
-  includedPieces: string[];
-  lineItems: PublicQuoteLine[]; // packages + add-ons + misc, each at list price
-  subtotal: number; // sum of lineItems (before savings/rush)
-  savings: number; // total discount amount (>= 0); 0 when no discount applies
-  rush: number; // rush surcharge (>= 0); 0 when no rush
-  total: number; // after savings + rush, before shipping — same as the printed PDF
-  depositExpected: number; // the fixed deposit to start proofs (capped at total); 0 when none configured
-  depositPaid: number; // amount Janelle has recorded as received (capped at total)
-  balanceRemaining: number; // total − depositPaid (>= 0)
+  title: string;
+  groups: PublicGroup[];
+  extras: PublicExtra[];
+  services: { label: string; price: number }[];
+  discount: { label: string; amount: number } | null;
+  rush: { label: string; amount: number } | null;
+  adjustment: { label: string; amount: number } | null;
+  /** null ⇒ "added later" (footnote). */
+  shipping: number | null;
+  /** Groups + extras + services, before savings/discount. */
+  subtotal: number;
+  /** Suite savings + the discount. */
+  savings: number;
+  total: number;
+  depositExpected: number;
+  depositPaid: number;
+  balanceRemaining: number;
+  /** Quotes converted from the old calculator keep their whole-dollar display. */
+  wholeDollars: boolean;
+  anyPhysical: boolean;
   proofs: { images: PublicQuoteFile[]; pdfs: PublicQuoteFile[] };
-  clientNote: string; // Janelle's client-facing message; "" when none set
+  clientNote: string;
 }
 
 function formatEventDate(iso: string): string {
@@ -248,122 +266,89 @@ function formatEventDate(iso: string): string {
   });
 }
 
-function buildIncludedPieces(
-  config: DraftConfig,
-  breakdown: QuoteBreakdown,
-  catalog: CatalogItem[],
-): string[] {
-  const pieces: string[] = [];
-
-  for (const line of config.lines) {
-    if (line.kind === "item") {
-      const cat = catalog.find((i) => i.key === line.itemKey);
-      const label = cat?.label ?? line.itemKey ?? "Item";
-      pieces.push(`${label} — ${line.digital ? "design" : `${line.qty} pcs`}`);
-      continue;
-    }
-
-    const pkgDef = line.pkg ? PACKAGES[line.pkg] : undefined;
-    if (!pkgDef) continue;
-    const isDigital = pkgDef.isDigital;
-    for (const it of pkgDef.items) {
-      const k = typeof it === "string" ? it : it.key;
-      const label =
-        (typeof it !== "string" && it.displayLabel) || catalog.find((i) => i.key === k)?.label || k;
-      const cat = catalog.find((i) => i.key === k);
-      const count =
-        cat?.fixed !== undefined ? `${cat.fixed} pcs` : isDigital ? "design" : `${(cat?.qty ?? 0) * line.qty} pcs`;
-      pieces.push(`${label} — ${count}`);
-    }
-  }
-
-  // Misc add-ons surface by name (their price sits in the investment table).
-  for (const m of breakdown.miscLines) pieces.push(`${m.label} × ${m.qty}`);
-  return pieces;
+function pieceOf(l: QuoteLineV5): PublicPiece {
+  const optionNames = l.options.map((o) => o.name);
+  const detail = [l.detail, ...optionNames, l.reuseDesign ? "adapted design" : null].filter(Boolean).join(" · ");
+  const digitalFile = l.kind === "product" && l.digital;
+  return {
+    name: l.name.trim() || "Custom item",
+    qty: digitalFile ? null : l.qty,
+    ...(detail ? { detail } : digitalFile ? { detail: "digital file" } : {}),
+  };
 }
 
-// Display name for a single priced line including piece count.
-// Item lines: "Games — 60 pcs" (or "Games — design" when digital).
-// Bundle lines: just the package name (e.g. "Sweet Suite").
-function lineLabel(line: LineResult, catalog: CatalogItem[]): string {
-  if (line.kind === "item") {
-    const cat = catalog.find((i) => i.key === line.itemKey);
-    const base = cat?.label ?? line.itemKey ?? "Item";
-    return line.digital ? `${base} — design` : `${base} — ${line.qty} pcs`;
-  }
-  return (line.pkg ? PACKAGES[line.pkg]?.name : undefined) ?? line.pkg ?? "Package";
-}
-
-// A short client-facing label for the quote-level project-services line.
-function servicesLabel(b: QuoteBreakdown): string {
-  const parts: string[] = [];
-  if (b.services.revisionCost > 0) parts.push("revisions");
-  if (b.services.licenseVar > 0) parts.push("file license");
-  if (b.services.packaging > 0) parts.push("packaging");
-  return parts.length > 0 ? `Project services (${parts.join(" + ")})` : "Project services";
-}
-
-// Project a full Draft + its recomputed breakdown down to the client-safe shape.
-// Everything secret (assumptionsSnapshot, per-item rates, the cost buildup) is
-// dropped here by construction — only the fields below ever leave the server.
-// `depositPaid` is the amount Janelle has recorded as received (from PortalMeta).
+// Project a v5 Draft + its totals down to the client-safe shape. Everything
+// secret is dropped here by construction: only the fields below ever leave
+// the server. `depositPaid` is what Janelle recorded as received (PortalMeta).
 export function buildPublicQuote(
   draft: Draft,
-  breakdown: QuoteBreakdown,
+  totals: QuoteTotals,
   files: PublicQuoteFile[],
-  catalog: CatalogItem[] = ITEM_CATALOG,
   depositPaid = 0,
 ): PublicQuote {
   const { config } = draft;
-  const savings = breakdown.savings;
+  const lineTotal = new Map(totals.lines.map((l) => [l.id, l.total]));
+  const grouped = new Set<string>();
 
-  // Itemized lines at list price (before quote-wide savings): one per quote
-  // line, then the once-per-quote project-services charge, then misc.
-  // `subtotal − savings + rush` closes to `finalPrice` (verified against the
-  // engine buildup).
-  const lineItems: PublicQuoteLine[] = [
-    ...breakdown.lines.map((l) => ({
-      label: lineLabel(l, catalog),
-      price: l.list,
-      kind: (l.kind === "package" ? "package" : "addon") as PublicQuoteLine["kind"],
-    })),
-  ];
-  if (breakdown.services.servicesList > 0) {
-    lineItems.push({
-      label: servicesLabel(breakdown),
-      price: breakdown.services.servicesList,
-      kind: "service",
+  const groups: PublicGroup[] = totals.groups
+    .filter((g) => g.lineIds.length > 0)
+    .map((g) => {
+      g.lineIds.forEach((id) => grouped.add(id));
+      return {
+        name: g.name,
+        pieces: config.lines.filter((l) => l.groupId === g.id).map(pieceOf),
+        subtotal: g.subtotal,
+        savingsPct: g.bundlePct,
+        savings: g.savings,
+      };
     });
-  }
-  for (const m of breakdown.miscLines) {
-    lineItems.push({
-      label: m.qty > 1 ? `${m.label} × ${m.qty}` : m.label,
-      price: m.total,
-      kind: "misc",
-    });
-  }
-  const subtotal = breakdown.subtotalList;
 
-  const total = breakdown.finalPrice;
-  const clampToTotal = (n: number) => Math.min(Math.max(n || 0, 0), total);
-  const depositExpected = clampToTotal(draft.assumptionsSnapshot.depositAmount || 0);
+  const extras: PublicExtra[] = config.lines
+    .filter((l) => !grouped.has(l.id))
+    .map((l) => {
+      const piece = pieceOf(l);
+      // A converted line is a fixed price for the whole piece: its qty of 1 says nothing.
+      const qty = piece.qty === 1 && (l.includes?.length || l.system || config.legacy) ? null : piece.qty;
+      return {
+        ...piece,
+        qty,
+        price: lineTotal.get(l.id) ?? 0,
+        ...(l.includes && l.includes.length > 0 ? { includes: [...l.includes] } : {}),
+      };
+    });
+
+  const services: { label: string; price: number }[] = [];
+  const n = Math.max(0, Math.round(config.services.extraRevisions));
+  if (totals.services.revisions > 0) {
+    services.push({ label: `Extra revision round${n === 1 ? "" : "s"} ×${n}`, price: totals.services.revisions });
+  }
+  if (totals.services.license > 0) services.push({ label: "File license (print-ready source files)", price: totals.services.license });
+  if (totals.services.packaging > 0) services.push({ label: "Packaging & handling", price: totals.services.packaging });
+
+  const total = totals.total;
+  const clampToTotal = (x: number) => Math.min(Math.max(x || 0, 0), Math.max(total, 0));
   const paid = clampToTotal(depositPaid);
-  const balanceRemaining = Math.max(total - paid, 0);
 
   return {
     clientName: draft.client.name || "",
     eventType: draft.client.eventType || "",
     eventDate: formatEventDate(draft.client.eventDate),
-    packageName: quoteDisplayName(config),
-    includedPieces: buildIncludedPieces(config, breakdown, catalog),
-    lineItems,
-    subtotal,
-    savings,
-    rush: breakdown.rushAmount,
+    title: quoteDisplayName(config),
+    groups,
+    extras,
+    services,
+    discount: totals.discount ? { label: totals.discount.label, amount: totals.discount.amount } : null,
+    rush: totals.rush ? { label: totals.rush.label, amount: totals.rush.amount } : null,
+    adjustment: totals.adjustment ? { label: totals.adjustment.label, amount: totals.adjustment.amount } : null,
+    shipping: totals.shipping,
+    subtotal: totals.itemsSubtotal + totals.services.total,
+    savings: totals.bundleSavings + (totals.discount?.amount ?? 0),
     total,
-    depositExpected,
+    depositExpected: clampToTotal(totals.deposit),
     depositPaid: paid,
-    balanceRemaining,
+    balanceRemaining: Math.max(total - paid, 0),
+    wholeDollars: !!config.legacy,
+    anyPhysical: totals.anyPhysical,
     proofs: {
       images: files.filter((f) => f.kind === "image"),
       pdfs: files.filter((f) => f.kind === "pdf"),

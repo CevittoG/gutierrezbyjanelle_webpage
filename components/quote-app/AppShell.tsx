@@ -8,13 +8,19 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { useState } from "react";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/utils";
 
 const NAV = [
-  { href: "/quotes", label: "Dashboard", match: (p: string) => p === "/quotes" || p.startsWith("/quotes/") },
+  {
+    href: "/quotes",
+    label: "Dashboard",
+    match: (p: string) => p === "/quotes" || (p.startsWith("/quotes/") && !p.startsWith("/quotes/prices")),
+  },
   { href: "/quote/new", label: "New quote", match: (p: string) => p.startsWith("/quote/new") },
+  { href: "/quotes/prices", label: "Price book", match: (p: string) => p.startsWith("/quotes/prices") },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -36,13 +42,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-40 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 md:px-6">
-          <Link href="/quotes" aria-label="Studio dashboard" className="flex items-center gap-2 shrink-0">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 sm:gap-4 px-4 md:px-6">
+          <Link href="/quotes" aria-label="Studio dashboard" className="hidden sm:flex items-center gap-2 shrink-0">
             <Image src="/logo.svg" alt="" width={32} height={32} className="h-8 w-8 object-contain" priority />
             <span className="hidden sm:inline font-squarepeg text-2xl leading-none">Studio</span>
           </Link>
 
-          <nav className="flex items-center gap-1 text-sm" aria-label="Quote tools">
+          <nav className="flex min-w-0 items-center gap-0.5 sm:gap-1 text-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Quote tools">
             {NAV.map((item) => {
               const active = item.match(pathname);
               return (
@@ -51,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "h-9 px-3 inline-flex items-center rounded-md normal-case tracking-normal transition-colors",
+                    "h-11 px-2 sm:px-3 inline-flex items-center whitespace-nowrap rounded-md normal-case tracking-normal transition-colors",
                     active
                       ? "text-foreground underline decoration-accent decoration-2 underline-offset-[6px]"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
@@ -63,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             <span className="hidden md:inline text-[11px] uppercase tracking-widest text-muted-foreground">
               {siteConfig.name}
             </span>
@@ -71,9 +77,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={signOut}
               disabled={signingOut}
-              className="h-9 px-3 rounded-md border border-border text-sm normal-case tracking-normal text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
+              aria-label="Sign out"
+              className="h-11 w-11 sm:w-auto sm:px-3 inline-flex items-center justify-center gap-2 rounded-md border border-border text-sm normal-case tracking-normal text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-50"
             >
-              {signingOut ? "Signing out…" : "Sign out"}
+              <LogOut className="h-4 w-4 sm:hidden" aria-hidden />
+              <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>
             </button>
           </div>
         </div>

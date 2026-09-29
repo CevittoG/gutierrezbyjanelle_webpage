@@ -1,3 +1,7 @@
+// FROZEN (docs/quote-builder-redesign.md §8.5): the pre-v5 quote engine,
+// moved here unchanged so legacy quotes keep converting to the exact totals
+// their clients saw. Do not edit the money math in this file.
+
 export type PkgKey =
   | "diy"
   | "sweet"
@@ -503,68 +507,4 @@ export function calcQuoteServices(
     profitAmount: profit,
     servicesList: list,
   };
-}
-
-// --- Formatting ---
-
-export function fmt$(n: number, dec = 0): string {
-  return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-
-export function fmt$2(n: number): string {
-  return fmt$(n, 2);
-}
-
-export function fmtPct(n: number): string {
-  return Math.round(n) + "%";
-}
-
-// --- Persistence ---
-
-const STORAGE_KEY = "quote-calc-defaults";
-
-export function loadSavedDefaults(): QuoteState {
-  if (typeof window === "undefined") return { ...DEFAULTS };
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw) as Partial<QuoteState>;
-    return { ...DEFAULTS, ...parsed };
-  } catch {
-    return { ...DEFAULTS };
-  }
-}
-
-export function saveDefaults(s: QuoteState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-}
-
-export function clearSavedDefaults(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-export function exportSettings(s: QuoteState): void {
-  const blob = new Blob([JSON.stringify(s, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `quote-calc-settings-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function importSettings(file: File): Promise<QuoteState> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string) as Partial<QuoteState>;
-        resolve({ ...DEFAULTS, ...parsed });
-      } catch {
-        reject(new Error("Invalid JSON file"));
-      }
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
 }
