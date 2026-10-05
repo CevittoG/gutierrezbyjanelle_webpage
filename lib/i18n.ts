@@ -101,6 +101,12 @@ export const dictionary = {
     "etsy.eyebrow": "Shop on Etsy",
 
     "footer.tagline": "Designed for creatives.",
+    "footer.faq": "Questions, answered",
+
+    "faq.eyebrow": "FAQ",
+    "faq.heading": "Questions, answered",
+    "faq.intro": "Straight answers about how I work, where I ship and what each suite includes. Don't see yours? Send me a note.",
+    "faq.jump": "Jump to a topic",
   },
   es: {
     "nav.home": "Inicio",
@@ -187,6 +193,12 @@ export const dictionary = {
     "etsy.eyebrow": "Compra en Etsy",
 
     "footer.tagline": "Diseñado para creativos.",
+    "footer.faq": "Preguntas frecuentes",
+
+    "faq.eyebrow": "Preguntas frecuentes",
+    "faq.heading": "Preguntas, respondidas",
+    "faq.intro": "Respuestas claras sobre cómo trabajo, a dónde envío y qué incluye cada colección. ¿No ves la tuya? Escríbeme.",
+    "faq.jump": "Ir a un tema",
   },
 } as const;
 

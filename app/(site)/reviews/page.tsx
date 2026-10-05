@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { SiteReviews } from "../_components/reviews";
 
-const pageDescription = `Read what clients say about ${siteConfig.name}. Real experiences from real clients.`;
+const pageDescription = `What brides and families say about ${siteConfig.name}: responsive, detail-driven custom wedding and event stationery, including bilingual English–Spanish designs.`;
 const pageTitle = `Client Reviews | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/reviews`;
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { SiteOccasion } from "../_components/occasion";
 
-const pageDescription = `Custom stationery and signage for dinner parties, graduations, showers, birthdays, quinceañeras, and corporate events by ${siteConfig.name}.`;
+const pageDescription = `Custom invitations, menus and signs for quinceañeras, showers, birthdays, graduations, dinner parties and corporate events by ${siteConfig.name}. Bilingual design, Austin, TX and Long Island, NY, shipping across the US.`;
 const pageTitle = `Events & Corporate | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/events`;
 

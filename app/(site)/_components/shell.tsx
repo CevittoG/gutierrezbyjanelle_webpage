@@ -111,6 +111,8 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             {nav.map((item) => (
               <Link key={item.href} href={item.href} className="w-fit hover:text-[hsl(var(--accent-light))]">{item.label}</Link>
             ))}
+            {/* Footer only, never mainNav: the page exists for answer engines and the curious. */}
+            <Link href="/faq" className="w-fit hover:text-[hsl(var(--accent-light))]">{t("footer.faq")}</Link>
           </nav>
           <div className="flex flex-col gap-3 text-[11px] tracking-[0.18em]">
             {contacts.map((c) => (
@@ -119,6 +121,11 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
               </a>
             ))}
             <span className="mt-2 normal-case tracking-normal text-primary-foreground/60">{siteConfig.contactEmail}</span>
+            <p className="mt-4 text-[10px] tracking-[0.2em] text-primary-foreground/60">
+              {siteConfig.locations.map((l) => `${l.city}, ${l.regionCode}`).join(" · ")}
+              <br />
+              {p(siteConfig.shipping)}
+            </p>
           </div>
         </div>
         <div className="border-t border-primary-foreground/15 px-4 py-6 text-center text-[10px] tracking-[0.2em] text-primary-foreground/60">
