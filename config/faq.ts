@@ -113,15 +113,6 @@ export const faqs: FaqEntry[] = [
       "Sí. Cada pieza se puede pedir por separado o sumarse a cualquier colección: invitaciones, tarjetas RSVP, menús, tarjetas de agradecimiento, tarjetas de lugar, toppers para bebidas, posavasos, charms para copas y bebidas, etiquetas para recuerdos, carteles de mesa, forros para sobres, sellos de cera y papel texturizado. Si no ves lo que buscas, pregúntame."
     ),
   },
-  {
-    id: "timeline",
-    section: "weddings",
-    q: b("How far ahead should I order wedding invitations?", "¿Con cuánta anticipación debo pedir mis invitaciones de boda?"),
-    a: b(
-      "Save the dates usually go out six to eight months before the wedding, and invitations six to eight weeks before. Reach out at least two months before your first mailing so there's time for design, proofs and printing. Once we start, I send you a timeline guide for your date so nothing sneaks up on you.",
-      "Los save the dates suelen enviarse de seis a ocho meses antes de la boda, y las invitaciones de seis a ocho semanas antes. Escríbeme al menos dos meses antes de tu primer envío para tener tiempo de diseño, pruebas e impresión. Al comenzar, te envío una guía de tiempos para tu fecha."
-    ),
-  },
   // ── Events and celebrations ──────────────────────────
   {
     id: "event-types",
@@ -158,6 +149,15 @@ export const faqs: FaqEntry[] = [
     a: b(
       "It takes four steps. You send your date, style and inspiration by email or Instagram. I design every piece from a blank page, never a template, around your colors, venue and story. We refine the proofs together until everything feels like you. Then your stationery arrives printed and shipped, or as digital files.",
       "Son cuatro pasos. Me envías tu fecha, tu estilo e inspiración por correo o Instagram. Diseño cada pieza desde una página en blanco, nunca una plantilla, alrededor de tus colores, tu lugar y tu historia. Afinamos las pruebas juntos hasta que todo se sienta como tú. Luego recibes tu papelería impresa o en archivos digitales."
+    ),
+  },
+  {
+    id: "timeline",
+    section: "ordering",
+    q: b("How far in advance should I order?", "¿Con cuánta anticipación debo hacer mi pedido?"),
+    a: b(
+      "Order at least three weeks before you need your pieces in hand: that leaves time for design, proofs and printing or shipping. For save the dates and invitations, count back from your mailing date, since save the dates usually go out six to eight months ahead and invitations six to eight weeks before.",
+      "Haz tu pedido al menos tres semanas antes de necesitar tus piezas: así hay tiempo para diseño, pruebas e impresión o envío. Para save the dates e invitaciones, calcula desde tu fecha de envío: los save the dates suelen enviarse de seis a ocho meses antes y las invitaciones de seis a ocho semanas antes."
     ),
   },
   {

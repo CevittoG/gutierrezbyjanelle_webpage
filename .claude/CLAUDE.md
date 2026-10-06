@@ -464,6 +464,8 @@ All public routes render with brand styling and full SEO metadata. The quote bui
 - AI-generated renders feature surfaced in Sweet Suite and Signature Suite pricing tiers
 
 **Still remaining:**
+- **Anybody drops accents** (deferred 2026-10): accented letters in Anybody body text render without their accents ("Papeleria", "Gutierrez") sitewide in headless Chromium; Square Peg headings are fine. Check in a real browser and fix before the Spanish phase
+- **Server-rendered `/es` routes** (deferred 2026-10): the Spanish copy is client-rendered, so AI crawlers only ever see English
 - Review the 8 quotes the freeze listed under `dashboardCorrections` (their old dashboard figure differed from the client link)
 - Docker prod build verification (`docker build --target runner`)
 - Lighthouse audit (target 90+ on all categories)
