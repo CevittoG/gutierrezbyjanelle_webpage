@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { SiteHome } from "./_components/home";
 
+const homeTitle = `${siteConfig.name} · Custom Wedding & Event Stationery, Austin & Long Island`;
+
 export const metadata: Metadata = {
-  title: { absolute: siteConfig.name },
+  title: { absolute: homeTitle },
   description: siteConfig.description,
   alternates: { canonical: siteConfig.url },
   openGraph: {
@@ -12,13 +14,13 @@ export const metadata: Metadata = {
     alternateLocale: siteConfig.alternateLocales,
     url: siteConfig.url,
     siteName: siteConfig.name,
-    title: siteConfig.name,
+    title: homeTitle,
     description: siteConfig.description,
     images: siteConfig.ogImages,
   },
   twitter: {
     card: "summary_large_image",
-    title: siteConfig.name,
+    title: homeTitle,
     description: siteConfig.description,
     images: siteConfig.twitterImages,
   },

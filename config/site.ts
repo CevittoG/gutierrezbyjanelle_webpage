@@ -1,4 +1,4 @@
-import type { Bilingual } from "@/lib/i18n";
+import type { Bilingual } from "../lib/i18n";
 
 const b = (en: string, es: string): Bilingual => ({ en, es });
 
@@ -18,7 +18,10 @@ export type About = { sections: FounderSection[] };
  * `photo` is optional on purpose: while it is unset, `FounderPortrait`
  * renders nothing at all rather than a placeholder frame.
  */
-export type Founder = { photo?: string; alt: Bilingual };
+export type Founder = { name: string; photo?: string; alt: Bilingual };
+
+/** Where the studio works from. Feeds the footer, /faq, JSON-LD and llms.txt. */
+export type StudioLocation = { city: string; region: string; regionCode: string; country: "US" };
 
 export type InvestmentTier = {
   id: string;
@@ -106,8 +109,16 @@ export const siteConfig = {
   // are the real-world identifiers and stay unaccented.
   name: "Gutiérrez by Janelle",
   description:
-    "Custom invitations, décor, signs, and digital resources for your wedding and events. Designed with love by Janelle.",
+    "Custom wedding and event stationery, signs and digital invitations, designed from scratch in English, Spanish or both. Based in Austin, TX and Long Island, NY, shipping across the US.",
   url: "https://www.gutierrezbyjanelle.com",
+  locations: [
+    { city: "Austin", region: "Texas", regionCode: "TX", country: "US" },
+    { city: "Long Island", region: "New York", regionCode: "NY", country: "US" },
+  ] satisfies StudioLocation[],
+  /** Printed pieces ship anywhere in this country; digital files go anywhere. */
+  serviceArea: "United States",
+  languages: ["en", "es"],
+  shipping: b("Shipping across the US", "Envíos a todo EE. UU."),
   locale: "en_US",
   alternateLocales: ["es_ES"],
   ogImages: [
@@ -167,6 +178,7 @@ export const siteConfig = {
     ],
   } satisfies About,
   founder: {
+    name: "Janelle Gutiérrez",
     // Drop the headshot at public/founder/janelle.jpg, then uncomment the line
     // below. Until then FounderPortrait renders nothing — no placeholder frame.
     // photo: "/founder/janelle.jpg",
@@ -217,7 +229,7 @@ export const siteConfig = {
       id: "diy-digital",
       name: b("Short and Suite", "Corto y Dulce"),
       description: b(
-        "Dedicated to those who resignate with “keep it simple.” Perfect for mini or micro wedding preferences.",
+        "Dedicated to those who resonate with “keep it simple.” Perfect for mini or micro wedding preferences.",
         "Dedicado a quienes prefieren \"mantenerlo simple.\" Perfecto para bodas mini o micro."
       ),
       features: [

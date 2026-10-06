@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { SiteOccasion } from "../_components/occasion";
 
-const pageDescription = `A personal note from Janelle to brides and grooms, your wedding stationery and signage designer.`;
+const pageDescription = `Custom wedding invitation suites, save the dates, ceremony programs and signs, designed from scratch in English, Spanish or both. Austin, TX and Long Island, NY, shipping across the US.`;
 const pageTitle = `Weddings | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/weddings`;
 

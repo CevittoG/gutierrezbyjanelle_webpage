@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { SiteAbout } from "../_components/about";
 
-const pageDescription = `Meet Janelle Gutiérrez, the designer and founder behind ${siteConfig.name}.`;
+const pageDescription = `Meet Janelle Gutiérrez, the designer and founder behind ${siteConfig.name}: custom bilingual wedding and event stationery from Austin, TX and Long Island, NY.`;
 const pageTitle = `About | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/about`;
 

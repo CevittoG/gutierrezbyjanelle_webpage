@@ -3,7 +3,7 @@ import { siteConfig } from "@/config/site";
 import { SiteGallery } from "../_components/gallery";
 
 const pageDescription =
-  "Recent invitations, signage, and event pieces by Janelle. A look at the work, hand to hand.";
+  "Real client work by Janelle Gutiérrez: wedding welcome signs, ceremony programs, drink toppers, bar signs, shower games and invitations, each designed from scratch.";
 const pageTitle = `Gallery | ${siteConfig.name}`;
 const pageUrl = `${siteConfig.url}/gallery`;
 
